@@ -1,0 +1,20 @@
+{
+  "name": "helloxglitter-preorder",
+  "version": "1.0.0",
+  "description": "helloxglitter Pre-order กระเป๋าผ้า",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node test/easyslip-verify.test.js && node test/customer-fields.test.js && node test-recalc.js && node test-promo.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "firebase": "^12.14.0",
+    "firebase-admin": "^14.1.0",
+    "jsqr": "^1.4.0"
+  },
+  "devDependencies": {
+    "jest": "^30.4.2"
+  }
+}

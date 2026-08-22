@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>ตรวจสอบสถานะออเดอร์ — helloxglitter</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Nunito',sans-serif;background:linear-gradient(135deg,#fff0f5 0%,#f8f0ff 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.wrap{width:100%;max-width:480px}
+.logo{text-align:center;margin-bottom:24px}
+.logo h1{font-size:28px;font-weight:800;color:#d45a8a}.logo h1 span{color:#e8809e}
+.logo p{font-size:13px;color:#c08090;margin-top:2px}
+
+.card{background:white;border-radius:20px;border:1.5px solid #f0d0e0;padding:32px 28px;box-shadow:0 8px 30px rgba(200,100,150,0.1)}
+.card h2{font-size:18px;font-weight:800;color:#555;margin-bottom:16px;text-align:center}
+
+.form-row{display:flex;gap:8px}
+.form-input{flex:1;border:1.5px solid #f0c0d0;border-radius:12px;padding:13px 16px;font-size:15px;font-family:inherit;color:#333;background:#fffafc;outline:none;transition:border-color .15s}
+.form-input:focus{border-color:#d45a8a}
+.form-input::placeholder{color:#c0b0b8}
+.track-btn{background:#d45a8a;color:white;border:none;border-radius:12px;padding:13px 20px;font-size:15px;font-weight:800;font-family:inherit;cursor:pointer;transition:background .15s;white-space:nowrap}
+.track-btn:hover{background:#c04080}
+.track-btn:disabled{opacity:.5;cursor:default}
+
+.result{margin-top:20px;display:none}
+.result.show{display:block}
+.err-msg{text-align:center;color:#d44;font-size:14px;padding:16px 0}
+
+/* Order Info */
+.oid{font-size:20px;font-weight:800;color:#d45a8a;text-align:center;margin-bottom:4px}
+.odate{font-size:12px;color:#a09098;text-align:center;margin-bottom:16px}
+
+.steps{display:flex;justify-content:center;gap:80px;margin:20px 0;position:relative}
+.steps::before{content:'';position:absolute;top:16px;left:calc(50% - 60px);right:calc(50% - 60px);height:3px;background:#f0e0e8;border-radius:2px}
+.steps .fill{position:absolute;top:16px;left:calc(50% - 60px);height:3px;background:#30a030;border-radius:2px;transition:width .4s;width:0}
+.step{text-align:center;position:relative;z-index:1}
+.step-dot{width:36px;height:36px;border-radius:50%;background:white;border:3px solid #e8d8e0;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;font-size:16px;color:#c0b0b8;transition:all .3s}
+.step.active .step-dot{border-color:#d45a8a;color:#d45a8a;background:#fff0f5;box-shadow:0 0 0 4px rgba(212,90,138,0.15)}
+.step.done .step-dot{border-color:#30a030;color:white;background:#30a030;box-shadow:0 0 0 4px rgba(48,160,48,0.15)}
+.step-label{font-size:11px;font-weight:700;color:#c0b0b8;white-space:nowrap}
+.step.active .step-label{color:#d45a8a}
+.step.done .step-label{color:#30a030}
+
+.info-box{background:#f8f4f8;border-radius:12px;padding:14px 16px;margin-bottom:12px}
+.info-row{display:flex;justify-content:space-between;padding:5px 0;font-size:13px}
+.info-row+.info-row{border-top:1px dashed #f0e0e8}
+.info-label{color:#a09098}
+.info-val{font-weight:700;color:#555}
+.info-val.price{color:#d45a8a;font-size:16px}
+.info-val.status{font-weight:800}
+
+.patterns-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.pattern-tag{background:#fff0f5;color:#d45a8a;border:1px solid #f0d0e0;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700}
+
+.note-box{background:#fffef8;border:1px solid #f0e8c0;border-radius:10px;padding:12px 14px;font-size:12px;color:#a08000;margin-top:12px}
+
+@media(max-width:480px){.form-row{flex-direction:column}.track-btn{width:100%}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">
+    <h1>hello<span>x</span>glitter</h1>
+    <p>ตรวจสอบสถานะออเดอร์</p>
+  </div>
+
+  <div class="card">
+    <h2><i class="ti ti-search"></i> ตรวจสอบออเดอร์</h2>
+    <div class="form-row">
+      <input class="form-input" id="trackInput" placeholder="ใส่รหัสออเดอร์ เช่น HXG-20260614-ABCD" autofocus/>
+      <button class="track-btn" id="trackBtn" onclick="doTrack()">ตรวจสอบ</button>
+    </div>
+
+    <div class="result" id="resultArea">
+      <div class="oid" id="rId"></div>
+      <div class="odate" id="rDate"></div>
+
+      <div class="steps" id="stepsBar">
+        <div class="fill" id="stepsFill"></div>
+        <div class="step" data-s="0"><div class="step-dot"><i class="ti ti-loader"></i></div><div class="step-label">กำลังดำเนินการ</div></div>
+        <div class="step" data-s="1"><div class="step-dot"><i class="ti ti-truck-delivery"></i></div><div class="step-label">จัดส่งสำเร็จ</div></div>
+      </div>
+
+      <div class="info-box">
+        <div class="info-row"><span class="info-label">จำนวน</span><span class="info-val" id="rBags"></span></div>
+        <div class="info-row"><span class="info-label">ยอดรวม</span><span class="info-val price" id="rPrice"></span></div>
+        <div class="info-row"><span class="info-label">สถานะ</span><span class="info-val status" id="rStatus"></span></div>
+      </div>
+
+      <div class="info-box">
+        <div class="info-label" style="margin-bottom:4px">ลายที่สั่ง</div>
+        <div class="patterns-list" id="rPatterns"></div>
+      </div>
+
+      <div class="note-box" id="rNote" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+var TRACK_STATUSES=['กำลังดำเนินการ','จัดส่งสำเร็จ'];
+var TRACK_COLORS=['#d45a8a','#30a030'];
+
+function toTrackStatus(s){return s>=3?1:0;}
+
+function doTrack(){
+  var id=document.getElementById('trackInput').value.trim();
+  if(!id)return;
+  var btn=document.getElementById('trackBtn');
+  var area=document.getElementById('resultArea');
+  btn.disabled=true;btn.textContent='กำลังค้นหา...';
+  area.classList.remove('show');
+
+  fetch('/api/track/'+encodeURIComponent(id))
+    .then(function(r){
+      if(!r.ok)throw new Error('not found');
+      return r.json();
+    })
+    .then(function(o){
+      var ts=toTrackStatus(o.status);
+      document.getElementById('rId').textContent=o.id;
+      var d=new Date(o.created_at);
+      document.getElementById('rDate').textContent='สั่งเมื่อ '+d.toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});
+      document.getElementById('rBags').textContent=o.total_bags+' ใบ';
+      document.getElementById('rPrice').textContent=(o.total_price||0).toLocaleString()+' ฿';
+      document.getElementById('rStatus').textContent=TRACK_STATUSES[ts];
+      document.getElementById('rStatus').style.color=TRACK_COLORS[ts];
+
+      // steps
+      var steps=document.querySelectorAll('.step');
+      steps.forEach(function(s){
+        var snum=parseInt(s.dataset.s);
+        s.classList.remove('active','done');
+        if(snum<ts)s.classList.add('done');
+        else if(snum===ts)s.classList.add('active');
+      });
+      document.getElementById('stepsFill').style.width=ts===1?'100%':'0%';
+
+      // patterns
+      var plist=document.getElementById('rPatterns');
+      plist.innerHTML=(o.patterns||[]).map(function(n){return '<span class="pattern-tag">'+n+(o.qty>1?' ×'+o.qty:'')+'</span>';}).join('');
+
+      // note
+      var noteBox=document.getElementById('rNote');
+      if(o.note){noteBox.style.display='block';noteBox.innerHTML='<i class="ti ti-message"></i> '+o.note;}
+      else{noteBox.style.display='none';}
+
+      area.classList.add('show');
+    })
+    .catch(function(){
+      document.getElementById('rId').textContent='';
+      document.getElementById('rDate').textContent='ไม่พบออเดอร์นี้ในระบบ';
+      document.getElementById('rPatterns').innerHTML='';
+      document.getElementById('rNote').style.display='none';
+      var steps=document.querySelectorAll('.step');steps.forEach(function(s){s.classList.remove('active','done')});
+      document.getElementById('stepsFill').style.width='0%';
+      document.getElementById('rBags').textContent='-';
+      document.getElementById('rPrice').textContent='-';
+      document.getElementById('rStatus').textContent='ไม่พบ';
+      document.getElementById('rStatus').style.color='#d44';
+      area.classList.add('show');
+    })
+    .finally(function(){
+      btn.disabled=false;btn.textContent='ตรวจสอบ';
+    });
+}
+
+document.getElementById('trackInput').addEventListener('keydown',function(e){
+  if(e.key==='Enter')doTrack();
+});
+</script>
+</body>
+</html>

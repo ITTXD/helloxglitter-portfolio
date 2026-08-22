@@ -1,0 +1,946 @@
+require('dotenv').config();
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const { exec } = require('child_process');
+const crypto = require('crypto');
+const { verifySlipWithEasySlip } = require('./slip-verify');
+
+// ==================== FIREBASE INIT ====================
+let db = null;
+try {
+  const { initializeApp } = require('firebase/app');
+  const { getFirestore } = require('firebase/firestore');
+
+  const firebaseConfig = {
+    apiKey: process.env.FIREBASE_API_KEY,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.FIREBASE_APP_ID,
+  };
+
+  const firebaseApp = initializeApp(firebaseConfig);
+  db = getFirestore(firebaseApp);
+  console.log('Firebase connected, project:', process.env.FIREBASE_PROJECT_ID);
+} catch (err) {
+  console.warn('Firebase init failed:', err.message);
+  console.warn('Server will start but Firestore API calls will fail.');
+}
+
+// ==================== FIRESTORE HELPERS ====================
+async function fsAddDoc(collectionName, data) {
+  const { collection, addDoc } = require('firebase/firestore');
+  return addDoc(collection(db, collectionName), data);
+}
+
+async function fsGetDocs(collectionName, orderField) {
+  const { collection, getDocs, query, orderBy } = require('firebase/firestore');
+  const q = orderField
+    ? query(collection(db, collectionName), orderBy(orderField, 'desc'))
+    : collection(db, collectionName);
+  const snap = await getDocs(q);
+  const results = [];
+  snap.forEach(d => results.push({ _docId: d.id, ...d.data() }));
+  return results;
+}
+
+async function fsGetDoc(collectionName, docId) {
+  const { doc, getDoc } = require('firebase/firestore');
+  const d = await getDoc(doc(db, collectionName, docId));
+  return d.exists() ? { _docId: d.id, ...d.data() } : null;
+}
+
+async function fsUpdateDoc(collectionName, docId, data) {
+  const { doc, updateDoc } = require('firebase/firestore');
+  await updateDoc(doc(db, collectionName, docId), data);
+}
+
+async function fsDeleteDoc(collectionName, docId) {
+  const { doc, deleteDoc } = require('firebase/firestore');
+  await deleteDoc(doc(db, collectionName, docId));
+}
+
+async function fsFindByField(collectionName, fieldName, fieldValue) {
+  const { collection, getDocs, query, where, limit } = require('firebase/firestore');
+  const q = query(collection(db, collectionName), where(fieldName, '==', fieldValue), limit(1));
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  const d = snap.docs[0];
+  return { _docId: d.id, ...d.data() };
+}
+
+// ==================== CONFIG ====================
+const PORT = process.env.PORT || 3000;
+const PUBLIC_DIR = path.join(__dirname, 'public');
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.webp': 'image/webp',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+};
+
+// ==================== HELPERS ====================
+function parseCookies(req) {
+  const cookies = {};
+  const header = req.headers.cookie || '';
+  header.split(';').forEach(c => {
+    const [key, ...val] = c.split('=');
+    if (key) cookies[key.trim()] = decodeURIComponent(val.join('='));
+  });
+  return cookies;
+}
+
+function isAdmin(req) {
+  const cookies = parseCookies(req);
+  return cookies.admin_session === SESSION_SECRET;
+}
+
+function generateOrderId() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let rand = '';
+  for (let i = 0; i < 4; i++) rand += chars[Math.floor(Math.random() * chars.length)];
+  const d = new Date();
+  const ds = d.getFullYear().toString()
+    + ('0' + (d.getMonth() + 1)).slice(-2)
+    + ('0' + d.getDate()).slice(-2);
+  return 'HXG-' + ds + '-' + rand;
+}
+
+function sendJson(res, status, data) {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify(data));
+}
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try { resolve(JSON.parse(body)); }
+      catch { resolve(body); }
+    });
+    req.on('error', reject);
+  });
+}
+
+function extractCustomerFields(data) {
+  let name = (data.customer_name || '').trim();
+  let phone = (data.customer_phone || '').trim();
+  let address = (data.customer_address || '').trim();
+  let info = (data.customer_info || '').trim();
+
+  if (!name && !phone && !address && info) {
+    const lines = info.split('\n').map(l => l.trim()).filter(Boolean);
+    if (!name && lines.length > 0) name = lines[0];
+    if (!phone && lines.length > 1) phone = lines[1];
+    if (!address && lines.length > 2) address = lines.slice(2).join('\n');
+  }
+
+  if (name || phone || address) {
+    info = [name, phone, address].filter(Boolean).join('\n');
+  }
+
+  return {
+    customer_name: name,
+    customer_phone: phone,
+    customer_address: address,
+    customer_info: info,
+  };
+}
+
+function send404(res) { sendJson(res, 404, { error: 'Not found' }); }
+function send401(res) { sendJson(res, 401, { error: 'Unauthorized' }); }
+function send500(res, msg) { sendJson(res, 500, { error: msg || 'Server error' }); }
+
+// ==================== API ROUTES ====================
+async function handleApi(req, res) {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const pathname = url.pathname;
+  const method = req.method;
+
+  if (!db) { send500(res, 'Firestore ยังไม่พร้อม — กรุณาเปิด Firestore API ใน Firebase Console'); return true; }
+
+  // POST /api/login
+  if (pathname === '/api/login' && method === 'POST') {
+    const body = await readBody(req);
+    if (body.password === ADMIN_PASSWORD) {
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Set-Cookie': `admin_session=${SESSION_SECRET}; Path=/; HttpOnly; SameSite=Strict`,
+      });
+      res.end(JSON.stringify({ success: true }));
+    } else {
+      sendJson(res, 401, { error: 'รหัสผ่านไม่ถูกต้อง' });
+    }
+    return true;
+  }
+
+  // POST /api/logout
+  if (pathname === '/api/logout' && method === 'POST') {
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Set-Cookie': 'admin_session=; Path=/; HttpOnly; Max-Age=0',
+    });
+    res.end(JSON.stringify({ success: true }));
+    return true;
+  }
+
+  // GET /api/check-auth
+  if (pathname === '/api/check-auth' && method === 'GET') {
+    sendJson(res, 200, { authenticated: isAdmin(req) });
+    return true;
+  }
+
+  // POST /api/orders — ลูกค้าสั่งซื้อ (ไม่ต้อง auth)
+  if (pathname === '/api/orders' && method === 'POST') {
+    const body = await readBody(req);
+    const cust = extractCustomerFields(body);
+    if (!cust.customer_info || !body.patterns || body.patterns.length === 0) {
+      sendJson(res, 400, { error: 'กรุณากรอกข้อมูลให้ครบ' });
+      return true;
+    }
+
+    const order = {
+      id: generateOrderId(),
+      created_at: new Date().toISOString(),
+      customer_name: cust.customer_name,
+      customer_phone: cust.customer_phone,
+      customer_address: cust.customer_address,
+      customer_info: cust.customer_info,
+      patterns: body.patterns,
+      pattern_qtys: body.pattern_qtys || null,
+      qty: body.qty || 1,
+      total_bags: body.total_bags || (body.patterns.length * (body.qty || 1)),
+      original_price: body.original_price || body.total_price || 0,
+      total_price: body.total_price || 0,
+      savings: body.savings || 0,
+      shipping_cost: body.shipping_cost != null ? body.shipping_cost : 50,
+      is_remote: body.is_remote || false,
+      status: 0,
+      note: body.note || '',
+      note_status: body.note ? 'on' : 'off',
+      tracking_number: '',
+      tracking_carrier: '',
+    };
+
+    const docRef = await fsAddDoc('orders', order);
+    order._docId = docRef.id;
+    sendJson(res, 201, { success: true, order });
+    return true;
+  }
+
+  // POST /api/wallpaper/order — ลูกค้าสั่งซื้อ Wallpaper (ไม่ต้อง auth)
+  if (pathname === '/api/wallpaper/order' && method === 'POST') {
+    const body = await readBody(req);
+    if (!body.customer_info) {
+      sendJson(res, 400, { error: 'กรุณากรอกข้อมูลให้ครบ' }); return true;
+    }
+    if (!body.slip_data) {
+      sendJson(res, 400, { error: 'กรุณาแนบสลีปการโอนเงิน' }); return true;
+    }
+    const orderId = generateOrderId();
+    const totalPrice = body.total_price || 99;
+
+    // ตรวจสอบสลิปผ่าน EasySlip API ก่อนบันทึก Database
+    const verifyResult = await verifySlipWithEasySlip({
+      slipData: body.slip_data,
+      expectedAmount: totalPrice,
+      orderId: orderId,
+      db: db,
+    });
+
+    if (!verifyResult.success) {
+      sendJson(res, 400, { error: verifyResult.error || 'การตรวจสอบสลิปล้มเหลว กรุณาตรวจสอบรูปสลิปอีกครั้ง' });
+      return true;
+    }
+
+    const patterns = body.patterns || ['Wallpaper'];
+    const patternQtys = body.pattern_qtys || null;
+    const totalBags = body.total_bags || 1;
+    const order = {
+      id: orderId,
+      created_at: new Date().toISOString(),
+      type: 'wallpaper',
+      customer_info: body.email || '',
+      email: body.email || '',
+      patterns: patterns,
+      pattern_qtys: patternQtys,
+      qty: 1,
+      total_bags: totalBags,
+      total_price: totalPrice,
+      shipping_cost: 0,
+      status: 1, // Auto-approve
+      note: body.note || '',
+      slip_data: body.slip_data || null,
+      slip_uploaded_at: body.slip_data ? new Date().toISOString() : null,
+      slip_verified: true,
+      slip_verified_at: new Date().toISOString(),
+      slip_verify_msg: 'ตรวจสอบผ่าน EasySlip สำเร็จ',
+      slip_trans_ref: verifyResult.transRef || '',
+      slip_bank: verifyResult.senderBank || '',
+      slip_sender_name: verifyResult.senderName || '',
+      slip_receiver_name: verifyResult.receiverName || '',
+      slip_amount: verifyResult.amount != null ? verifyResult.amount : null,
+      download_link: null,
+      tracking_number: '',
+      tracking_carrier: '',
+    };
+    const docRef = await fsAddDoc('orders', order);
+    order._docId = docRef.id;
+    sendJson(res, 201, { success: true, order });
+    return true;
+  }
+
+  // POST /api/wallpaper/check — ลูกค้าเช็ค email เพื่อรับ link (ไม่ต้อง auth)
+  if (pathname === '/api/wallpaper/check' && method === 'POST') {
+    const body = await readBody(req);
+    const email = (body.email || '').trim().toLowerCase();
+    if (!email || !email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+      sendJson(res, 400, { error: 'กรุณากรอก E-mail ให้ถูกต้อง' }); return true;
+    }
+    const orders = await fsGetDocs('orders', 'created_at');
+    const found = orders.filter(function(o) {
+      if (o.type !== 'wallpaper') return false;
+      var stored = (o.email || '').trim().toLowerCase();
+      return stored === email;
+    });
+    if (found.length === 0) {
+      sendJson(res, 200, { found: false, message: 'ไม่พบออเดอร์ Wallpaper สำหรับเบอร์นี้ค่ะ กรุณาตรวจสอบอีกครั้งนะคะ' });
+      return true;
+    }
+    const confirmed = found.filter(function(o) { return o.status >= 1; });
+    if (confirmed.length > 0) {
+      sendJson(res, 200, {
+        found: true,
+      confirmed: true,
+      download_link: confirmed[0].download_link || 'https://drive.google.com/drive/folders/1xhovSRun2q6O4g7S_wDKwuHuETZVk10-?usp=sharing',
+      order_id: confirmed[0].id,
+      message: 'ยืนยันเรียบร้อยแล้วค่ะ! 🎉',
+    });
+      return true;
+    }
+    sendJson(res, 200, {
+      found: true,
+      confirmed: false,
+      order_id: found[0].id,
+      message: 'พบออเดอร์ของคุณค่ะ แต่อยู่ระหว่างการยืนยัน กรุณารอสักครู่นะคะ 💝',
+    });
+    return true;
+  }
+
+  // GET /api/status — EasySlip API status check
+  if (pathname === '/api/status' && method === 'GET') {
+    const apiKey = process.env.EASYSLIP_API_KEY || '';
+    sendJson(res, 200, {
+      status: 'online',
+      hasApiKey: Boolean(apiKey)
+    });
+    return true;
+  }
+
+  // POST /api/verify — Standalone EasySlip verification endpoint matching AI/server.js
+  if (pathname === '/api/verify' && method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const apiKey = process.env.EASYSLIP_API_KEY || '';
+      const checkDuplicate = body.checkDuplicate !== false && body.checkDuplicate !== 'false';
+      const base64Image = body.base64;
+
+      if (!base64Image) {
+        sendJson(res, 400, {
+          status: 400,
+          message: 'กรุณาอัปโหลดรูปภาพสลิป'
+        });
+        return true;
+      }
+
+      const { cleanBase64, checkDuplicateTransRef } = require('./slip-verify');
+      const rawBase64 = cleanBase64(base64Image);
+
+      const payload = {
+        base64: rawBase64,
+        checkDuplicate: checkDuplicate
+      };
+
+      if (body.matchAmount != null && Number(body.matchAmount) > 0) {
+        payload.matchAmount = Number(body.matchAmount);
+      }
+
+      console.log(`[EasySlip] Verifying slip via EasySlip API v2 (checkDuplicate: ${checkDuplicate})...`);
+
+      const response = await fetch('https://api.easyslip.com/v2/verify/bank', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json().catch(() => ({}));
+      console.log(`[EasySlip] Response Status: ${response.status}`, JSON.stringify(result));
+
+      // Also check local database duplicate if requested
+      if (response.ok && result.data && checkDuplicate && db) {
+        const transRef = result.data.transRef || result.data.transactionRef || '';
+        if (transRef) {
+          const isLocalDup = await checkDuplicateTransRef(db, transRef);
+          if (isLocalDup) {
+            result.data.isDuplicate = true;
+          }
+        }
+      }
+
+      // Check receiver name — ต้องตรงกับบัญชีร้าน
+      if (response.ok && result.data) {
+        const rData = result.data;
+        const receiverObj = rData.receiver || {};
+        let receiverName = '';
+        if (receiverObj.account && receiverObj.account.name) {
+          receiverName = typeof receiverObj.account.name === 'string'
+            ? receiverObj.account.name
+            : (receiverObj.account.name.th || receiverObj.account.name.en || '');
+        } else if (receiverObj.name) {
+          receiverName = typeof receiverObj.name === 'string'
+            ? receiverObj.name
+            : (receiverObj.name.th || receiverObj.name.en || '');
+        }
+        if (receiverName) {
+          const rLower = receiverName.toLowerCase();
+          const isReceiverMatch = rLower.includes('ณิชกานต์') || rLower.includes('นิชากานต์') || rLower.includes('เอติญัติ');
+          if (!isReceiverMatch) {
+            result.receiverWarning = true;
+            result.receiverMessage = `ชื่อผู้รับเงินไม่ตรงกับบัญชีของทางร้านค่ะ (พบชื่อ: ${receiverName})`;
+          }
+        }
+      }
+
+      sendJson(res, response.status, result);
+      return true;
+    } catch (error) {
+      console.error('[EasySlip] Error:', error);
+      sendJson(res, 500, {
+        status: 500,
+        message: 'เกิดข้อผิดพลาดในการเชื่อมต่อไปยัง EasySlip: ' + error.message,
+        error: error.message
+      });
+      return true;
+    }
+  }
+
+  // POST /api/mock — Mock EasySlip response for testing matching AI/server.js
+  if (pathname === '/api/mock' && method === 'POST') {
+    setTimeout(() => {
+      sendJson(res, 200, {
+        status: 200,
+        message: "success",
+        data: {
+          payload: "0004000001010301402251000185934651323389020953037645802TH",
+          transRef: `MOCK_${Date.now()}`,
+          date: new Date().toISOString(),
+          amount: {
+            amount: 500.00,
+            local: {
+              amount: 500.00,
+              currency: "THB"
+            }
+          },
+          sender: {
+            bank: {
+              id: "004",
+              name: "ธนาคารกสิกรไทย (KBANK)",
+              short: "KBANK"
+            },
+            account: {
+              name: {
+                th: "นาย สมชาย สายเปย์",
+                en: "MR. SOMCHAI SAIPAY"
+              },
+              bank: {
+                type: "BANK_ACCOUNT",
+                account: "xxx-x-x1234-x"
+              }
+            }
+          },
+          receiver: {
+            bank: {
+              id: "014",
+              name: "ธนาคารกสิกรไทย (KBANK)",
+              short: "KBANK"
+            },
+            account: {
+              name: {
+                th: "น.ส. ณิชกานต์ เอติญัติ",
+                en: "MISS NICHAKARN A."
+              },
+              bank: {
+                type: "PROMPTPAY",
+                account: "081-xxx-9999"
+              }
+            }
+          },
+          isDuplicate: false
+        }
+      });
+    }, 400);
+    return true;
+  }
+
+  // POST /api/sticker/order — สร้างออเดอร์สติกเกอร์ + ตรวจสอบสลีปผ่าน EasySlip (ไม่ต้อง auth)
+  if (pathname === '/api/sticker/order' && method === 'POST') {
+    const body = await readBody(req);
+    const orderData = body.order;
+    const slipData = body.slip_data;
+
+    if (!orderData || (!orderData.customer_info && !orderData.customer_name) || !orderData.patterns || orderData.patterns.length === 0) {
+      sendJson(res, 400, { error: 'ข้อมูลออเดอร์ไม่ครบ' }); return true;
+    }
+    if (!slipData) {
+      sendJson(res, 400, { error: 'กรุณาแนบสลีปการโอนเงิน' }); return true;
+    }
+
+    const orderId = generateOrderId();
+    const totalPrice = Number(orderData.total_price || 0);
+    const shippingCost = Number(orderData.shipping_cost != null ? orderData.shipping_cost : 50);
+    const grandTotal = totalPrice + shippingCost;
+
+    // ตรวจสอบสลิปผ่าน EasySlip API ก่อนบันทึก Database
+    const verifyResult = await verifySlipWithEasySlip({
+      slipData: slipData,
+      expectedAmount: grandTotal,
+      orderId: orderId,
+      db: db,
+    });
+
+    if (!verifyResult.success) {
+      sendJson(res, 400, { error: verifyResult.error || 'การตรวจสอบสลิปล้มเหลว กรุณาตรวจสอบรูปสลิปอีกครั้ง' });
+      return true;
+    }
+
+    const cust = extractCustomerFields(orderData);
+
+    const order = {
+      id: orderId,
+      created_at: new Date().toISOString(),
+      type: 'sticker',
+      customer_name: cust.customer_name,
+      customer_phone: cust.customer_phone,
+      customer_address: cust.customer_address,
+      customer_info: cust.customer_info,
+      patterns: orderData.patterns,
+      pattern_qtys: orderData.pattern_qtys || null,
+      qty: orderData.qty || 1,
+      total_bags: orderData.total_bags || orderData.patterns.length,
+      total_price: totalPrice,
+      shipping_cost: shippingCost,
+      status: 1,
+      note: orderData.note || '',
+      note_status: orderData.note ? 'on' : 'off',
+      slip_data: slipData,
+      slip_uploaded_at: new Date().toISOString(),
+      slip_verified: true,
+      slip_verified_at: new Date().toISOString(),
+      slip_verify_msg: 'ตรวจสอบผ่าน EasySlip สำเร็จ',
+      slip_trans_ref: verifyResult.transRef || '',
+      slip_bank: verifyResult.senderBank || '',
+      slip_sender_name: verifyResult.senderName || '',
+      slip_receiver_name: verifyResult.receiverName || '',
+      slip_amount: verifyResult.amount != null ? verifyResult.amount : null,
+    };
+
+    const docRef = await fsAddDoc('sticker_orders', order);
+    order._docId = docRef.id;
+    sendJson(res, 201, { success: true, order });
+    return true;
+  }
+
+  // POST /api/orders/confirm — สร้างออเดอร์ + ตรวจสอบสลีปผ่าน EasySlip (ไม่ต้อง auth)
+  if (pathname === '/api/orders/confirm' && method === 'POST') {
+    const body = await readBody(req);
+    const orderData = body.order;
+    const slipData = body.slip_data;
+
+    if (!orderData || (!orderData.customer_info && !orderData.customer_name) || !orderData.patterns || orderData.patterns.length === 0) {
+      sendJson(res, 400, { error: 'ข้อมูลออเดอร์ไม่ครบ' }); return true;
+    }
+    if (!slipData) {
+      sendJson(res, 400, { error: 'กรุณาแนบสลีปการโอนเงิน' }); return true;
+    }
+
+    const orderId = orderData.id || generateOrderId();
+    const totalPrice = Number(orderData.total_price || 0);
+    let shippingCost = orderData.shipping_cost != null ? Number(orderData.shipping_cost) : 50;
+    if (orderData.total_bags >= 3 && !orderData.is_remote) {
+      shippingCost = 0;
+    }
+    const grandTotal = totalPrice + shippingCost;
+
+    // ตรวจสอบสลิปผ่าน EasySlip API ก่อนบันทึก Database
+    const verifyResult = await verifySlipWithEasySlip({
+      slipData: slipData,
+      expectedAmount: grandTotal,
+      orderId: orderId,
+      db: db,
+    });
+
+    if (!verifyResult.success) {
+      sendJson(res, 400, {
+        error: verifyResult.error || 'การตรวจสอบสลิปล้มเหลว กรุณาตรวจสอบรูปสลิปอีกครั้ง',
+        verifyDetails: verifyResult
+      });
+      return true;
+    }
+
+    const cust = extractCustomerFields(orderData);
+
+    const order = {
+      id: orderId,
+      created_at: orderData.created_at || new Date().toISOString(),
+      customer_name: cust.customer_name,
+      customer_phone: cust.customer_phone,
+      customer_address: cust.customer_address,
+      customer_info: cust.customer_info,
+      patterns: orderData.patterns,
+      pattern_qtys: orderData.pattern_qtys || null,
+      qty: orderData.qty || 1,
+      total_bags: orderData.total_bags || orderData.patterns.length,
+      original_price: orderData.original_price || totalPrice,
+      total_price: totalPrice,
+      savings: orderData.savings || 0,
+      shipping_cost: shippingCost,
+      is_remote: orderData.is_remote || false,
+      status: 1,
+      note: orderData.note || '',
+      note_status: orderData.note ? 'on' : 'off',
+      slip_data: slipData,
+      slip_uploaded_at: new Date().toISOString(),
+      slip_verified: true,
+      slip_verified_at: new Date().toISOString(),
+      slip_verify_msg: 'ตรวจสอบผ่าน EasySlip สำเร็จ',
+      slip_trans_ref: verifyResult.transRef || '',
+      slip_bank: verifyResult.senderBank || '',
+      slip_sender_name: verifyResult.senderName || '',
+      slip_receiver_bank: verifyResult.receiverBank || '',
+      slip_receiver_name: verifyResult.receiverName || '',
+      slip_amount: verifyResult.amount != null ? verifyResult.amount : null,
+      slip_date: verifyResult.date || '',
+      tracking_number: '',
+      tracking_carrier: '',
+    };
+
+    const docRef = await fsAddDoc('orders', order);
+    order._docId = docRef.id;
+    sendJson(res, 201, { success: true, order });
+    return true;
+  }
+
+  // GET /api/orders — ดึงทุกออเดอร์ (ต้อง auth)
+  if (pathname === '/api/orders' && method === 'GET') {
+    if (!isAdmin(req)) { send401(res); return true; }
+    const orders = await fsGetDocs('orders', 'created_at');
+    sendJson(res, 200, orders);
+    return true;
+  }
+
+  // GET /api/orders/:id
+  if (pathname.startsWith('/api/orders/') && method === 'GET') {
+    if (!isAdmin(req)) { send401(res); return true; }
+    const id = pathname.split('/api/orders/')[1];
+    const order = await fsGetDoc('orders', id);
+    if (!order) { send404(res); return true; }
+    sendJson(res, 200, order);
+    return true;
+  }
+
+  // PUT /api/orders/:id
+  if (pathname.startsWith('/api/orders/') && method === 'PUT') {
+    if (!isAdmin(req)) { send401(res); return true; }
+    const id = pathname.split('/api/orders/')[1];
+    const body = await readBody(req);
+    var existing = await fsGetDoc('orders', id);
+    var docId = id;
+    if (!existing) {
+      const byCustom = await fsFindByField('orders', 'id', id);
+      if (byCustom) { existing = byCustom; docId = byCustom._docId; }
+    }
+    if (!existing) { send404(res); return true; }
+    if (body.note !== undefined) {
+      body.note_status = body.note ? 'on' : 'off';
+    }
+    if (body.customer_name !== undefined || body.customer_phone !== undefined || body.customer_address !== undefined || body.customer_info !== undefined) {
+      const cust = extractCustomerFields({
+        customer_name: body.customer_name !== undefined ? body.customer_name : existing.customer_name,
+        customer_phone: body.customer_phone !== undefined ? body.customer_phone : existing.customer_phone,
+        customer_address: body.customer_address !== undefined ? body.customer_address : existing.customer_address,
+        customer_info: body.customer_info !== undefined ? body.customer_info : existing.customer_info,
+      });
+      body.customer_name = cust.customer_name;
+      body.customer_phone = cust.customer_phone;
+      body.customer_address = cust.customer_address;
+      body.customer_info = cust.customer_info;
+    }
+    await fsUpdateDoc('orders', docId, body);
+    sendJson(res, 200, { success: true });
+    return true;
+  }
+
+  // DELETE /api/orders/:id
+  if (pathname.startsWith('/api/orders/') && method === 'DELETE') {
+    if (!isAdmin(req)) { send401(res); return true; }
+    const id = pathname.split('/api/orders/')[1];
+    var existing = await fsGetDoc('orders', id);
+    var docId = id;
+    if (!existing) {
+      const byCustom = await fsFindByField('orders', 'id', id);
+      if (byCustom) { existing = byCustom; docId = byCustom._docId; }
+    }
+    if (!existing) { send404(res); return true; }
+    await fsDeleteDoc('orders', docId);
+    sendJson(res, 200, { success: true });
+    return true;
+  }
+
+  // POST /api/orders/:id/slip — upload slip image (admin)
+  if (pathname.startsWith('/api/orders/') && pathname.endsWith('/slip') && method === 'POST') {
+    if (!isAdmin(req)) { send401(res); return true; }
+    const id = pathname.split('/api/orders/')[1].replace('/slip', '');
+    const body = await readBody(req);
+    var existing = await fsGetDoc('orders', id);
+    var docId = id;
+    if (!existing) {
+      const byCustom = await fsFindByField('orders', 'id', id);
+      if (byCustom) { existing = byCustom; docId = byCustom._docId; }
+    }
+    if (!existing) { send404(res); return true; }
+
+    if (!body.slip_data) { sendJson(res, 400, { error: 'ไม่มีข้อมูลสลีป' }); return true; }
+
+    const updateData = {
+      slip_data: body.slip_data,
+      slip_uploaded_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      status: 1,
+    };
+
+    await fsUpdateDoc('orders', docId, updateData);
+    sendJson(res, 200, { success: true, verified: true, message: 'อัปโหลดสลีปสำเร็จ' });
+    return true;
+  }
+
+  // POST /api/orders/:id/slip-public — customer uploads slip (no auth)
+  if (pathname.startsWith('/api/orders/') && pathname.endsWith('/slip-public') && method === 'POST') {
+    const id = pathname.split('/api/orders/')[1].replace('/slip-public', '');
+    const body = await readBody(req);
+    var existing = await fsGetDoc('orders', id);
+    var docId = id;
+    if (!existing) {
+      const byCustom = await fsFindByField('orders', 'id', id);
+      if (byCustom) { existing = byCustom; docId = byCustom._docId; }
+    }
+    if (!existing) { send404(res); return true; }
+
+    if (!body.slip_data) { sendJson(res, 400, { error: 'ไม่มีข้อมูลสลีป' }); return true; }
+
+    const updateData = {
+      slip_data: body.slip_data,
+      slip_uploaded_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      status: 1,
+    };
+
+    await fsUpdateDoc('orders', docId, updateData);
+
+    sendJson(res, 200, { success: true, verified: true, message: 'อัปโหลดสลีปสำเร็จ ยืนยันออเดอร์แล้ว!' });
+    return true;
+  }
+
+  // GET /api/stats
+  if (pathname === '/api/stats' && method === 'GET') {
+    if (!isAdmin(req)) { send401(res); return true; }
+    const orders = await fsGetDocs('orders');
+    const stats = {
+      total_orders: orders.length,
+      total_bags: orders.reduce((s, o) => s + (o.total_bags || 0), 0),
+      total_revenue: orders.reduce((s, o) => s + (o.total_price || 0) + (o.shipping_cost != null ? o.shipping_cost : 50), 0),
+      total_product_price: orders.reduce((s, o) => s + (o.total_price || 0), 0),
+      total_shipping: orders.reduce((s, o) => s + (o.shipping_cost != null ? o.shipping_cost : 50), 0),
+      by_status: { 0: 0, 1: 0, 2: 0, 3: 0 },
+    };
+    orders.forEach(o => { stats.by_status[o.status] = (stats.by_status[o.status] || 0) + 1; });
+    sendJson(res, 200, stats);
+    return true;
+  }
+
+  // GET /api/track/phone/:phone — public, search orders by phone
+  if (pathname.startsWith('/api/track/phone/') && method === 'GET') {
+    const phone = pathname.split('/api/track/phone/')[1];
+    if (!phone) { send404(res); return true; }
+    const searchPhone = decodeURIComponent(phone).replace(/\D/g, '');
+    if (!searchPhone) {
+      sendJson(res, 400, { error: 'กรุณาระบุเบอร์โทรศัพท์ที่ถูกต้อง' });
+      return true;
+    }
+    const allOrders = await fsGetDocs('orders');
+    const found = allOrders.filter(o => {
+      // 1. Match direct customer_phone
+      if (o.customer_phone) {
+        var pClean = o.customer_phone.replace(/\D/g, '');
+        if (pClean && (pClean === searchPhone || pClean.endsWith(searchPhone) || searchPhone.endsWith(pClean))) return true;
+      }
+      // 2. Regex match on customer_info
+      var phoneNumbers = (o.customer_info || '').match(/0[689]\d(?:[\ \-\.]?\d){7}(?!\d)/g) || [];
+      if (phoneNumbers.some(p => p.replace(/\D/g, '') === searchPhone)) return true;
+
+      // 3. Substring match if clean customer_info contains searchPhone
+      var cleanInfo = (o.customer_info || '').replace(/\D/g, '');
+      if (cleanInfo.includes(searchPhone) && searchPhone.length >= 9) return true;
+
+      return false;
+    });
+    if (found.length === 0) {
+      sendJson(res, 404, { error: 'ไม่พบออเดอร์จากเบอร์นี้ค่ะ' });
+      return true;
+    }
+    sendJson(res, 200, {
+      orders: found.map(o => ({
+        id: o.id,
+        status: o.status,
+        patterns: o.patterns,
+        pattern_qtys: o.pattern_qtys || null,
+        qty: o.qty,
+        total_bags: o.total_bags,
+        total_price: o.total_price,
+        created_at: o.created_at,
+        note: o.note || '',
+        tracking_number: o.tracking_number || '',
+        tracking_carrier: o.tracking_carrier || '',
+        customer_name: o.customer_name || (o.customer_info || '').split('\n')[0] || '',
+        customer_phone: o.customer_phone || (o.customer_info || '').split('\n')[1] || '',
+        customer_address: o.customer_address || ((o.customer_info || '').split('\n').slice(2).join('\n')) || '',
+        customer_info: o.customer_info || '',
+        shipping_cost: o.shipping_cost != null ? o.shipping_cost : 50,
+        is_remote: o.is_remote || false,
+      })),
+    });
+    return true;
+  }
+
+  // GET /api/track/:id — public, no auth
+  if (pathname.startsWith('/api/track/') && method === 'GET') {
+    const id = pathname.split('/api/track/')[1];
+    if (!id) { send404(res); return true; }
+    const order = await fsGetDoc('orders', id);
+    if (!order) {
+      const byCustom = await fsFindByField('orders', 'id', id);
+      if (byCustom) {
+        sendJson(res, 200, {
+          id: byCustom.id,
+          status: byCustom.status,
+          patterns: byCustom.patterns,
+          qty: byCustom.qty,
+          total_bags: byCustom.total_bags,
+          total_price: byCustom.total_price,
+          created_at: byCustom.created_at,
+          note: byCustom.note || '',
+          tracking_number: byCustom.tracking_number || '',
+          tracking_carrier: byCustom.tracking_carrier || '',
+        });
+      } else {
+        send404(res);
+      }
+      return true;
+    }
+    sendJson(res, 200, {
+      id: order.id,
+      status: order.status,
+      patterns: order.patterns,
+      qty: order.qty,
+      total_bags: order.total_bags,
+      total_price: order.total_price,
+      created_at: order.created_at,
+      note: order.note || '',
+      tracking_number: order.tracking_number || '',
+      tracking_carrier: order.tracking_carrier || '',
+    });
+    return true;
+  }
+
+  return false;
+}
+
+// ==================== STATIC FILE SERVER ====================
+function serveStatic(req, res) {
+  let urlPath = req.url.split('?')[0];
+  urlPath = decodeURIComponent(urlPath);
+  if (urlPath === '/admin' || urlPath === '/track' || urlPath === '/checklink') {
+    res.writeHead(301, { 'Location': urlPath + '/' });
+    res.end();
+    return;
+  }
+  let filePath = path.join(PUBLIC_DIR, urlPath === '/' ? 'index.html' : urlPath);
+
+  // If path ends with / or has no extension, try index.html
+  if (urlPath.endsWith('/') || !path.extname(urlPath)) {
+    const tryIndex = path.join(filePath, 'index.html');
+    if (fs.existsSync(tryIndex)) filePath = tryIndex;
+  }
+
+  const ext = path.extname(filePath).toLowerCase();
+  const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+
+  fs.readFile(filePath, (err, data) => {
+    if (err) {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('404 Not Found');
+      return;
+    }
+    res.writeHead(200, {
+      'Content-Type': contentType,
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+    });
+    res.end(data);
+  });
+}
+
+// ==================== SERVER ====================
+const requestHandler = async (req, res) => {
+  try {
+    if (req.url.startsWith('/api/')) {
+      const handled = await handleApi(req, res);
+      if (!handled) send404(res);
+      return;
+    }
+    serveStatic(req, res);
+  } catch (err) {
+    console.error('Server error:', err);
+    sendJson(res, 500, { error: 'Internal server error' });
+  }
+};
+
+if (process.env.VERCEL) {
+  module.exports = requestHandler;
+} else {
+  const server = http.createServer(requestHandler);
+  server.listen(PORT, () => {
+    const url = `http://localhost:${PORT}`;
+    console.log(`Server running at ${url}`);
+    console.log(`Admin panel: ${url}/admin/`);
+    exec(`open ${url}`);
+  });
+}

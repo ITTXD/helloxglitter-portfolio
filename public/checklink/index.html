@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>helloxglitter — เช็คลิงก์ดาวน์โหลด Wallpaper</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="/style.css"/>
+<style>
+body{background:linear-gradient(135deg,#f5f0ff 0%,#ede4ff 100%);min-height:100vh;display:flex;flex-direction:column;align-items:center}
+.check-wrap{width:100%;max-width:460px;margin:0 auto;padding:20px 16px 40px}
+.check-header{text-align:center;margin-bottom:28px;padding-top:20px}
+.check-header h1{font-size:26px;font-weight:800;color:#6b3fa0;margin-bottom:4px}
+.check-header h1 span{color:#7c3aed}
+.check-header p{font-size:13px;color:#a090b8;font-weight:600}
+.back-link{display:inline-flex;align-items:center;gap:4px;color:#7c3aed;font-size:13px;font-weight:700;text-decoration:none;margin-bottom:12px}
+.back-link:hover{text-decoration:underline}
+.result-box{margin-top:16px;padding:16px;border-radius:12px;text-align:center;font-size:14px;line-height:1.6}
+.result-ok{background:#f0fff0;border:1.5px solid #b0e0b0;color:#208020}
+.result-wait{background:#fff8e0;border:1.5px solid #f0e0a0;color:#a08000}
+.result-fail{background:#f5f0ff;border:1.5px solid #d0c0e8;color:#6b3fa0}
+.download-btn{display:inline-flex;align-items:center;gap:6px;background:#7c3aed;color:white;padding:10px 24px;border-radius:99px;font-weight:800;font-size:14px;text-decoration:none;margin-top:10px;transition:background .15s}
+.download-btn:hover{background:#6d28d9}
+</style>
+</head>
+<body>
+
+<div class="check-wrap">
+  <div class="check-header">
+    <a class="back-link" href="/"><i class="ti ti-arrow-left"></i> กลับไปหน้าแรก</a>
+    <h1>hello<span>x</span>glitter</h1>
+    <p>📥 เช็คลิงก์ดาวน์โหลด Wallpaper</p>
+  </div>
+
+  <div class="form-card">
+    <div class="sec-title" style="margin-bottom:12px"><i class="ti ti-download"></i> เช็คลิงก์ดาวน์โหลด</div>
+    <div class="form-row">
+      <label>E-mail ที่ใช้สั่งซื้อ *</label>
+      <input type="email" id="checkEmail" placeholder="example@gmail.com" style="width:100%;border:1.5px solid #d0c0e8;border-radius:10px;padding:11px 14px;font-size:14px;font-family:inherit;color:#333;background:#fffafc;outline:none;box-sizing:border-box"/>
+    </div>
+    <div class="err" id="checkErr"></div>
+    <div id="checkResult" style="display:none"></div>
+    <button class="submit-btn wp-submit-btn" id="checkBtn" onclick="doCheck()"><i class="ti ti-search"></i> เช็คลิงก์ดาวน์โหลด</button>
+  </div>
+</div>
+
+<script>
+function escHtml(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function doCheck() {
+  var email = document.getElementById('checkEmail').value.trim();
+  var err = document.getElementById('checkErr');
+  var result = document.getElementById('checkResult');
+  if (!email || !email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+    err.style.display = 'block'; err.textContent = 'กรุณากรอก E-mail ให้ถูกต้อง'; return;
+  }
+  err.style.display = 'none';
+  var btn = document.getElementById('checkBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader"></i> กำลังเช็ค...';
+
+  fetch('/api/wallpaper/check', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email }),
+  }).then(function(r) { return r.json(); })
+    .then(function(data) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ti ti-search"></i> เช็คลิงก์ดาวน์โหลด';
+      result.style.display = 'block';
+      if (data.confirmed && data.download_link) {
+        result.className = 'result-box result-ok';
+        result.innerHTML = '<div>' + escHtml(data.message) + '</div><a class="download-btn" href="' + escHtml(data.download_link) + '" target="_blank"><i class="ti ti-download"></i> ดาวน์โหลด Wallpaper</a>';
+      } else if (data.confirmed && !data.download_link) {
+        result.className = 'result-box result-ok';
+        result.innerHTML = '<div>✅ ' + escHtml(data.message) + '</div><div style="font-size:13px;color:#8070a0;margin-top:8px">กำลังรอ link ดาวน์โหลดจากทางร้านนะคะ ติดตามได้ที่หน้านี้ค่ะ 🎀</div>';
+      } else if (data.found && !data.confirmed) {
+        result.className = 'result-box result-wait';
+        result.innerHTML = '<div>⏳ ' + escHtml(data.message) + '</div>';
+      } else {
+        result.className = 'result-box result-fail';
+        result.innerHTML = '<div>❌ ' + escHtml(data.message) + '</div>';
+      }
+    })
+    .catch(function(e) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ti ti-search"></i> เช็คลิงก์ดาวน์โหลด';
+      err.style.display = 'block'; err.textContent = 'เกิดข้อผิดพลาด กรุณาลองใหม่';
+    });
+}
+</script>
+</body>
+</html>

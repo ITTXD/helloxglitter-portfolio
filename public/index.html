@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>helloxglitter — Order กระเป๋าผ้า</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<nav class="navbar" id="navbar">
+  <div class="navbar-brand">hello<span>x</span>glitter</div>
+  <div class="navbar-links">
+    <a class="nav-link active" data-page="preorder" onclick="showPage('preorder')"><i class="ti ti-shopping-bag"></i> Order</a>
+    <a class="nav-link" data-page="wallpaper" onclick="showPage('wallpaper')"><i class="ti ti-brush"></i> Wallpaper</a>
+    <a class="nav-link" data-page="sticker" onclick="showPage('sticker')"><i class="ti ti-star"></i> Sticker</a>
+    <a class="nav-link" data-page="checklink" onclick="window.location.href='/checklink/'"><i class="ti ti-download"></i> เช็คลิงก์</a>
+    <a class="nav-link" data-page="tracking" onclick="showPage('tracking')"><i class="ti ti-truck"></i> ติดตามออเดอร์</a>
+  </div>
+</nav>
+
+<!-- PAGE 1: ORDER -->
+<div id="page-preorder" class="page active">
+<div class="hero">
+  <div class="hero-tag">Order เปิดรับแล้ว!</div>
+  <h1>hello<span>x</span>glitter</h1>
+  <div class="hero-sub">กระเป๋าผ้าลายน่ารัก · 46 ลาย · 4 ไซส์</div>
+</div>
+
+<div class="notice-wrap">
+  <div class="notice-card">
+    <div class="notice-title">⏰ ระยะเวลารอสินค้า</div>
+    <div class="notice-body">
+      <p>ทางร้านจะเริ่มทยอยส่งยอดให้ช่างผลิตตั้งแต่วันที่ <strong>19/06/69</strong> เพื่อช่วยลดระยะเวลาการรอสินค้า</p>
+      <p>และจะเปิดรับออเดอร์เพิ่มเติมจนถึงวันที่ <strong>23/06/69</strong></p>
+      <div class="notice-highlight">📌 คำสั่งซื้อที่ชำระเงินหลังวันที่ 19.06 จะถูกส่งเข้ารอบผลิตวันที่ 23.06 จึงอาจได้รับสินค้าช้ากว่ารอบแรกเล็กน้อย ทางร้านแนะนำให้ชำระเงินภายในวันที่ 19 เพื่อเข้ารอบผลิตแรกค่ะ ദ്ദി(ᵔᗜᵔ)</div>
+      <p class="notice-sub">สินค้าจะใช้เวลาผลิตประมาณ 7 วัน โดยไม่นับวันเสาร์–อาทิตย์ เนื่องจากเป็นวันหยุดของพี่ช่าง แต่ร้านจะเร่งให้ไวที่สุดค่ะ! หากสินค้าเสร็จก่อนกำหนด ทางร้านจะรีบตรวจสอบและจัดส่งให้ลูกค้าในทันทีค่ะ</p>
+    </div>
+  </div>
+</div>
+
+<div class="notice-wrap">
+  <div class="notice-card notice-pink">
+    <div class="notice-title">💝 พิเศษสำหรับรอบนี้ — เปิดให้สั่งซื้อเกือบทุกลายที่ร้านทำมาเลย!</div>
+    <div class="notice-body">
+      <p>ทางร้านนำลายเก่าที่ไม่ได้รีสต็อกมานานกลับมาเปิดให้สั่งซื้ออีกครั้ง ต้อนรับการกลับมาของทางร้านที่อยู่คู่กับลูกค้ามายาวนาน <strong>13 ปี</strong> มาหวนความคิดถึงไปด้วยกันนะคะ ⸜( ˶>ᴗ<˶)⸝♡</p>
+      <p>ทางร้านตั้งใจผลิตและของแถมทุกชิ้นอย่างดีที่สุด ลูกค้าจะไม่ผิดหวังกับการกลับมาของร้านครั้งนี้อย่างแน่นอนค่ะ</p>
+      <p>ลูกค้าที่เคยพลาดได้มีโอกาสเก็บลายที่ชอบในราคาพิเศษจากทางร้าน โดยไม่ต้องตามหาสินค้ามือสองในราคาที่สูงกว่าค่ะ โดยเป็นราคาที่ไม่ overpriced คู่ขวัญกับคนไทย!</p>
+      <div class="notice-highlight">⚠️ บางลายอาจเป็นการเปิดผลิตครั้งสุดท้าย และจะไม่มีการนำกลับมาผลิตหรือรีสต็อกอีก</div>
+      <p class="notice-sub">การเปิดรับออเดอร์ครั้งนี้ ทางร้านจะนำยอดความสนใจของลูกค้าในแต่ละลายไปประกอบการพิจารณาผลิตและจัดสต็อกในอนาคตเพื่อช่วยลดปัญหาสินค้าค้างสต็อกค่ะ 🗂️৻(  •̀ ᗜ •́  ৻)</p>
+    </div>
+  </div>
+</div>
+
+<div class="info-banner">
+  <div class="banner-card">
+    <i class="ti ti-truck banner-icon"></i>
+    <div>
+      <div class="banner-title">🚚 ค่าจัดส่ง</div>
+      <div class="banner-body">
+        • ค่าส่งเหมา <strong>50 บาท</strong><br>
+        • พื้นที่ห่างไกล <strong>+15 บาท</strong><br><br>
+        📦 แจ้งเลขแทร็คผ่าน openchat ใน note เลยนะคะ<br>
+        กดลิ้งค์เพื่อเข้ากลุ่ม → <a href="https://urlkub.co/FUY9pP" target="_blank" style="color:#d45a8a;font-weight:700">🎀 เข้ากลุ่ม</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="promo-wrap">
+    <div class="promo-header"><i class="ti ti-tag"></i> โปรโมชั่นพิเศษ</div>
+    <div class="ptabs" id="promoTabs">
+      <div class="ptab active" data-panel="pnormal"><div class="pt-name">Normal</div><div class="pt-sub">15×16"</div></div>
+      <div class="ptab" data-panel="plarge"><div class="pt-name">Large</div><div class="pt-sub">15.5×4×16"</div></div>
+      <div class="ptab" data-panel="peasy"><div class="pt-name">Easy Bag</div><div class="pt-sub">10.5×5×14"</div></div>
+      <div class="ptab" data-panel="pmaxi"><div class="pt-name">Maxi</div><div class="pt-sub">18×20"</div></div>
+    </div>
+    <div class="promo-panel show" id="pnormal">
+      <div class="pgrid">
+        <div class="pitem"><div class="pqty">1 ใบ</div><div class="pori">399 ฿</div><div class="pprice">299 ฿</div><div class="psave">ประหยัด 100 ฿</div></div>
+        <div class="pitem"><div class="pqty">2 ใบ</div><div class="pori">798 ฿</div><div class="pprice">559 ฿</div><div class="pbadge">+ Griptok + พวงกุญแจ</div><div class="psave">ประหยัด 239 ฿</div></div>
+        <div class="pitem"><div class="pqty">3 ใบขึ้นไป</div><div class="pori">1,197 ฿</div><div class="pprice">750 ฿</div><div class="pbadge">🚚 ส่งฟรี + Griptok + พวงกุญแจ + กระเป๋าหูรูดสุ่มลาย 1 ใบ</div><div class="psave">ประหยัด 447 ฿</div></div>
+      </div>
+    </div>
+    <div class="promo-panel" id="plarge">
+      <div class="pgrid">
+        <div class="pitem"><div class="pqty">1 ใบ</div><div class="pori">499 ฿</div><div class="pprice">449 ฿</div><div class="psave">ประหยัด 50 ฿</div></div>
+        <div class="pitem"><div class="pqty">2 ใบ</div><div class="pori">998 ฿</div><div class="pprice">699 ฿</div><div class="pbadge">+ Griptok 2 + พวงกุญแจ 2</div><div class="psave">ประหยัด 299 ฿</div></div>
+        <div class="pitem"><div class="pqty">3 ใบขึ้นไป</div><div class="pori">1,497 ฿</div><div class="pprice">990 ฿</div><div class="pbadge">🚚 ส่งฟรี + Griptok 2 + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 2 ใบ</div><div class="psave">ประหยัด 507 ฿</div></div>
+      </div>
+    </div>
+    <div class="promo-panel" id="peasy">
+      <div class="pgrid">
+        <div class="pitem"><div class="pqty">1 ใบ</div><div class="pori">425 ฿</div><div class="pprice">355 ฿</div><div class="psave">ประหยัด 70 ฿</div></div>
+        <div class="pitem"><div class="pqty">2 ใบ</div><div class="pori">850 ฿</div><div class="pprice">630 ฿</div><div class="pbadge">+ Griptok + พวงกุญแจ</div><div class="psave">ประหยัด 220 ฿</div></div>
+        <div class="pitem"><div class="pqty">3 ใบขึ้นไป</div><div class="pori">1,275 ฿</div><div class="pprice">800 ฿</div><div class="pbadge">🚚 ส่งฟรี + Griptok + พวงกุญแจ + กระเป๋าหูรูดสุ่มลาย 1 ใบ</div><div class="psave">ประหยัด 475 ฿</div></div>
+      </div>
+    </div>
+    <div class="promo-panel" id="pmaxi">
+      <div class="pgrid">
+        <div class="pitem"><div class="pqty">1 ใบ</div><div class="pori">550 ฿</div><div class="pprice">499 ฿</div><div class="pbadge">แถม Keychain 1</div><div class="psave">ประหยัด 51 ฿</div></div>
+        <div class="pitem"><div class="pqty">2 ใบ</div><div class="pori">1,100 ฿</div><div class="pprice">900 ฿</div><div class="pbadge">+ Griptok + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 1 ใบ</div><div class="psave">ประหยัด 200 ฿</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="sec">
+  <div class="sec-title"><i class="ti ti-photo"></i> เลือกลายที่ชอบ <span style="font-size:12px;color:#d4a0b0;font-weight:400;text-transform:none;letter-spacing:0;margin-left:4px">— เลือกได้หลายลาย</span></div>
+  <div class="size-tabs" id="sizeTabs">
+    <div class="stab active" data-size="all">ทั้งหมด (46)</div>
+    <div class="stab" data-size="normal">Normal (36)</div>
+    <div class="stab" data-size="large">Large (7)</div>
+    <div class="stab" data-size="easy">Easy Bag (2)</div>
+    <div class="stab" data-size="maxi">Maxi (1)</div>
+  </div>
+  <div class="gallery" id="gallery"></div>
+
+  <div class="selected-bar">
+    <div class="sb-top">
+      <i class="ti ti-sparkles" style="color:#e0a0b8;font-size:17px"></i>
+      <span class="sb-label">ลายที่เลือก</span>
+      <span class="sb-count" id="sbCount">0 ลาย</span>
+      <span class="sb-clear" id="sbClear" style="display:none" onclick="clearAll()">ล้างทั้งหมด ✕</span>
+    </div>
+    <div class="sb-chips" id="sbChips"><span class="sb-empty">ยังไม่ได้เลือกลาย กดที่รูปเพื่อเลือกได้เลยค่ะ</span></div>
+  </div>
+
+  <div class="sec-title" style="margin-top:8px"><i class="ti ti-clipboard-text"></i> ข้อมูลสั่งซื้อ</div>
+  <div class="form-card" id="formCard">
+    <div class="form-row">
+      <label>ชื่อ-นามสกุล *</label>
+      <input type="text" id="fname" placeholder="ชื่อ-นามสกุล ผู้รับ"/>
+    </div>
+    <div class="form-row">
+      <label>เบอร์โทรศัพท์ *</label>
+      <input type="tel" id="fphone" placeholder="เช่น 0812345678 (ตัวเลข 10 หลัก)" maxlength="12"/>
+    </div>
+    <div class="form-row">
+      <label>ที่อยู่จัดส่ง *</label>
+      <textarea id="faddress" rows="3" placeholder="บ้านเลขที่ ซอย ถนน แขวง/ตำบล เขต/อำเภอ จังหวัด รหัสไปรษณีย์"></textarea>
+    </div>
+    <div class="form-row">
+      <label>หมายเหตุ</label>
+      <textarea id="fnote" rows="2" placeholder="มีอะไรอยากแจ้งร้าน พิมพ์ไว้ตรงนี้ได้เลยนะคะ ( ദ്ദി ˙ᗜ˙ )"></textarea>
+    </div>
+    <div class="summary-box">
+      <div class="sum-title"><i class="ti ti-receipt"></i> สรุปยอดสั่งซื้อ</div>
+      <div id="sumItems"><div class="sum-empty">เลือกลายและใส่จำนวนเพื่อดูยอดรวมค่ะ</div></div>
+    </div>
+    <div class="err" id="errMsg"></div>
+    <button class="submit-btn" onclick="doSubmit()"><i class="ti ti-heart"></i> ตกลงการสั่งซื้อ ✓</button>
+  </div>
+
+  <div class="success" id="successBox">
+    <div class="si"><i class="ti ti-circle-check"></i></div>
+    <h3>ได้รับข้อมูลแล้ว ขอบคุณมากนะคะ!</h3>
+    <p>ทีมงาน helloxglitter จะติดต่อกลับเพื่อแจ้งยอดและวิธีชำระเงินภายใน 1–2 วันทำการค่ะ<br>ค่าจัดส่งเหมา 50 บาท 🚚✨</p>
+  </div>
+</div>
+<div class="footer">helloxglitter · กระเป๋าผ้าลายน่ารัก<br>สอบถามเพิ่มเติมได้ทาง Instagram ค่ะ</div>
+</div>
+
+<!-- PAGE 2: THANK YOU -->
+<div id="page-thankyou" class="page">
+<div class="hero">
+  <div class="hero-tag">ขอบคุณค่ะ! 🎉</div>
+  <h1>hello<span>x</span>glitter</h1>
+  <div class="hero-sub">ได้รับ order ของคุณแล้วค่ะ</div>
+</div>
+<div class="ty-wrap" id="ty-content">
+  <!-- filled by JS -->
+</div>
+</div>
+
+<!-- PAGE 3: TRACKING -->
+<div id="page-tracking" class="page">
+<div class="hero">
+  <div class="hero-tag">ติดตามออเดอร์</div>
+  <h1>hello<span>x</span>glitter</h1>
+  <div class="hero-sub">ตรวจสอบสถานะ order ของคุณค่ะ</div>
+</div>
+<div class="tr-wrap">
+  <div class="tr-card">
+    <div class="tr-title"><i class="ti ti-search"></i> ค้นหาออเดอร์ของคุณ</div>
+    <div class="tr-sub">กรอกเบอร์โทรศัพท์ที่ใช้สั่งซื้อเพื่อดูสถานะและเลข tracking ได้เลยค่ะ</div>
+    <input class="tr-input" id="tr-phone" type="tel" placeholder="เบอร์โทรศัพท์ที่ใช้สั่งซื้อ" oninput="trackSearch()"/>
+    <div class="tr-result" id="tr-result"><!-- filled by JS --></div>
+  </div>
+  <div id="tr-all-orders"></div>
+  <button class="tr-back-btn" onclick="showPage('preorder')"><i class="ti ti-arrow-left"></i> กลับไปสั่งซื้อ</button>
+</div>
+</div>
+
+<!-- PAGE: STICKER -->
+<div id="page-sticker" class="page">
+<div class="hero sticker-hero">
+  <div class="hero-tag">สติกเกอร์ลายน่ารัก ⭐</div>
+  <h1>hello<span>x</span>glitter</h1>
+  <div class="hero-sub">สติกเกอร์แผงละ 69 บาท · ค่าส่ง 50 บาท (ฟรี 3 แผงขึ้นไป)</div>
+</div>
+
+<div class="sec">
+  <div class="sec-title"><i class="ti ti-star"></i> เลือกลายสติกเกอร์ <span style="font-size:12px;color:#80b0d0;font-weight:400;text-transform:none;letter-spacing:0;margin-left:4px">— เลือกได้หลายลาย</span></div>
+  <div class="gallery sticker-gallery" id="stickerGallery"></div>
+
+  <div class="selected-bar sticker-bar">
+    <div class="sb-top">
+      <i class="ti ti-star" style="color:#80b0d0;font-size:17px"></i>
+      <span class="sb-label">ลายที่เลือก</span>
+      <span class="sb-count" id="stickerCount">0 แผง</span>
+      <span class="sb-clear" id="stickerClear" style="display:none" onclick="stickerClearAll()">ล้างทั้งหมด ✕</span>
+    </div>
+    <div class="sb-chips" id="stickerChips"><span class="sb-empty">ยังไม่ได้เลือกลาย กดที่รูปเพื่อเลือกได้เลยค่ะ</span></div>
+  </div>
+
+  <div class="sec-title" style="margin-top:8px"><i class="ti ti-clipboard-text"></i> ข้อมูลสั่งซื้อ</div>
+  <div class="form-card sticker-form" id="stickerFormCard">
+    <div class="form-row">
+      <label>ชื่อ-นามสกุล *</label>
+      <input type="text" id="stickerFname" placeholder="ชื่อ-นามสกุล ผู้รับ"/>
+    </div>
+    <div class="form-row">
+      <label>เบอร์โทรศัพท์ *</label>
+      <input type="tel" id="stickerFphone" placeholder="เช่น 0812345678 (ตัวเลข 10 หลัก)" maxlength="12"/>
+    </div>
+    <div class="form-row">
+      <label>ที่อยู่จัดส่ง *</label>
+      <textarea id="stickerFaddress" rows="3" placeholder="บ้านเลขที่ ซอย ถนน แขวง/ตำบล เขต/อำเภอ จังหวัด รหัสไปรษณีย์"></textarea>
+    </div>
+    <div class="form-row">
+      <label>หมายเหตุ</label>
+      <textarea id="stickerFnote" rows="2" placeholder="มีอะไรอยากแจ้งร้าน พิมพ์ไว้ตรงนี้ได้เลยนะคะ"></textarea>
+    </div>
+    <div class="summary-box sticker-summary">
+      <div class="sum-title"><i class="ti ti-receipt"></i> สรุปยอดสั่งซื้อ</div>
+      <div id="stickerSumItems"><div class="sum-empty">เลือกลายสติกเกอร์เพื่อดูยอดรวมค่ะ</div></div>
+    </div>
+    <div class="slip-section" id="stickerSlipSection">
+      <div class="slip-title"><i class="ti ti-upload"></i> อัปโหลดสลีปโอนเงิน</div>
+      <div class="slip-desc">แนบรูปสลีปการโอนเงิน</div>
+      <div class="slip-drop" id="stickerSlipDrop" onclick="document.getElementById('stickerSlipInput').click()" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="event.preventDefault();this.classList.remove('dragover');stickerHandleSlip(event.dataTransfer.files[0])">
+        <i class="ti ti-cloud-upload" style="font-size:36px;color:#5a90c0;margin-bottom:8px;display:block"></i>
+        <div style="font-size:13px;font-weight:700;color:#4080b0">แตะเพื่อเลือกรูป หรือลากมาวาง</div>
+        <div style="font-size:11px;color:#a09098;margin-top:4px">JPG, PNG ไม่เกิน 5 MB</div>
+      </div>
+      <input type="file" id="stickerSlipInput" accept="image/*" style="display:none" onchange="stickerHandleSlip(this.files[0])"/>
+      <div class="slip-preview hidden" id="stickerSlipPreview">
+        <img id="stickerSlipPreviewImg" src="" alt="สลีป"/>
+        <div class="slip-actions">
+          <button class="slip-btn slip-btn-cancel" onclick="stickerCancelSlip()"><i class="ti ti-x"></i> ยกเลิก</button>
+        </div>
+      </div>
+      <div class="slip-done hidden" id="stickerSlipDone"><i class="ti ti-circle-check"></i> อัปโหลดสลีปเรียบร้อยแล้วค่ะ!</div>
+    </div>
+    <div class="err" id="stickerErrMsg"></div>
+    <button class="submit-btn sticker-submit-btn" id="stickerSubmitBtn" onclick="stickerDoSubmit()"><i class="ti ti-heart"></i> ตกลงการสั่งซื้อ ✓</button>
+  </div>
+  <div class="success hidden" id="stickerSuccessBox">
+    <div class="si"><i class="ti ti-circle-check"></i></div>
+    <h3>ตรวจสอบสลิปและบันทึกออเดอร์สำเร็จแล้วค่ะ! 🎉</h3>
+    <p>ทีมงาน helloxglitter ได้รับยอดและข้อมูลการสั่งซื้อของคุณเรียบร้อยแล้วค่ะ</p>
+    <div class="wp-orderid-box" id="stickerOrderIdBox" style="display:none">
+      <div class="wp-orderid-label">รหัสออเดอร์ของคุณ</div>
+      <div class="wp-orderid-val" id="stickerOrderIdVal"></div>
+    </div>
+    <div id="stickerSlipVerifyResult" style="margin-top:16px;"></div>
+  </div>
+</div>
+<div class="footer">helloxglitter · สติกเกอร์ลายน่ารัก<br>สอบถามเพิ่มเติมได้ทาง Instagram ค่ะ</div>
+</div>
+
+<!-- PAGE 4: WALLPAPER -->
+<div id="page-wallpaper" class="page">
+<div class="hero wp-hero">
+  <div class="hero-tag">Wallpaper น่ารักๆ 🎨</div>
+  <h1>hello<span>x</span>glitter</h1>
+  <div class="hero-sub">Wallpaper ลายน่ารัก · ลายละ 99 บาท · ไม่มีค่าส่ง</div>
+</div>
+
+<div class="notice-wrap">
+  <div class="notice-card notice-purple">
+    <div class="notice-title">🎨 Wallpaper Digital Download</div>
+    <div class="notice-body">
+      <p>เปลี่ยนหน้าจอเดิม ๆ ให้กลายเป็นมุมน่ารักที่เห็นแล้วใจฟูทุกวัน 💖</p>
+      <p>ลายวาดสไตล์ร้าน HLG เหมาะสำหรับตกแต่งหน้าจอมือถือ แท็บเล็ต หรือคอมพิวเตอร์ ให้ดูสดใส น่ารัก และมีสไตล์มากขึ้น ✨</p>
+      <div class="notice-highlight">
+        💌 รายละเอียดไฟล์<br>
+        ไฟล์ภาพมีความละเอียดสูง<br>
+        ไม่มีลายน้ำ<br>
+        ดาวน์โหลดแล้วใช้งานได้ทันที<br>
+        ไม่มีค่าส่ง เพราะเป็นสินค้า Digital Product<br><br>
+        🌷 ราคาเพียง 99 บาท / SET<br><br>
+        เลือก Wallpaper ลายโปรด แล้วพกความน่ารักติดหน้าจอไปด้วยกันนะคะ 🎀💖
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="notice-wrap">
+  <div class="notice-card notice-purple">
+    <div class="notice-title">💝 วิธีสั่งซื้อ</div>
+    <div class="notice-body">
+      <p>1. เลือกลายที่ชอบจากแกลเลอรีด้านล่าง แล้วกด +/- เพื่อเลือกจำนวนที่ต้องการ</p>
+      <p>2. กรอก E-mail ที่ใช้ในการรับ Wallpaper</p>
+      <p>3. โอนชำระ แล้วแนบสลิปการโอนเงิน</p>
+      <div class="notice-highlight">รอระบบยืนยัน + แจ้ง link ดาวน์โหลด → ดาวน์โหลดได้เลย! 💕✨</div>
+    </div>
+  </div>
+</div>
+
+<div class="info-banner">
+  <div class="banner-card">
+    <i class="ti ti-device-mobile banner-icon"></i>
+    <div>
+      <div class="banner-title">📱 Wallpaper</div>
+      <div class="banner-body">
+        <strong>99 ฿</strong> ต่อ 1 เซ็ต<br>
+        ไม่มีค่าส่ง · ชำระผ่านบัญชีธนาคาร<br><br>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <strong>กสิกร 749-2439-414</strong> (Nichakarn E.)
+          <button onclick="copyBank(this)" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📋 คัดลอก</button>
+        </div>
+        <img src="/images/qrcode.jpeg" alt="QR Code" style="width:100%;border-radius:10px;margin-top:10px;display:block;border:1.5px solid #d0c0e8;box-sizing:border-box"/>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="sec">
+  <div class="sec-title"><i class="ti ti-photo"></i> Wallpaper <span style="font-size:12px;color:#b8a0d0;font-weight:400;text-transform:none;letter-spacing:0;margin-left:4px">— เลือกจำนวนได้</span></div>
+  
+  <div class="wp-card" id="wpCard" onclick="wpTogglePattern('Wallpaper')">
+    <img class="wp-card-img" src="/images/wallphone.png" alt="Wallpaper"/>
+    <div class="wp-card-info">
+      <div class="wp-card-name">Wallpaper</div>
+      <div class="wp-card-price">99 ฿</div>
+    </div>
+    <div class="wp-card-check" id="wpCardCheck"><i class="ti ti-check"></i></div>
+    <div class="wp-card-qty" id="wpCardQty" onclick="event.stopPropagation()">
+      <button class="gqbtn" onclick="event.stopPropagation();wpChangeQty('Wallpaper',-1)">−</button>
+      <span class="gqnum" id="wpCardQtyNum">1</span>
+      <button class="gqbtn" onclick="event.stopPropagation();wpChangeQty('Wallpaper',1)">+</button>
+    </div>
+  </div>
+
+  <div class="wp-card" style="border:2px dashed #d0c0e8;cursor:default;opacity:0.7;margin-top:12px">
+    <div style="width:100%;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#f5f0ff,#ede4ff)">
+      <div style="text-align:center">
+        <div style="font-size:48px;color:#d0c0e8;margin-bottom:8px">🖼️</div>
+        <div style="font-size:18px;font-weight:800;color:#b8a0d0">Coming Soon</div>
+        <div style="font-size:12px;color:#c0b0d8;margin-top:4px">เร็วๆ นี้</div>
+      </div>
+    </div>
+    <div class="wp-card-info">
+      <div class="wp-card-name" style="color:#c0b0d8">สินค้า วอลเปเป้อ</div>
+      <div class="wp-card-price" style="color:#c0b0d8">— ฿</div>
+    </div>
+  </div>
+
+  <div class="sec-title" style="margin-top:8px"><i class="ti ti-clipboard-text"></i> ข้อมูลสั่งซื้อ</div>
+  <div class="form-card" id="wpFormCard">
+    <div class="form-row">
+      <label>E-mail *</label>
+      <input type="email" id="wpfemail" placeholder="example@gmail.com" style="width:100%;border:1.5px solid #d0c0e8;border-radius:10px;padding:11px 14px;font-size:14px;font-family:inherit;color:#333;background:#fffafc;outline:none;box-sizing:border-box"/>
+    </div>
+    <div class="form-row">
+      <label>หมายเหตุ</label>
+      <textarea id="wpfnote" rows="2" placeholder="มีอะไรอยากแจ้งร้าน พิมพ์ไว้ตรงนี้ได้เลยนะคะ ( ദ്ദി ˙ᗜ˙ )"></textarea>
+    </div>
+    <div class="summary-box">
+      <div class="sum-title"><i class="ti ti-receipt"></i> สรุปยอดสั่งซื้อ</div>
+      <div id="wpSumItems"><div class="sum-empty">เลือกลายเพื่อดูยอดรวมค่ะ</div></div>
+    </div>
+
+    <div class="slip-section" id="wpSlipSection">
+      <div class="slip-title"><i class="ti ti-upload"></i> อัปโหลดสลีปโอนเงิน</div>
+      <div class="slip-desc">แนบรูปสลีปการโอนเงิน</div>
+      <div class="slip-drop" id="wpSlipDrop" onclick="document.getElementById('wpSlipInput').click()" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="event.preventDefault();this.classList.remove('dragover');wpHandleSlip(event.dataTransfer.files[0])">
+        <i class="ti ti-cloud-upload" style="font-size:36px;color:#7c3aed;margin-bottom:8px;display:block"></i>
+        <div style="font-size:13px;font-weight:700;color:#6b3fa0">แตะเพื่อเลือกรูป หรือลากมาวาง</div>
+        <div style="font-size:11px;color:#a09098;margin-top:4px">JPG, PNG ไม่เกิน 5 MB</div>
+      </div>
+      <input type="file" id="wpSlipInput" accept="image/*" style="display:none" onchange="wpHandleSlip(this.files[0])"/>
+      <div class="slip-preview hidden" id="wpSlipPreview">
+        <img id="wpSlipPreviewImg" src="" alt="สลีป"/>
+        <div class="slip-actions">
+          <button class="slip-btn slip-btn-cancel" onclick="wpCancelSlip()"><i class="ti ti-x"></i> ยกเลิก</button>
+        </div>
+      </div>
+      <div class="slip-done hidden" id="wpSlipDone"><i class="ti ti-circle-check"></i> อัปโหลดสลีปเรียบร้อยแล้วค่ะ!</div>
+    </div>
+
+    <div class="err" id="wpErrMsg"></div>
+    <button class="submit-btn wp-submit-btn" id="wpSubmitBtn" onclick="wpDoSubmit()"><i class="ti ti-heart"></i> ตกลงการสั่งซื้อ ✓</button>
+  </div>
+
+  <div class="success hidden" id="wpSuccessBox">
+    <div class="si"><i class="ti ti-circle-check"></i></div>
+    <h3>ชำระเงินสำเร็จ ขอบคุณมากนะคะ! 🎉</h3>
+    <p>ระบบตรวจสอบสลิปและยืนยันออเดอร์ให้คุณอัตโนมัติแล้วค่ะ สามารถกดรับวอลเปเปอร์ได้ทันทีเลย 💕✨<br><br><a href="/checklink/" target="_blank" class="submit-btn" style="display:inline-block; text-decoration:none; text-align:center; background:linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);">📥 ไปหน้าดาวน์โหลด Wallpaper →</a></p>
+    <div class="wp-orderid-box" id="wpOrderIdBox" style="display:none">
+      <div class="wp-orderid-label">รหัสออเดอร์ของคุณ</div>
+      <div class="wp-orderid-val" id="wpOrderIdVal"></div>
+    </div>
+  </div>
+</div>
+<div class="footer">helloxglitter · Wallpaper ลายน่ารัก<br>สอบถามเพิ่มเติมได้ทาง Instagram ค่ะ</div>
+</div>
+
+<!-- PAGE 5: WALLPAPER CHECK -->
+<div id="page-wpcheck" class="page">
+<div class="hero wp-hero">
+  <div class="hero-tag">📥 เช็คลิงก์ดาวน์โหลด</div>
+  <h1>hello<span>x</span>glitter</h1>
+  <div class="hero-sub">เช็คลิงก์ดาวน์โหลด Wallpaper</div>
+</div>
+
+<div class="sec">
+  <div class="form-card" id="wpCheckCard">
+    <div class="form-row">
+      <label>E-mail ที่ใช้สั่งซื้อ *</label>
+      <input type="email" id="wpCheckEmail" placeholder="example@gmail.com" style="width:100%;border:1.5px solid #d0c0e8;border-radius:10px;padding:11px 14px;font-size:14px;font-family:inherit;color:#333;background:#fffafc;outline:none;box-sizing:border-box"/>
+    </div>
+    <div class="err" id="wpCheckErr"></div>
+    <div id="wpCheckResult" style="display:none"></div>
+    <button class="submit-btn wp-submit-btn" id="wpCheckBtn" onclick="wpCheckDownload()"><i class="ti ti-search"></i> เช็คลิงก์ดาวน์โหลด</button>
+  </div>
+</div>
+<div class="footer">helloxglitter · เช็คลิงก์ดาวน์โหลด</div>
+</div>
+
+
+
+<!-- MAXI POPUP -->
+<div class="maxi-popup" id="maxiPopup" onclick="closeMaxiPopup(event)">
+  <div class="maxi-popup-card" onclick="event.stopPropagation()">
+    <div class="maxi-popup-icon">🎀</div>
+    <div class="maxi-popup-title">สินค้า Order พิเศษน้าค้า~</div>
+    <div class="maxi-popup-msg">ลาย Diary's Musketeers เป็นรอบผลิตตามออเดอร์พิเศษค่ะ<br>ต้องรอระยะเวลาผลิตประมาณ <strong>10 วัน</strong> น้า 🥰</div>
+    <button class="maxi-popup-btn" onclick="closeMaxiPopup()">เข้าใจแล้วค้า~</button>
+  </div>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div class="modal-overlay hidden" id="confirmModal" onclick="closeConfirm(event)">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="modal-head">ตกลงการสั่งซื้อ</div>
+    <div class="modal-body" id="confirmBody"></div>
+    <div class="modal-actions">
+      <button class="modal-btn modal-btn-cancel" onclick="closeConfirm()">ยกเลิก</button>
+      <button class="modal-btn modal-btn-confirm" id="confirmBtn" onclick="submitOrder()">ตกลง ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- WELCOME POPUP -->
+<div class="welcome-popup" id="welcomePopup">
+  <div class="welcome-popup-card">
+    <div class="welcome-popup-icon">🎀</div>
+    <div class="welcome-popup-title">สวัสดีค่ะ!</div>
+    <div class="welcome-popup-sub">helloxglitter ยินดีต้อนรับ</div>
+    <div class="welcome-popup-msg">ต้องการเข้าหน้าไหนคะ?</div>
+    <div class="welcome-popup-btns">
+      <button class="welcome-btn welcome-btn-preorder" onclick="selectPage('preorder')">
+        <span class="welcome-btn-icon">🛍️</span>
+        <span class="welcome-btn-text">Order กระเป๋า<br><span class="welcome-btn-sub">กระเป๋าผ้าลายน่ารัก</span></span>
+      </button>
+      <button class="welcome-btn welcome-btn-wallpaper" onclick="selectPage('wallpaper')">
+        <span class="welcome-btn-icon">🎨</span>
+        <span class="welcome-btn-text">Wallpaper<br><span class="welcome-btn-sub">ซื้อขาย wallpaper</span></span>
+      </button>
+      <button class="welcome-btn" onclick="selectPage('sticker')" style="border-color:#a0d0ff;background:#f0f8ff">
+        <span class="welcome-btn-icon">⭐</span>
+        <span class="welcome-btn-text">Sticker<br><span class="welcome-btn-sub">สติกเกอร์ลายน่ารัก</span></span>
+      </button>
+      <button class="welcome-btn" onclick="window.location.href='/checklink/'" style="border-color:#d0c0e8;background:#f5f0ff">
+        <span class="welcome-btn-icon">📥</span>
+        <span class="welcome-btn-text">เช็คลิงก์<br><span class="welcome-btn-sub">ดาวน์โหลด wallpaper</span></span>
+      </button>
+      <button class="welcome-btn" onclick="selectPage('tracking')" style="border-color:#c8e6c9;background:#f0faf0">
+        <span class="welcome-btn-icon">📦</span>
+        <span class="welcome-btn-text">ติดตามออเดอร์<br><span class="welcome-btn-sub">ดูสถานะ & เลข tracking</span></span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- IMAGE LIGHTBOX -->
+<div id="imgLightbox" class="img-lightbox" onclick="closeImgLightbox(event)">
+  <button class="img-lb-close" onclick="closeImgLightbox()"><i class="ti ti-x"></i></button>
+  <div class="img-lb-wrap" id="imgLbWrap">
+    <img id="imgLbImg" src=""/>
+  </div>
+</div>
+
+<div id="musicBtn" class="music-btn" onclick="toggleMusic()">
+  <i class="ti ti-music"></i>
+</div>
+<div id="musicPlayer" class="music-player hidden">
+  <div class="music-header">
+    <span class="music-title"><i class="ti ti-disc"></i> เพลงเพราะๆ</span>
+    <button class="music-close" onclick="toggleMusic()"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="music-controls">
+    <button class="mc-btn" id="mcPlayBtn" onclick="musicPlay()"><i class="ti ti-player-play"></i></button>
+    <button class="mc-btn" onclick="musicPause()"><i class="ti ti-player-pause"></i></button>
+    <input type="range" class="mc-volume" id="mcVolume" min="0" max="1" step="0.05" value="0.5" oninput="musicVolume(this.value)"/>
+  </div>
+</div>
+<script src="/data/patterns.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>helloxglitter — หลังบ้าน</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="/admin/admin.css"/>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginPage" class="login-page">
+  <div class="login-card">
+    <div class="login-logo">hello<span>x</span>glitter</div>
+    <div class="login-sub">หลังบ้าน</div>
+    <form id="loginForm" onsubmit="return doLogin(event)">
+      <input class="login-input" id="loginPassword" type="password" placeholder="รหัสผ่าน" autofocus/>
+      <div class="login-err" id="loginErr"></div>
+      <button class="login-btn" type="submit">เข้าสู่ระบบ</button>
+    </form>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboardPage" class="dashboard hidden">
+
+  <!-- Top Bar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-logo">hello<span>x</span>glitter</div>
+      <div class="topbar-sub">หลังบ้าน</div>
+    </div>
+    <div class="topbar-tabs">
+      <button class="topbar-tab active" data-view="orders" onclick="switchView('orders')"><i class="ti ti-shopping-bag"></i> ออเดอร์</button>
+      <button class="topbar-tab" data-view="summary" onclick="switchView('summary')"><i class="ti ti-file-description"></i> สรุปยอด</button>
+      <button class="topbar-tab" data-view="print" onclick="switchView('print')"><i class="ti ti-printer"></i> พิมพ์ใบแปะหน้าพัสดุ</button>
+      <button class="topbar-tab" data-view="tracking" onclick="switchView('tracking')"><i class="ti ti-truck"></i> ใส่เลขพัสดุ</button>
+    </div>
+    <div class="topbar-right">
+      <button class="logout-btn" onclick="doLogout()"><i class="ti ti-logout"></i> ออก</button>
+    </div>
+  </div>
+
+  <!-- VIEW: ORDERS -->
+  <div id="viewOrders" class="admin-view">
+  <!-- Stats Cards -->
+  <div class="stats-row" id="statsRow">
+    <div class="stat-card">
+      <div class="stat-icon"><i class="ti ti-shopping-bag"></i></div>
+      <div class="stat-info">
+        <div class="stat-val" id="statTotal">-</div>
+        <div class="stat-label">ออเดอร์ทั้งหมด</div>
+      </div>
+    </div>
+    <div class="stat-card stat-warn">
+      <div class="stat-icon"><i class="ti ti-clock"></i></div>
+      <div class="stat-info">
+        <div class="stat-val" id="statPending">-</div>
+        <div class="stat-label">รอยืนยัน</div>
+      </div>
+    </div>
+    <div class="stat-card stat-money">
+      <div class="stat-icon"><i class="ti ti-cash"></i></div>
+      <div class="stat-info">
+        <div class="stat-val" id="statRevenue">-</div>
+        <div class="stat-label">รายได้รวม</div>
+      </div>
+    </div>
+    <div class="stat-card stat-bags">
+      <div class="stat-icon"><i class="ti ti-package"></i></div>
+      <div class="stat-info">
+        <div class="stat-val" id="statBags">-</div>
+        <div class="stat-label">จำนวนใบทั้งหมด</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filter Bar -->
+  <div class="filter-bar">
+    <div class="filter-tabs" id="filterTabs">
+      <button class="ftab active" data-filter="all">ทั้งหมด <span class="ftab-count">0</span></button>
+      <button class="ftab" data-filter="0">รอยืนยัน <span class="ftab-count">0</span></button>
+      <button class="ftab" data-filter="1">ยืนยันแล้ว <span class="ftab-count">0</span></button>
+      <button class="ftab" data-filter="2">กำลังผลิต <span class="ftab-count">0</span></button>
+      <button class="ftab" data-filter="3">จัดส่งแล้ว <span class="ftab-count">0</span></button>
+    </div>
+    <div class="filter-date-tabs" id="filterDateTabs">
+      <button class="dftab active" data-dfilter="all">ทั้งหมด</button>
+      <button class="dftab" data-dfilter="upto19">ถึง 19 มิ.ย.</button>
+      <button class="dftab" data-dfilter="20to25">20–25 มิ.ย.</button>
+      <button class="dftab" data-dfilter="after25">หลัง 25 มิ.ย.</button>
+    </div>
+    <div class="refresh-bar">
+      <button class="refresh-btn" id="refreshBtn" onclick="refreshData()"><i class="ti ti-refresh"></i> รีเฟรช</button>
+      <div class="filter-search">
+        <i class="ti ti-search"></i>
+        <input id="searchInput" placeholder="ค้นหา รหัส / ชื่อ..." oninput="filterOrders()"/>
+      </div>
+    </div>
+  </div>
+
+  <!-- Orders Table -->
+  <div class="table-wrap">
+    <table class="order-table" id="orderTable">
+      <thead>
+        <tr>
+          <th>รหัส</th>
+          <th>ลูกค้า</th>
+          <th>ลาย</th>
+          <th>ใบ</th>
+          <th>ยอดรวม</th>
+          <th>tracking</th>
+          <th>สถานะ</th>
+          <th>วันที่</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="orderTableBody"></tbody>
+    </table>
+    <div class="empty-state" id="emptyState" style="display:none">
+      <i class="ti ti-inbox"></i>
+      <div>ยังไม่มีออเดอร์</div>
+    </div>
+  </div>
+  </div><!-- /viewOrders -->
+
+  <!-- VIEW: SUMMARY -->
+  <div id="viewSummary" class="admin-view hidden">
+    <div class="summary-page">
+      <div class="date-filter-bar">
+        <button class="dtab active" data-drange="all" onclick="switchDateFilter('all')">ทั้งหมด</button>
+        <button class="dtab" data-drange="before19" onclick="switchDateFilter('before19')">ชำระก่อน 19 มิ.ย.</button>
+        <button class="dtab" data-drange="19to23" onclick="switchDateFilter('19to23')">รอบ 21-23 มิ.ย.</button>
+        <button class="dtab" data-drange="24to25" onclick="switchDateFilter('24to25')">24-25 มิ.ย.</button>
+      </div>
+      <div class="summary-wrap" id="productSummary"></div>
+    </div>
+  </div>
+
+  <!-- VIEW: PRINT LABELS -->
+  <div id="viewPrint" class="admin-view hidden">
+    <div class="print-page">
+      <div class="print-toolbar">
+        <div class="print-toolbar-left">
+          <h2 class="print-title"><i class="ti ti-printer"></i> พิมพ์ใบแปะหน้าพัสดุ</h2>
+          <span class="print-sub">ขนาด 150 × 100 mm — เฉพาะออเดอร์ที่ยืนยันแล้ว</span>
+        </div>
+        <div class="print-toolbar-right">
+          <button class="print-action-btn" onclick="printSelectAll()"><i class="ti ti-checkbox"></i> เลือกทั้งหมด</button>
+          <button class="print-action-btn" onclick="printDeselectAll()"><i class="ti ti-square"></i> ยกเลิกทั้งหมด</button>
+          <button class="print-action-btn print-action-primary" id="printBtn" onclick="generateLabelsPDF()" disabled><i class="ti ti-printer"></i> พิมพ์ที่เลือก (<span id="printSelectedCount">0</span>)</button>
+        </div>
+      </div>
+      <div class="print-table-wrap">
+        <table class="print-table">
+          <thead>
+            <tr>
+              <th class="print-th-check"><input type="checkbox" id="printCheckAll" onchange="printToggleAll(this.checked)"/></th>
+              <th>สินค้า / ลูกค้า</th>
+              <th>จำนวน</th>
+              <th>สถานะ</th>
+            </tr>
+          </thead>
+          <tbody id="printTableBody"></tbody>
+        </table>
+        <div class="empty-state" id="printEmptyState" style="display:none">
+          <i class="ti ti-package-off"></i>
+          <div>ยังไม่มีออเดอร์ที่ยืนยันแล้ว</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VIEW: TRACKING -->
+  <div id="viewTracking" class="admin-view hidden">
+    <div class="tracking-page">
+      <div class="tracking-toolbar">
+        <h2 class="tracking-title"><i class="ti ti-truck"></i> ใส่เลขพัสดุ</h2>
+        <div class="filter-date-tabs" id="trackingDateTabs">
+          <button class="dftab active" data-tfilter="all" onclick="switchTrackingDateFilter('all')">ทั้งหมด</button>
+          <button class="dftab" data-tfilter="before19" onclick="switchTrackingDateFilter('before19')">ก่อน 19 มิ.ย.</button>
+          <button class="dftab" data-tfilter="upto19" onclick="switchTrackingDateFilter('upto19')">ถึง 19 มิ.ย.</button>
+          <button class="dftab" data-tfilter="20to23" onclick="switchTrackingDateFilter('20to23')">20–23 มิ.ย.</button>
+          <button class="dftab" data-tfilter="20to25" onclick="switchTrackingDateFilter('20to25')">20–25 มิ.ย.</button>
+          <button class="dftab" data-tfilter="after23" onclick="switchTrackingDateFilter('after23')">หลัง 23 มิ.ย.</button>
+          <button class="dftab" data-tfilter="after25" onclick="switchTrackingDateFilter('after25')">หลัง 25 มิ.ย.</button>
+        </div>
+        <div class="tracking-search">
+          <i class="ti ti-search"></i>
+          <input id="trackingSearch" placeholder="ค้นหา รหัส / ชื่อลูกค้า..." oninput="renderTrackingView()"/>
+        </div>
+      </div>
+      <div class="tracking-list" id="trackingList"></div>
+    </div>
+  </div>
+
+  <!-- Hidden label container for PDF rendering -->
+  <div id="labelContainer" class="label-container"></div>
+
+<!-- ORDER DETAIL MODAL -->
+<div id="orderModal" class="modal hidden" onclick="closeModal(event)">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title" id="modalOrderId">-</div>
+      <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- DELETE CONFIRM MODAL -->
+<div id="deleteModal" class="modal hidden" onclick="closeDeleteModal(event)">
+  <div class="modal-card modal-card-sm" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title"><i class="ti ti-alert-triangle" style="color:#d44"></i> ยืนยันการลบ</div>
+      <button class="modal-close" onclick="closeDeleteModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" style="text-align:center">
+      <div class="del-msg" id="deleteModalMsg">ต้องการลบออเดอร์นี้จริงหรือไม่?</div>
+      <div class="del-actions">
+        <button class="m-action-btn m-action-cancel" onclick="closeDeleteModal()"><i class="ti ti-x"></i> ยกเลิก</button>
+        <button class="m-action-btn m-action-delete" id="deleteConfirmBtn"><i class="ti ti-trash"></i> ลบ</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toastContainer" class="toast-container"></div>
+<datalist id="carrierOptions"><option value="Flash Express"/><option value="Shopee"/></datalist>
+
+<!-- LIGHTBOX -->
+<div id="lightbox" class="lightbox hidden" onclick="closeLightbox()">
+  <button class="lightbox-close" onclick="closeLightbox()"><i class="ti ti-x"></i></button>
+  <img id="lightboxImg" src=""/>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="/data/patterns.js"></script>
+<script src="/admin/admin.js"></script>
+</body>
+</html>
