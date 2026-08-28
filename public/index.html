@@ -196,16 +196,28 @@
 <!-- PAGE: STICKER -->
 <div id="page-sticker" class="page">
 <div class="hero sticker-hero">
-  <div class="hero-tag">สติกเกอร์ลายน่ารัก ⭐</div>
+  <div class="hero-tag">✨ ลายสติกเกอร์ตัวอย่าง (Coming Soon) ⭐</div>
   <h1>hello<span>x</span>glitter</h1>
-  <div class="hero-sub">สติกเกอร์แผงละ 69 บาท · ค่าส่ง 50 บาท (ฟรี 3 แผงขึ้นไป)</div>
+  <div class="hero-sub">สติกเกอร์แผงละ 69 บาท · เปิดให้ชมลายตัวอย่างก่อนเปิดรับออเดอร์เร็วๆ นี้นะคะ 💖</div>
 </div>
 
 <div class="sec">
-  <div class="sec-title"><i class="ti ti-star"></i> เลือกลายสติกเกอร์ <span style="font-size:12px;color:#80b0d0;font-weight:400;text-transform:none;letter-spacing:0;margin-left:4px">— เลือกได้หลายลาย</span></div>
+  <div class="sec-title"><i class="ti ti-star"></i> ชมลายสติกเกอร์ <span style="font-size:12px;color:#80b0d0;font-weight:400;text-transform:none;letter-spacing:0;margin-left:4px">— แตะที่รูปเพื่อดูรูปขยายใหญ่</span></div>
   <div class="gallery sticker-gallery" id="stickerGallery"></div>
 
-  <div class="selected-bar sticker-bar">
+  <div class="sticker-coming-soon-card" style="margin-top:20px;padding:32px 20px;background:#ffffff;border-radius:20px;text-align:center;box-shadow:0 8px 24px rgba(224,90,143,0.08);border:2px dashed #f5c8d8;">
+    <div style="font-size:36px;margin-bottom:10px;">💌</div>
+    <div style="font-size:18px;font-weight:800;color:#c04878;margin-bottom:8px;">เปิดให้ชมลายตัวอย่างก่อนน้า ✨</div>
+    <p style="font-size:14px;color:#7a6b75;line-height:1.6;margin-bottom:16px;">
+      รอบสั่งซื้อสติกเกอร์จะเปิดรับเร็วๆ นี้นะคะ ลูกค้าสามารถแตะที่รูปเพื่อดูดีเทลความน่ารักของแต่ละลายได้เลยค่ะ 💖<br>
+      ติดตามประกาศเปิดรอบพรีออเดอร์ได้ทาง Instagram ของร้านเลยนะคะ
+    </p>
+    <a href="https://www.instagram.com/helloxglitter" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,#ff7597,#f35588);color:#fff;padding:10px 24px;border-radius:24px;text-decoration:none;font-weight:700;font-size:14px;box-shadow:0 4px 12px rgba(243,85,136,0.3);">
+      <i class="ti ti-brand-instagram"></i> ติดตามรอบเปิดพรีทาง IG
+    </a>
+  </div>
+
+  <div class="selected-bar sticker-bar" style="display:none;">
     <div class="sb-top">
       <i class="ti ti-star" style="color:#80b0d0;font-size:17px"></i>
       <span class="sb-label">ลายที่เลือก</span>
@@ -215,8 +227,8 @@
     <div class="sb-chips" id="stickerChips"><span class="sb-empty">ยังไม่ได้เลือกลาย กดที่รูปเพื่อเลือกได้เลยค่ะ</span></div>
   </div>
 
-  <div class="sec-title" style="margin-top:8px"><i class="ti ti-clipboard-text"></i> ข้อมูลสั่งซื้อ</div>
-  <div class="form-card sticker-form" id="stickerFormCard">
+  <div class="sec-title" style="display:none;"><i class="ti ti-clipboard-text"></i> ข้อมูลสั่งซื้อ</div>
+  <div class="form-card sticker-form" id="stickerFormCard" style="display:none;">
     <div class="form-row">
       <label>ชื่อ-นามสกุล *</label>
       <input type="text" id="stickerFname" placeholder="ชื่อ-นามสกุล ผู้รับ"/>
@@ -471,9 +483,9 @@
         <span class="welcome-btn-icon">🎨</span>
         <span class="welcome-btn-text">Wallpaper<br><span class="welcome-btn-sub">ซื้อขาย wallpaper</span></span>
       </button>
-      <button class="welcome-btn" onclick="selectPage('sticker')" style="border-color:#a0d0ff;background:#f0f8ff">
+      <button class="welcome-btn" disabled style="border-color:#e2e8f0;background:#f8fafc;opacity:0.65;cursor:not-allowed;">
         <span class="welcome-btn-icon">⭐</span>
-        <span class="welcome-btn-text">Sticker<br><span class="welcome-btn-sub">สติกเกอร์ลายน่ารัก</span></span>
+        <span class="welcome-btn-text">Sticker <span style="font-size:10px;background:#ff7597;color:#fff;padding:2px 7px;border-radius:10px;font-weight:700;">เร็วๆ นี้</span><br><span class="welcome-btn-sub">สติกเกอร์ลายน่ารัก</span></span>
       </button>
       <button class="welcome-btn" onclick="window.location.href='/checklink/'" style="border-color:#d0c0e8;background:#f5f0ff">
         <span class="welcome-btn-icon">📥</span>

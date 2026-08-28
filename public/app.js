@@ -1044,30 +1044,19 @@ function stickerBuildGallery() {
   var patterns = (typeof window !== 'undefined' && window.STICKER_PATTERNS) || (typeof STICKER_PATTERNS !== 'undefined' ? STICKER_PATTERNS : []);
   if (!gallery || !patterns.length) return;
   gallery.innerHTML = patterns.map(function(p) {
-    var isPicked = !!stickerPicked[p.name];
-    var q = stickerPicked[p.name] || 0;
-    var attrName = escAttr(p.name);
     var imgSrc = p.img || '';
     var safeImg = imgSrc.replace(/'/g, "\\'");
-    var h = '<div class="gcard' + (isPicked ? ' picked' : '') + '" onclick="stickerTogglePattern(\'' + attrName + '\')">';
+    var h = '<div class="gcard" onclick="openImgLightbox(\'' + safeImg + '\')" style="cursor:zoom-in;">';
     if (imgSrc) {
       h += '<img class="gimg" src="' + escHtml(imgSrc) + '" alt="' + escHtml(p.name) + '" loading="lazy"/>';
-      h += '<div class="gzoom" onclick="event.stopPropagation();openImgLightbox(\'' + safeImg + '\')"><i class="ti ti-zoom-in"></i></div>';
+      h += '<div class="gzoom"><i class="ti ti-zoom-in"></i></div>';
     } else {
       h += '<div class="gimg" style="display:flex;align-items:center;justify-content:center;background:#fff0f6;color:#e05a8f;font-size:28px;"><i class="ti ti-star"></i></div>';
     }
     h += '<div class="glabel">'
       + '<div class="gname">' + escHtml(p.name) + '</div>'
-      + '<div class="gprice">' + (p.price || 69) + ' ฿</div>'
-      + '</div>'
-      + '<div class="gcheck"><i class="ti ti-check"></i></div>';
-    if (isPicked) {
-      h += '<div class="gqty" onclick="event.stopPropagation()">'
-        + '<button class="gqbtn" onclick="event.stopPropagation();stickerChangeQty(\'' + attrName + '\',-1)">−</button>'
-        + '<span class="gqnum">' + q + '</span>'
-        + '<button class="gqbtn" onclick="event.stopPropagation();stickerChangeQty(\'' + attrName + '\',1)">+</button>'
-        + '</div>';
-    }
+      + '<div class="gprice">' + (p.price || 69) + ' ฿ <span style="font-size:10px;color:#ff7597;font-weight:700;margin-left:2px">Preview</span></div>'
+      + '</div>';
     h += '</div>';
     return h;
   }).join('');
