@@ -332,6 +332,7 @@ module.exports = async (req, res) => {
             'BlackSwan.PNG',
             'Castle purple (Alexa).PNG',
             'Castle purple (Liana)PNG.PNG',
+            'Elina (Rainbow Magic).png',
             'Elina Mermaidia.PNG',
             'Nori Mermaidia.PNG',
             'Nutcracker🍬.PNG',

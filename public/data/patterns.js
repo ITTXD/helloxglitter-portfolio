@@ -129,6 +129,7 @@ var STICKER_PATTERNS = [
   {name:'Black Swan',img:'/sticker/BlackSwan.PNG',price:69},
   {name:'Castle purple (Alexa)',img:'/sticker/Castle%20purple%20(Alexa).PNG',price:69},
   {name:'Castle purple (Liana)',img:'/sticker/Castle%20purple%20(Liana)PNG.PNG',price:69},
+  {name:'Elina (Rainbow Magic)',img:'/sticker/Elina%20(Rainbow%20Magic).png',price:69},
   {name:'Elina Mermaidia',img:'/sticker/Elina%20Mermaidia.PNG',price:69},
   {name:'Nori Mermaidia',img:'/sticker/Nori%20Mermaidia.PNG',price:69},
   {name:'Nutcracker🍬',img:'/sticker/Nutcracker%F0%9F%8D%AC.PNG',price:69},
