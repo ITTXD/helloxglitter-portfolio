@@ -126,22 +126,15 @@ var STICKER_SHIPPING = 50;
 var STICKER_FREE_SHIPPING_QTY = 3;
 
 var STICKER_PATTERNS = [
-  {name:'Magic Pegasus',img:'',price:69,comingSoon:true},
-  {name:'Castle Pink',img:'',price:69,comingSoon:true},
-  {name:'Castle Purple',img:'',price:69,comingSoon:true},
-  {name:'Erika',img:'',price:69,comingSoon:true},
-  {name:'Anneliese',img:'',price:69,comingSoon:true},
-  {name:'Elina (Mermaidia)',img:'',price:69,comingSoon:true},
-  {name:'Nori (Mermaidia)',img:'',price:69,comingSoon:true},
-  {name:'Elina (Rainbow Magic)',img:'',price:69,comingSoon:true},
-  {name:'Swan Lake Odette',img:'',price:69,comingSoon:true},
-  {name:'Black Swan',img:'',price:69,comingSoon:true},
-  {name:'Fairy Godmother',img:'',price:69,comingSoon:true},
-  {name:'Rapunzel V.1',img:'',price:69,comingSoon:true},
-  {name:'Rapunzel V.2',img:'',price:69,comingSoon:true},
-  {name:'Mariposa',img:'',price:69,comingSoon:true},
-  {name:'Sugarplum',img:'',price:69,comingSoon:true},
-  {name:'Charming School',img:'',price:69,comingSoon:true},
+  {name:'Black Swan',img:'/sticker/BlackSwan.PNG',price:69},
+  {name:'Castle purple (Alexa)',img:'/sticker/Castle%20purple%20(Alexa).PNG',price:69},
+  {name:'Castle purple (Liana)',img:'/sticker/Castle%20purple%20(Liana)PNG.PNG',price:69},
+  {name:'Elina Mermaidia',img:'/sticker/Elina%20Mermaidia.PNG',price:69},
+  {name:'Nori Mermaidia',img:'/sticker/Nori%20Mermaidia.PNG',price:69},
+  {name:'Nutcracker🍬',img:'/sticker/Nutcracker%F0%9F%8D%AC.PNG',price:69},
+  {name:'Rapunzel (Paint)',img:'/sticker/Rapunzel%20(Paint).PNG',price:69},
+  {name:'Rapunzel (princess)',img:'/sticker/Rapunzel%20(princess).PNG',price:69},
+  {name:'Swan Lake',img:'/sticker/SwanlakePNG.PNG',price:69},
 ];
 
 function computeStickerPrice(picked) {
@@ -152,9 +145,10 @@ function computeStickerPrice(picked) {
     count += picked[name];
   }
   var shipping = count >= STICKER_FREE_SHIPPING_QTY ? 0 : STICKER_SHIPPING;
-  return { total: total, shipping: shipping, grandTotal: total + shipping };
+  return { total: total, shipping: shipping, grandTotal: total + shipping, count: count };
 }
 
 function getStickerByName(name) {
-  return STICKER_PATTERNS.find(function(x) { return x.name === name; });
+  var list = (typeof window !== 'undefined' && window.STICKER_PATTERNS) || STICKER_PATTERNS;
+  return list.find(function(x) { return x.name === name; });
 }

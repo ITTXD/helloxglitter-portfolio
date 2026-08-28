@@ -19,11 +19,13 @@ function getList() {
 }
 
 function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function escAttr(s) {
-  return s.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  if (!s) return '';
+  return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
 }
 
 function pickedCount() {
@@ -292,6 +294,7 @@ function showPage(page) {
     document.getElementById('tr-phone').value = '';
   }
   if (page === 'wallpaper') { wpBuildGallery(); wpUpdateSelectedBar(); }
+  if (page === 'sticker') { stickerBuildGallery(); stickerUpdateSelectedBar(); fetchStickersFromApi(); }
   var targetPage = document.getElementById('page-' + page);
   targetPage.querySelectorAll('.reveal:not(.visible)').forEach(function(el) { el.classList.add('visible'); });
 }
@@ -641,27 +644,34 @@ function renderOrderCard(order) {
   }).join('');
 
   var pq = order.pattern_qtys || {};
-  var itemsHtml = order.patterns.map(function(name) {
-    var p = ALL_PATTERNS.find(function(x) { return x.name === name; });
-    var img = p ? '<img class="tr-img-thumb" src="' + p.img + '" alt="' + escHtml(name) + '">' : '<div class="tr-img-thumb" style="background:#fadadd;"></div>';
+  var itemsHtml = (order.patterns || []).map(function(name) {
+    var p = ALL_PATTERNS.find(function(x) { return x.name === name; })
+      || (typeof getStickerByName === 'function' ? getStickerByName(name) : null)
+      || (typeof WP_PATTERNS !== 'undefined' ? WP_PATTERNS.find(function(x) { return x.name === name; }) : null);
+    var img = p && p.img ? '<img class="tr-img-thumb" src="' + p.img + '" alt="' + escHtml(name) + '">' : '<div class="tr-img-thumb" style="background:#fadadd;"></div>';
     var q = pq[name] || order.qty || 1;
-    var price = p ? p.priceOrig * q : 0;
-    return '<div class="tr-item-row">' + img + '<div><div class="tr-item-name">' + escHtml(name) + '</div><div class="tr-item-size">×' + q + ' ใบ</div></div><div class="tr-item-price">' + price.toLocaleString() + ' ฿</div></div>';
+    var unitPrice = p ? (p.priceOrig || p.price || 0) : 0;
+    var price = unitPrice * q;
+    var unitLabel = order.type === 'sticker' ? 'ชุด' : order.type === 'wallpaper' ? 'ลาย' : 'ใบ';
+    return '<div class="tr-item-row">' + img + '<div><div class="tr-item-name">' + escHtml(name) + '</div><div class="tr-item-size">×' + q + ' ' + unitLabel + '</div></div><div class="tr-item-price">' + (price ? price.toLocaleString() + ' ฿' : '') + '</div></div>';
   }).join('');
 
-  return '<div class="tr-order-card" style="margin-bottom:12px;">'
+  var unitLabel = order.type === 'sticker' ? 'ชุด' : order.type === 'wallpaper' ? 'ลาย' : 'ใบ';
+  var html = '<div class="tr-order-card" style="margin-bottom:12px;">'
     + '<div class="tr-order-head"><span class="tr-order-id"><i class="ti ti-tag"></i> ' + order.id + '</span><span class="tr-status-badge ' + STATUS_CLASS[order.status] + '"><i class="ti ' + statusIcons[order.status] + '"></i> ' + statuses[order.status] + '</span></div>'
     + '<div class="tr-timeline">' + tlHtml + '</div>'
     + '<div style="font-size:12px;font-weight:800;color:#c04878;margin-bottom:8px;">สินค้าที่สั่ง</div>'
     + itemsHtml
-    + '<div class="tr-detail-row"><span class="tr-detail-label">ยอดสินค้า</span><span class="tr-detail-val">' + order.total_price.toLocaleString() + ' ฿</span></div>'
+    + '<div class="tr-detail-row"><span class="tr-detail-label">ยอดสินค้า</span><span class="tr-detail-val">' + (order.total_price || 0).toLocaleString() + ' ฿</span></div>'
     + '<div class="tr-detail-row"><span class="tr-detail-label">ค่าจัดส่ง' + (order.is_remote && order.total_bags < 3 ? ' (พื้นที่ห่างไกล)' : '') + '</span><span class="tr-detail-val">' + (order.total_bags >= 3 ? 'ฟรี' : ((order.shipping_cost != null ? order.shipping_cost : 50) + ' ฿')) + '</span></div>'
     + '<div class="tr-detail-row"><span class="tr-detail-label">ยอดรวมทั้งหมด</span><span class="tr-detail-val" style="font-weight:800;color:#d45a8a">' + ((order.total_price || 0) + (order.total_bags >= 3 ? 0 : (order.shipping_cost != null ? order.shipping_cost : 50))).toLocaleString() + ' ฿</span></div>'
-    + '<div class="tr-detail-row"><span class="tr-detail-label">จำนวน</span><span class="tr-detail-val">' + order.total_bags + ' ใบ</span></div>'
+    + '<div class="tr-detail-row"><span class="tr-detail-label">จำนวน</span><span class="tr-detail-val">' + (order.total_bags || 0) + ' ' + unitLabel + '</span></div>'
     + '<div class="tr-detail-row"><span class="tr-detail-label">สั่งเมื่อ</span><span class="tr-detail-val">' + dateStr + '</span></div>';
+
   var contactDisplay = (order.customer_name ? '<strong>' + escHtml(order.customer_name) + '</strong><br>' : '')
     + (order.customer_phone ? '📞 ' + escHtml(order.customer_phone) + '<br>' : '')
     + (order.customer_address ? '📍 ' + escHtml(order.customer_address).replace(/\n/g, '<br>') : (order.customer_info || '').replace(/\n/g, '<br>'));
+
   return html + '<div class="tr-detail-row"><span class="tr-detail-label">ข้อมูลติดต่อ</span><span class="tr-detail-val" style="max-width:65%;text-align:right;word-break:break-word;">' + contactDisplay + '</span></div>'
     + '<div style="margin-top:14px;padding-top:14px;border-top:1.5px dashed #f5c8d8">'
     + '<div style="font-size:12px;font-weight:800;color:#c04878;margin-bottom:8px;"><i class="ti ti-truck"></i> สถานะจัดส่ง</div>'
@@ -1011,26 +1021,55 @@ var stickerPicked = {}; // { name: qty }
 window._stickerSlipData = null;
 window._stickerSlipFile = null;
 
+function fetchStickersFromApi() {
+  return fetch('/api/stickers')
+    .then(function(res) {
+      if (!res.ok) throw new Error('API status ' + res.status);
+      return res.json();
+    })
+    .then(function(data) {
+      if (data && data.stickers && Array.isArray(data.stickers) && data.stickers.length > 0) {
+        window.STICKER_PATTERNS = data.stickers;
+        stickerBuildGallery();
+        stickerUpdateSelectedBar();
+      }
+    })
+    .catch(function(err) {
+      console.warn('[Sticker] Using default sticker list:', err);
+    });
+}
+
 function stickerBuildGallery() {
   var gallery = document.getElementById('stickerGallery');
-  if (!gallery || typeof STICKER_PATTERNS === 'undefined') return;
-  gallery.innerHTML = STICKER_PATTERNS.map(function(p) {
+  var patterns = (typeof window !== 'undefined' && window.STICKER_PATTERNS) || (typeof STICKER_PATTERNS !== 'undefined' ? STICKER_PATTERNS : []);
+  if (!gallery || !patterns.length) return;
+  gallery.innerHTML = patterns.map(function(p) {
     var isPicked = !!stickerPicked[p.name];
     var q = stickerPicked[p.name] || 0;
     var attrName = escAttr(p.name);
-    return '<div class="gcard' + (isPicked ? ' picked' : '') + '" onclick="stickerTogglePattern(\'' + attrName + '\')">'
-      + '<img class="gimg" src="' + p.img + '" alt="' + escHtml(p.name) + '" loading="lazy"/>'
-      + '<div class="glabel">'
+    var imgSrc = p.img || '';
+    var safeImg = imgSrc.replace(/'/g, "\\'");
+    var h = '<div class="gcard' + (isPicked ? ' picked' : '') + '" onclick="stickerTogglePattern(\'' + attrName + '\')">';
+    if (imgSrc) {
+      h += '<img class="gimg" src="' + escHtml(imgSrc) + '" alt="' + escHtml(p.name) + '" loading="lazy"/>';
+      h += '<div class="gzoom" onclick="event.stopPropagation();openImgLightbox(\'' + safeImg + '\')"><i class="ti ti-zoom-in"></i></div>';
+    } else {
+      h += '<div class="gimg" style="display:flex;align-items:center;justify-content:center;background:#fff0f6;color:#e05a8f;font-size:28px;"><i class="ti ti-star"></i></div>';
+    }
+    h += '<div class="glabel">'
       + '<div class="gname">' + escHtml(p.name) + '</div>'
-      + '<div class="gprice">' + p.price + ' ฿</div>'
+      + '<div class="gprice">' + (p.price || 69) + ' ฿</div>'
       + '</div>'
-      + '<div class="gcheck"><i class="ti ti-check"></i></div>'
-      + '<div class="gqty" onclick="event.stopPropagation()">'
-      + '<button class="gqbtn" onclick="event.stopPropagation();stickerChangeQty(\'' + attrName + '\',-1)">−</button>'
-      + '<span class="gqnum">' + q + '</span>'
-      + '<button class="gqbtn" onclick="event.stopPropagation();stickerChangeQty(\'' + attrName + '\',1)">+</button>'
-      + '</div>'
-      + '</div>';
+      + '<div class="gcheck"><i class="ti ti-check"></i></div>';
+    if (isPicked) {
+      h += '<div class="gqty" onclick="event.stopPropagation()">'
+        + '<button class="gqbtn" onclick="event.stopPropagation();stickerChangeQty(\'' + attrName + '\',-1)">−</button>'
+        + '<span class="gqnum">' + q + '</span>'
+        + '<button class="gqbtn" onclick="event.stopPropagation();stickerChangeQty(\'' + attrName + '\',1)">+</button>'
+        + '</div>';
+    }
+    h += '</div>';
+    return h;
   }).join('');
   
   if (!window._stickerGalleryLoaded) {
@@ -1478,6 +1517,7 @@ document.addEventListener('DOMContentLoaded', function() {
   updateSelectedBar();
   stickerBuildGallery();
   stickerUpdateSelectedBar();
+  fetchStickersFromApi();
 
   // Scroll reveal with Intersection Observer (skip elements that already have entrance animations)
   var revealEls = document.querySelectorAll('.promo-wrap,.sec,.form-card,.tr-card,.ty-card');

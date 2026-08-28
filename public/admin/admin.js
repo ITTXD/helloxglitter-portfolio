@@ -206,6 +206,9 @@ function getPriceMap() {
   _priceMap = {};
   ALL_PATTERNS.forEach(function(p) { _priceMap[p.name] = p.priceOrig; });
   WP_PATTERNS.forEach(function(p) { _priceMap[p.name] = p.price; });
+  if (typeof STICKER_PATTERNS !== 'undefined') {
+    STICKER_PATTERNS.forEach(function(p) { _priceMap[p.name] = p.price || (typeof STICKER_PRICE !== 'undefined' ? STICKER_PRICE : 69); });
+  }
   // backward compat: old wallpaper name
   _priceMap['Merilah Pink WP'] = WP_PATTERNS[0] ? WP_PATTERNS[0].price : 99;
   return _priceMap;
@@ -215,6 +218,7 @@ function renderProductSummary() {
   var el = document.getElementById('productSummary');
   var priceMap = getPriceMap();
   var wallpapers = {};
+  var stickers = {};
   var bags = {};
 
   allOrders.forEach(function(o) {
@@ -223,13 +227,18 @@ function renderProductSummary() {
     var customer = (o.customer_info || '').split('\n')[0] || '-';
     names.forEach(function(name) {
       var qty = qtys[name] || o.qty || 1;
-      var price = priceMap[name] || 0;
+      var price = priceMap[name] || (o.type === 'sticker' ? (typeof STICKER_PRICE !== 'undefined' ? STICKER_PRICE : 69) : 0);
       var obj = { qty: qty, price: price, customer: customer, orderId: o.id, email: o.email || '' };
       if (o.type === 'wallpaper') {
         if (!wallpapers[name]) wallpapers[name] = { total: 0, totalPrice: 0, buyers: [] };
         wallpapers[name].total += qty;
         wallpapers[name].totalPrice += qty * price;
         wallpapers[name].buyers.push(obj);
+      } else if (o.type === 'sticker') {
+        if (!stickers[name]) stickers[name] = { total: 0, totalPrice: 0, buyers: [] };
+        stickers[name].total += qty;
+        stickers[name].totalPrice += qty * price;
+        stickers[name].buyers.push(obj);
       } else {
         if (!bags[name]) bags[name] = { total: 0, totalPrice: 0, buyers: [] };
         bags[name].total += qty;
@@ -241,6 +250,7 @@ function renderProductSummary() {
 
   var html = '';
   var hasWallpaper = Object.keys(wallpapers).length > 0;
+  var hasStickers = Object.keys(stickers).length > 0;
   var hasBags = Object.keys(bags).length > 0;
 
   function renderGroup(title, icon, data) {
@@ -271,6 +281,7 @@ function renderProductSummary() {
   }
 
   if (hasWallpaper) html += renderGroup('Wallpaper', 'ti-brush', wallpapers);
+  if (hasStickers) html += renderGroup('สติกเกอร์', 'ti-star', stickers);
   if (hasBags) html += renderGroup('กระเป๋า', 'ti-shopping-bag', bags);
   if (!html) html = '<div class="summary-empty">ยังไม่มีข้อมูลสินค้า</div>';
 
@@ -412,21 +423,24 @@ function openOrder(id) {
   var promo = computePromoPrice(pq);
   var groups = {};
   (order.patterns || []).forEach(function(name) {
-    var pat = getPatternByName(name);
-    var sizeKey = pat ? pat.sizeKey : 'normal';
+    var pat = getPatternByName(name)
+      || (typeof getStickerByName === 'function' ? getStickerByName(name) : null)
+      || (typeof WP_PATTERNS !== 'undefined' ? WP_PATTERNS.find(function(x) { return x.name === name; }) : null);
+    var sizeKey = pat ? (pat.sizeKey || (order.type === 'sticker' ? 'sticker' : order.type === 'wallpaper' ? 'wallpaper' : 'normal')) : 'normal';
     if (!groups[sizeKey]) groups[sizeKey] = [];
     groups[sizeKey].push({ name: name, qty: pq[name] || order.qty || 1, pat: pat });
   });
 
   for (var sk in groups) {
-    var sizeLabel = sk === 'normal' ? 'Normal' : sk === 'large' ? 'Large' : 'Easy';
+    var sizeLabel = sk === 'normal' ? 'Normal' : sk === 'large' ? 'Large' : sk === 'easy' ? 'Easy' : sk === 'maxi' ? 'Maxi' : sk === 'sticker' ? 'Sticker' : sk === 'wallpaper' ? 'Wallpaper' : sk;
     html += '<div class="m-pattern-group-label">' + sizeLabel + '</div>';
     groups[sk].forEach(function(item) {
       var img = item.pat ? item.pat.img : '';
       html += '<div class="m-pattern-item">';
       if (img) html += '<img class="m-pattern-img" src="' + escapeHtmlAttr(img) + '" alt="" onclick="event.stopPropagation();openLightbox(\'' + escapeHtmlAttr(img) + '\')"/>';
       html += '<span class="m-pattern-name">' + escapeHtml(item.name) + ' × ' + item.qty + '</span>';
-      html += '<span class="m-pattern-price">' + (item.pat ? (item.pat.priceOrig * item.qty).toLocaleString() : '-') + ' ฿</span>';
+      var itemPrice = item.pat ? ((item.pat.priceOrig || item.pat.price || (order.type === 'sticker' ? 69 : 0)) * item.qty) : '-';
+      html += '<span class="m-pattern-price">' + (typeof itemPrice === 'number' ? itemPrice.toLocaleString() + ' ฿' : itemPrice) + '</span>';
       html += '</div>';
     });
   }

@@ -342,163 +342,103 @@ async function handleApi(req, res) {
     return true;
   }
 
-  // GET /api/status — EasySlip API status check
-  if (pathname === '/api/status' && method === 'GET') {
-    const apiKey = process.env.EASYSLIP_API_KEY || '';
-    sendJson(res, 200, {
-      status: 'online',
-      hasApiKey: Boolean(apiKey)
-    });
-    return true;
-  }
-
-  // POST /api/verify — Standalone EasySlip verification endpoint matching AI/server.js
-  if (pathname === '/api/verify' && method === 'POST') {
+  // GET /api/stickers — อ่านรายชื่อรูปและไฟล์สติกเกอร์จากโฟลเดอร์ sticker
+  if (pathname === '/api/stickers' && method === 'GET') {
     try {
-      const body = await readBody(req);
-      const apiKey = process.env.EASYSLIP_API_KEY || '';
-      const checkDuplicate = body.checkDuplicate !== false && body.checkDuplicate !== 'false';
-      const base64Image = body.base64;
+      const dirs = [
+        path.join(__dirname, 'public', 'sticker'),
+        path.join(__dirname, 'Sticker'),
+        path.join(process.cwd(), 'public', 'sticker'),
+        path.join(process.cwd(), 'Sticker'),
+      ];
+      let stickerDir = null;
+      for (const d of dirs) {
+        if (fs.existsSync(d)) {
+          stickerDir = d;
+          break;
+        }
+      }
 
-      if (!base64Image) {
-        sendJson(res, 400, {
-          status: 400,
-          message: 'กรุณาอัปโหลดรูปภาพสลิป'
+      // Sync from Sticker/ to public/sticker/ if both exist
+      const rootSticker = path.join(__dirname, 'Sticker');
+      const pubSticker = path.join(__dirname, 'public', 'sticker');
+      if (fs.existsSync(rootSticker) && fs.existsSync(pubSticker)) {
+        try {
+          fs.readdirSync(rootSticker).forEach(f => {
+            if (!f.startsWith('.')) {
+              const src = path.join(rootSticker, f);
+              const dst = path.join(pubSticker, f);
+              if (!fs.existsSync(dst)) fs.copyFileSync(src, dst);
+            }
+          });
+        } catch (e) {}
+      }
+
+      const stickers = [];
+      const seenNames = new Set();
+      const validExts = ['.png', '.jpg', '.jpeg', '.webp'];
+
+      if (stickerDir) {
+        const files = fs.readdirSync(stickerDir);
+        files.forEach(file => {
+          if (file.startsWith('.')) return;
+          const ext = path.extname(file).toLowerCase();
+          if (!validExts.includes(ext)) return;
+
+          let name = file.replace(/\.[a-zA-Z0-9]+$/, '');
+          name = name.replace(/PNG$/i, '').trim();
+          if (name === 'BlackSwan') name = 'Black Swan';
+          if (name === 'Swanlake') name = 'Swan Lake';
+
+          if (!seenNames.has(name)) {
+            seenNames.add(name);
+            stickers.push({
+              name: name,
+              filename: file,
+              img: '/sticker/' + encodeURIComponent(file),
+              price: 69,
+            });
+          }
         });
-        return true;
       }
 
-      const { cleanBase64, checkDuplicateTransRef } = require('./slip-verify');
-      const rawBase64 = cleanBase64(base64Image);
-
-      const payload = {
-        base64: rawBase64,
-        checkDuplicate: checkDuplicate
-      };
-
-      if (body.matchAmount != null && Number(body.matchAmount) > 0) {
-        payload.matchAmount = Number(body.matchAmount);
+      // Fallback
+      if (stickers.length === 0) {
+        const fallbackFiles = [
+          'BlackSwan.PNG',
+          'Castle purple (Alexa).PNG',
+          'Castle purple (Liana)PNG.PNG',
+          'Elina Mermaidia.PNG',
+          'Nori Mermaidia.PNG',
+          'Nutcracker🍬.PNG',
+          'Rapunzel (Paint).PNG',
+          'Rapunzel (princess).PNG',
+          'SwanlakePNG.PNG',
+        ];
+        fallbackFiles.forEach(file => {
+          let name = file.replace(/\.[a-zA-Z0-9]+$/, '').replace(/PNG$/i, '').trim();
+          if (name === 'BlackSwan') name = 'Black Swan';
+          if (name === 'Swanlake') name = 'Swan Lake';
+          stickers.push({
+            name: name,
+            filename: file,
+            img: '/sticker/' + encodeURIComponent(file),
+            price: 69,
+          });
+        });
       }
 
-      console.log(`[EasySlip] Verifying slip via EasySlip API v2 (checkDuplicate: ${checkDuplicate})...`);
-
-      const response = await fetch('https://api.easyslip.com/v2/verify/bank', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const result = await response.json().catch(() => ({}));
-      console.log(`[EasySlip] Response Status: ${response.status}`, JSON.stringify(result));
-
-      // Also check local database duplicate if requested
-      if (response.ok && result.data && checkDuplicate && db) {
-        const transRef = result.data.transRef || result.data.transactionRef || '';
-        if (transRef) {
-          const isLocalDup = await checkDuplicateTransRef(db, transRef);
-          if (isLocalDup) {
-            result.data.isDuplicate = true;
-          }
-        }
-      }
-
-      // Check receiver name — ต้องตรงกับบัญชีร้าน
-      if (response.ok && result.data) {
-        const rData = result.data;
-        const receiverObj = rData.receiver || {};
-        let receiverName = '';
-        if (receiverObj.account && receiverObj.account.name) {
-          receiverName = typeof receiverObj.account.name === 'string'
-            ? receiverObj.account.name
-            : (receiverObj.account.name.th || receiverObj.account.name.en || '');
-        } else if (receiverObj.name) {
-          receiverName = typeof receiverObj.name === 'string'
-            ? receiverObj.name
-            : (receiverObj.name.th || receiverObj.name.en || '');
-        }
-        if (receiverName) {
-          const rLower = receiverName.toLowerCase();
-          const isReceiverMatch = rLower.includes('ณิชกานต์') || rLower.includes('นิชากานต์') || rLower.includes('เอติญัติ');
-          if (!isReceiverMatch) {
-            result.receiverWarning = true;
-            result.receiverMessage = `ชื่อผู้รับเงินไม่ตรงกับบัญชีของทางร้านค่ะ (พบชื่อ: ${receiverName})`;
-          }
-        }
-      }
-
-      sendJson(res, response.status, result);
+      stickers.sort((a, b) => a.name.localeCompare(b.name, 'th'));
+      sendJson(res, 200, { success: true, count: stickers.length, stickers });
       return true;
-    } catch (error) {
-      console.error('[EasySlip] Error:', error);
-      sendJson(res, 500, {
-        status: 500,
-        message: 'เกิดข้อผิดพลาดในการเชื่อมต่อไปยัง EasySlip: ' + error.message,
-        error: error.message
-      });
+    } catch (err) {
+      console.error('Error reading stickers:', err);
+      sendJson(res, 500, { error: 'Failed to read stickers: ' + err.message });
       return true;
     }
   }
 
-  // POST /api/mock — Mock EasySlip response for testing matching AI/server.js
-  if (pathname === '/api/mock' && method === 'POST') {
-    setTimeout(() => {
-      sendJson(res, 200, {
-        status: 200,
-        message: "success",
-        data: {
-          payload: "0004000001010301402251000185934651323389020953037645802TH",
-          transRef: `MOCK_${Date.now()}`,
-          date: new Date().toISOString(),
-          amount: {
-            amount: 500.00,
-            local: {
-              amount: 500.00,
-              currency: "THB"
-            }
-          },
-          sender: {
-            bank: {
-              id: "004",
-              name: "ธนาคารกสิกรไทย (KBANK)",
-              short: "KBANK"
-            },
-            account: {
-              name: {
-                th: "นาย สมชาย สายเปย์",
-                en: "MR. SOMCHAI SAIPAY"
-              },
-              bank: {
-                type: "BANK_ACCOUNT",
-                account: "xxx-x-x1234-x"
-              }
-            }
-          },
-          receiver: {
-            bank: {
-              id: "014",
-              name: "ธนาคารกสิกรไทย (KBANK)",
-              short: "KBANK"
-            },
-            account: {
-              name: {
-                th: "น.ส. ณิชกานต์ เอติญัติ",
-                en: "MISS NICHAKARN A."
-              },
-              bank: {
-                type: "PROMPTPAY",
-                account: "081-xxx-9999"
-              }
-            }
-          },
-          isDuplicate: false
-        }
-      });
-    }, 400);
-    return true;
-  }
+
 
   // POST /api/sticker/order — สร้างออเดอร์สติกเกอร์ + ตรวจสอบสลีปผ่าน EasySlip (ไม่ต้อง auth)
   if (pathname === '/api/sticker/order' && method === 'POST') {
@@ -562,7 +502,7 @@ async function handleApi(req, res) {
       slip_amount: verifyResult.amount != null ? verifyResult.amount : null,
     };
 
-    const docRef = await fsAddDoc('sticker_orders', order);
+    const docRef = await fsAddDoc('orders', order);
     order._docId = docRef.id;
     sendJson(res, 201, { success: true, order });
     return true;
@@ -652,6 +592,14 @@ async function handleApi(req, res) {
   if (pathname === '/api/orders' && method === 'GET') {
     if (!isAdmin(req)) { send401(res); return true; }
     const orders = await fsGetDocs('orders', 'created_at');
+    try {
+      const stickers = await fsGetDocs('sticker_orders');
+      stickers.forEach(s => {
+        if (!orders.some(o => o.id === s.id)) {
+          orders.push(s);
+        }
+      });
+    } catch (e) {}
     sendJson(res, 200, orders);
     return true;
   }
@@ -795,6 +743,14 @@ async function handleApi(req, res) {
       return true;
     }
     const allOrders = await fsGetDocs('orders');
+    try {
+      const stickers = await fsGetDocs('sticker_orders');
+      stickers.forEach(s => {
+        if (!allOrders.some(o => o.id === s.id)) {
+          allOrders.push(s);
+        }
+      });
+    } catch (e) {}
     const found = allOrders.filter(o => {
       // 1. Match direct customer_phone
       if (o.customer_phone) {
@@ -818,6 +774,7 @@ async function handleApi(req, res) {
     sendJson(res, 200, {
       orders: found.map(o => ({
         id: o.id,
+        type: o.type || 'bag',
         status: o.status,
         patterns: o.patterns,
         pattern_qtys: o.pattern_qtys || null,
@@ -843,25 +800,21 @@ async function handleApi(req, res) {
   if (pathname.startsWith('/api/track/') && method === 'GET') {
     const id = pathname.split('/api/track/')[1];
     if (!id) { send404(res); return true; }
-    const order = await fsGetDoc('orders', id);
+    let order = await fsGetDoc('orders', id);
     if (!order) {
       const byCustom = await fsFindByField('orders', 'id', id);
-      if (byCustom) {
-        sendJson(res, 200, {
-          id: byCustom.id,
-          status: byCustom.status,
-          patterns: byCustom.patterns,
-          qty: byCustom.qty,
-          total_bags: byCustom.total_bags,
-          total_price: byCustom.total_price,
-          created_at: byCustom.created_at,
-          note: byCustom.note || '',
-          tracking_number: byCustom.tracking_number || '',
-          tracking_carrier: byCustom.tracking_carrier || '',
-        });
-      } else {
-        send404(res);
-      }
+      if (byCustom) order = byCustom;
+    }
+    if (!order) {
+      try {
+        order = await fsGetDoc('sticker_orders', id);
+        if (!order) {
+          order = await fsFindByField('sticker_orders', 'id', id);
+        }
+      } catch (e) {}
+    }
+    if (!order) {
+      send404(res);
       return true;
     }
     sendJson(res, 200, {
@@ -897,6 +850,16 @@ function serveStatic(req, res) {
   if (urlPath.endsWith('/') || !path.extname(urlPath)) {
     const tryIndex = path.join(filePath, 'index.html');
     if (fs.existsSync(tryIndex)) filePath = tryIndex;
+  }
+
+  if (!fs.existsSync(filePath) && urlPath.toLowerCase().startsWith('/sticker/')) {
+    const fn = path.basename(urlPath);
+    const trySticker = path.join(PUBLIC_DIR, 'sticker', fn);
+    if (fs.existsSync(trySticker)) filePath = trySticker;
+    else {
+      const tryRoot = path.join(__dirname, 'Sticker', fn);
+      if (fs.existsSync(tryRoot)) filePath = tryRoot;
+    }
   }
 
   const ext = path.extname(filePath).toLowerCase();
