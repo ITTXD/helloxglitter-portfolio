@@ -17,9 +17,19 @@
     <a class="nav-link" data-page="wallpaper" onclick="showPage('wallpaper')"><i class="ti ti-brush"></i> Wallpaper</a>
     <a class="nav-link" data-page="sticker" onclick="showPage('sticker')"><i class="ti ti-star"></i> Sticker</a>
     <a class="nav-link" data-page="checklink" onclick="window.location.href='/checklink/'"><i class="ti ti-download"></i> เช็คลิงก์</a>
-    <a class="nav-link" data-page="tracking" onclick="showPage('tracking')"><i class="ti ti-truck"></i> ติดตามออเดอร์</a>
   </div>
 </nav>
+
+<div class="flash-sale-bar" id="flashSaleBar">
+  <span class="flash-badge"><i class="ti ti-flame"></i> 9.9 FLASH SALE</span>
+  <span class="flash-msg">ลดทันที 39.- ทุกใบ! (2 ใบ ลด 78.- / 3 ใบ ลด 117.- + ส่งฟรี)</span>
+  <div class="flash-countdown">
+    <span>เหลือเวลา</span>
+    <span class="flash-countdown-box" id="cd-h">00</span>:
+    <span class="flash-countdown-box" id="cd-m">00</span>:
+    <span class="flash-countdown-box" id="cd-s">00</span>
+  </div>
+</div>
 
 <!-- PAGE 1: ORDER -->
 <div id="page-preorder" class="page active">
@@ -68,42 +78,15 @@
     </div>
   </div>
 
-  <div class="promo-wrap">
-    <div class="promo-header"><i class="ti ti-gift"></i> โปรโมชั่นของแถม & ส่งฟรี</div>
+  <div class="promo-wrap" id="promoWrap">
+    <div class="promo-header" id="promoHeader"><i class="ti ti-gift"></i> โปรโมชั่นของแถม & ส่งฟรี</div>
     <div class="ptabs" id="promoTabs">
       <div class="ptab active" data-panel="pnormal"><div class="pt-name">Normal</div><div class="pt-sub">15×16"</div></div>
       <div class="ptab" data-panel="plarge"><div class="pt-name">Large</div><div class="pt-sub">15.5×4×16"</div></div>
       <div class="ptab" data-panel="peasy"><div class="pt-name">Easy Bag</div><div class="pt-sub">10.5×5×14"</div></div>
       <div class="ptab" data-panel="pmaxi"><div class="pt-name">Maxi</div><div class="pt-sub">18×20"</div></div>
     </div>
-    <div class="promo-panel show" id="pnormal">
-      <div class="pgrid">
-        <div class="pitem"><div class="pqty">1 ใบ</div><div class="pprice">399 ฿</div><div class="pbadge" style="background:#fff0f5;color:#c07088;">ราคาปกติ</div></div>
-        <div class="pitem"><div class="pqty">2 ใบ</div><div class="pprice">798 ฿</div><div class="pbadge">+ Griptok + พวงกุญแจ</div></div>
-        <div class="pitem"><div class="pqty">3 ใบขึ้นไป</div><div class="pprice">1,197 ฿</div><div class="pbadge">🚚 ส่งฟรี + Griptok + พวงกุญแจ + กระเป๋าหูรูดสุ่มลาย 1 ใบ</div></div>
-      </div>
-    </div>
-    <div class="promo-panel" id="plarge">
-      <div class="pgrid">
-        <div class="pitem"><div class="pqty">1 ใบ</div><div class="pprice">499 ฿</div><div class="pbadge" style="background:#fff0f5;color:#c07088;">ราคาปกติ</div></div>
-        <div class="pitem"><div class="pqty">2 ใบ</div><div class="pprice">998 ฿</div><div class="pbadge">+ Griptok 2 + พวงกุญแจ 2</div></div>
-        <div class="pitem"><div class="pqty">3 ใบขึ้นไป</div><div class="pprice">1,497 ฿</div><div class="pbadge">🚚 ส่งฟรี + Griptok 2 + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 2 ใบ</div></div>
-      </div>
-    </div>
-    <div class="promo-panel" id="peasy">
-      <div class="pgrid">
-        <div class="pitem"><div class="pqty">1 ใบ</div><div class="pprice">425 ฿</div><div class="pbadge" style="background:#fff0f5;color:#c07088;">ราคาปกติ</div></div>
-        <div class="pitem"><div class="pqty">2 ใบ</div><div class="pprice">850 ฿</div><div class="pbadge">+ Griptok + พวงกุญแจ</div></div>
-        <div class="pitem"><div class="pqty">3 ใบขึ้นไป</div><div class="pprice">1,275 ฿</div><div class="pbadge">🚚 ส่งฟรี + Griptok + พวงกุญแจ + กระเป๋าหูรูดสุ่มลาย 1 ใบ</div></div>
-      </div>
-    </div>
-    <div class="promo-panel" id="pmaxi">
-      <div class="pgrid">
-        <div class="pitem"><div class="pqty">1 ใบ</div><div class="pprice">550 ฿</div><div class="pbadge">แถม Keychain 1</div></div>
-        <div class="pitem"><div class="pqty">2 ใบ</div><div class="pprice">1,100 ฿</div><div class="pbadge">+ Griptok + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 1 ใบ</div></div>
-        <div class="pitem"><div class="pqty">3 ใบขึ้นไป</div><div class="pprice">1,650 ฿</div><div class="pbadge">🚚 ส่งฟรี + Griptok + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 1 ใบ</div></div>
-      </div>
-    </div>
+    <div id="promoPanels"></div>
   </div>
 </div>
 

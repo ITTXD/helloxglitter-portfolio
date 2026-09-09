@@ -23,6 +23,22 @@ body {
 }
 html { scroll-behavior: smooth; }
 
+/* 9.9 FLASH SALE STYLES */
+.flash-sale-bar{background:linear-gradient(90deg,#e82458 0%,#ff4d6d 50%,#e82458 100%);background-size:200% auto;animation:flashShimmer 3s linear infinite;color:white;padding:10px 16px;display:flex;align-items:center;justify-content:center;gap:12px;font-size:13px;font-weight:700;box-shadow:0 3px 12px rgba(232,36,88,0.35);position:sticky;top:0;z-index:99;flex-wrap:wrap}
+@keyframes flashShimmer{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+.flash-badge{background:white;color:#e82458;font-size:11px;font-weight:900;padding:3px 10px;border-radius:99px;display:inline-flex;align-items:center;gap:4px;box-shadow:0 2px 6px rgba(0,0,0,0.18);letter-spacing:0.04em;animation:pulseBadge 1.5s ease infinite}
+@keyframes pulseBadge{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+.flash-msg{display:inline-flex;align-items:center;gap:6px;letter-spacing:-0.01em;font-size:13px}
+.flash-countdown{display:inline-flex;align-items:center;gap:4px;background:rgba(0,0,0,0.25);padding:3px 10px;border-radius:8px;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums}
+.flash-countdown-box{background:white;color:#d41e4d;padding:1px 6px;border-radius:4px;min-width:24px;text-align:center;display:inline-block;font-weight:900}
+
+/* Gallery Flash Sale Badge & Prices */
+.flash-corner-tag{position:absolute;top:7px;left:7px;background:linear-gradient(135deg,#ff2a60,#ff5c80);color:white;font-size:10px;font-weight:900;padding:3px 8px;border-radius:6px;box-shadow:0 2px 8px rgba(255,42,96,0.45);z-index:2;display:flex;align-items:center;gap:3px;letter-spacing:0.02em}
+.gprice-row{display:flex;align-items:baseline;gap:5px;margin-top:2px;flex-wrap:wrap}
+.gprice-orig{font-size:10px;color:#a898a8;text-decoration:line-through}
+.gprice-sale{font-size:13px;font-weight:800;color:#ff2a60}
+.gprice-discount-tag{font-size:9px;font-weight:800;background:#ffe6ee;color:#ff2a60;padding:1px 5px;border-radius:4px}
+
 /* HERO */
 .hero { text-align: center; padding: 36px 20px 24px; background: #fff0f5; }
 .hero-tag {
@@ -634,6 +650,17 @@ html { scroll-behavior: smooth; }
   </div>
 </nav>
 
+<div class="flash-sale-bar" id="flashSaleBar">
+  <span class="flash-badge"><i class="ti ti-flame"></i> 9.9 FLASH SALE</span>
+  <span class="flash-msg">ลดทันที 39.- ทุกใบ! (2 ใบ ลด 78.- / 3 ใบ ลด 117.- + ส่งฟรี)</span>
+  <div class="flash-countdown">
+    <span>เหลือเวลา</span>
+    <span class="flash-countdown-box" id="cd-h">00</span>:
+    <span class="flash-countdown-box" id="cd-m">00</span>:
+    <span class="flash-countdown-box" id="cd-s">00</span>
+  </div>
+</div>
+
 <!-- ==========================================================================
      PAGE 1: PREORDER (BAGS)
      ========================================================================== -->
@@ -683,42 +710,15 @@ html { scroll-behavior: smooth; }
       </div>
     </div>
 
-    <div class="promo-wrap">
-      <div class="promo-header"><i class="ti ti-gift"></i> โปรโมชั่นของแถม & ส่งฟรี</div>
+    <div class="promo-wrap" id="promoWrap">
+      <div class="promo-header" id="promoHeader"><i class="ti ti-gift"></i> โปรโมชั่นของแถม & ส่งฟรี</div>
       <div class="ptabs" id="promoTabs">
         <div class="ptab active" data-panel="pnormal"><div class="pt-name">Normal</div><div class="pt-sub">15×16"</div></div>
         <div class="ptab" data-panel="plarge"><div class="pt-name">Large</div><div class="pt-sub">15.5×4×16"</div></div>
         <div class="ptab" data-panel="peasy"><div class="pt-name">Easy Bag</div><div class="pt-sub">10.5×5×14"</div></div>
         <div class="ptab" data-panel="pmaxi"><div class="pt-name">Maxi</div><div class="pt-sub">18×20"</div></div>
       </div>
-      <div class="promo-panel show" id="pnormal">
-        <div class="pgrid">
-          <div class="pitem"><div class="pqty">1 ใบ</div><div class="pprice">399 ฿</div><div class="pbadge" style="background:#fff0f5;color:#c07088;">ราคาปกติ</div></div>
-          <div class="pitem"><div class="pqty">2 ใบ</div><div class="pprice">798 ฿</div><div class="pbadge">+ Griptok + พวงกุญแจ</div></div>
-          <div class="pitem"><div class="pqty">3 ใบขึ้นไป</div><div class="pprice">1,197 ฿</div><div class="pbadge">🚚 ส่งฟรี + Griptok + พวงกุญแจ + กระเป๋าหูรูดสุ่มลาย 1 ใบ</div></div>
-        </div>
-      </div>
-      <div class="promo-panel" id="plarge">
-        <div class="pgrid">
-          <div class="pitem"><div class="pqty">1 ใบ</div><div class="pprice">499 ฿</div><div class="pbadge" style="background:#fff0f5;color:#c07088;">ราคาปกติ</div></div>
-          <div class="pitem"><div class="pqty">2 ใบ</div><div class="pprice">998 ฿</div><div class="pbadge">+ Griptok 2 + พวงกุญแจ 2</div></div>
-          <div class="pitem"><div class="pqty">3 ใบขึ้นไป</div><div class="pprice">1,497 ฿</div><div class="pbadge">🚚 ส่งฟรี + Griptok 2 + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 2 ใบ</div></div>
-        </div>
-      </div>
-      <div class="promo-panel" id="peasy">
-        <div class="pgrid">
-          <div class="pitem"><div class="pqty">1 ใบ</div><div class="pprice">425 ฿</div><div class="pbadge" style="background:#fff0f5;color:#c07088;">ราคาปกติ</div></div>
-          <div class="pitem"><div class="pqty">2 ใบ</div><div class="pprice">850 ฿</div><div class="pbadge">+ Griptok + พวงกุญแจ</div></div>
-          <div class="pitem"><div class="pqty">3 ใบขึ้นไป</div><div class="pprice">1,275 ฿</div><div class="pbadge">🚚 ส่งฟรี + Griptok + พวงกุญแจ + กระเป๋าหูรูดสุ่มลาย 1 ใบ</div></div>
-        </div>
-      </div>
-      <div class="promo-panel" id="pmaxi">
-        <div class="pgrid">
-          <div class="pitem"><div class="pqty">1 ใบ</div><div class="pprice">550 ฿</div><div class="pbadge">แถม Keychain 1</div></div>
-          <div class="pitem"><div class="pqty">2 ใบ</div><div class="pprice">1,100 ฿</div><div class="pbadge">+ Griptok + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 1 ใบ</div></div>
-          <div class="pitem"><div class="pqty">3 ใบขึ้นไป</div><div class="pprice">1,650 ฿</div><div class="pbadge">🚚 ส่งฟรี + Griptok + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 1 ใบ</div></div>
-        </div>
-      </div>
+      <div id="promoPanels"></div>
     </div>
   </div>
 
@@ -1144,14 +1144,37 @@ var REMOTE_PROVINCES = [
 ];
 
 /* 2. PROMO & SHIPPING CALCULATORS */
+var FLASH_SALE_DISCOUNT = 39;
+var FLASH_SALE_END_TIME = new Date('2026-09-09T23:59:59+07:00').getTime();
+
+function isFlashSaleActive() {
+  return Date.now() <= FLASH_SALE_END_TIME;
+}
+
 function computePromoPrice(patternQtys) {
   var total = 0;
+  var totalBags = 0;
   for (var name in patternQtys) {
     var p = ALL_PATTERNS.find(function(x) { return x.name === name; });
     if (!p) continue;
-    total += p.priceOrig * patternQtys[name];
+    var q = patternQtys[name] || 0;
+    total += p.priceOrig * q;
+    totalBags += q;
   }
-  return { original: total, promo: total, savings: 0 };
+
+  var active = isFlashSaleActive();
+  var discountPerItem = active ? FLASH_SALE_DISCOUNT : 0;
+  var totalDiscount = discountPerItem * totalBags;
+  var finalPrice = Math.max(0, total - totalDiscount);
+
+  return {
+    original: total,
+    promo: finalPrice,
+    savings: totalDiscount,
+    discountPerItem: discountPerItem,
+    totalBags: totalBags,
+    isFlashSale: active
+  };
 }
 
 function isRemoteArea(address) {
@@ -1212,20 +1235,127 @@ function totalBags() {
 }
 
 /* 4. GALLERY & UI BUILDERS */
+function renderPromoWrap() {
+  var wrap = document.getElementById('promoPanels');
+  var header = document.getElementById('promoHeader');
+  if (!wrap) return;
+
+  var activeTab = document.querySelector('.ptab.active');
+  var activePanelId = activeTab ? activeTab.dataset.panel : 'pnormal';
+  var isSale = isFlashSaleActive();
+
+  if (header) {
+    if (isSale) {
+      header.innerHTML = '<i class="ti ti-flame" style="color:#ff2a60;"></i> ⚡ 9.9 FLASH SALE — ลด 39.- ทุกใบ! (2 ใบ ลด 78.- / 3 ใบ ลด 117.-) + ของแถม & ส่งฟรี';
+    } else {
+      header.innerHTML = '<i class="ti ti-gift"></i> โปรโมชั่นของแถม & ส่งฟรี';
+    }
+  }
+
+  var panels = [
+    {
+      id: 'pnormal',
+      orig: 399,
+      tiers: [
+        { qty: '1 ใบ', freebie: '' },
+        { qty: '2 ใบ', freebie: '+ Griptok + พวงกุญแจ' },
+        { qty: '3 ใบขึ้นไป', freebie: '🚚 ส่งฟรี + Griptok + พวงกุญแจ + กระเป๋าหูรูดสุ่มลาย 1 ใบ' }
+      ]
+    },
+    {
+      id: 'plarge',
+      orig: 499,
+      tiers: [
+        { qty: '1 ใบ', freebie: '' },
+        { qty: '2 ใบ', freebie: '+ Griptok 2 + พวงกุญแจ 2' },
+        { qty: '3 ใบขึ้นไป', freebie: '🚚 ส่งฟรี + Griptok 2 + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 2 ใบ' }
+      ]
+    },
+    {
+      id: 'peasy',
+      orig: 425,
+      tiers: [
+        { qty: '1 ใบ', freebie: '' },
+        { qty: '2 ใบ', freebie: '+ Griptok + พวงกุญแจ' },
+        { qty: '3 ใบขึ้นไป', freebie: '🚚 ส่งฟรี + Griptok + พวงกุญแจ + กระเป๋าหูรูดสุ่มลาย 1 ใบ' }
+      ]
+    },
+    {
+      id: 'pmaxi',
+      orig: 550,
+      tiers: [
+        { qty: '1 ใบ', freebie: 'แถม Keychain 1' },
+        { qty: '2 ใบ', freebie: '+ Griptok + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 1 ใบ' },
+        { qty: '3 ใบขึ้นไป', freebie: '🚚 ส่งฟรี + Griptok + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 1 ใบ' }
+      ]
+    }
+  ];
+
+  var html = '';
+  panels.forEach(function(panel) {
+    var isShown = panel.id === activePanelId;
+    html += '<div class="promo-panel' + (isShown ? ' show' : '') + '" id="' + panel.id + '"><div class="pgrid">';
+    panel.tiers.forEach(function(tier, idx) {
+      var count = idx + 1;
+      var origTotal = panel.orig * count;
+      var disc = isSale ? (FLASH_SALE_DISCOUNT * count) : 0;
+      var promoTotal = origTotal - disc;
+
+      html += '<div class="pitem"><div class="pqty">' + tier.qty + '</div>';
+      if (isSale) {
+        html += '<div class="pori">' + origTotal.toLocaleString() + ' ฿</div>';
+        html += '<div class="pprice">' + promoTotal.toLocaleString() + ' ฿</div>';
+        if (tier.freebie) {
+          html += '<div class="pbadge">' + tier.freebie + '</div>';
+        }
+        html += '<div class="psave">🔥 ลด ' + disc.toLocaleString() + ' ฿' + (count > 1 ? ' (39×' + count + ')' : '') + '</div>';
+      } else {
+        html += '<div class="pprice">' + origTotal.toLocaleString() + ' ฿</div>';
+        if (tier.freebie) {
+          html += '<div class="pbadge">' + tier.freebie + '</div>';
+        } else {
+          html += '<div class="pbadge" style="background:#fff0f5;color:#c07088;">ราคาปกติ</div>';
+        }
+      }
+      html += '</div>';
+    });
+    html += '</div></div>';
+  });
+
+  wrap.innerHTML = html;
+}
+
 function buildGallery() {
   var list = getList();
   var html = '';
+  var isSale = isFlashSaleActive();
+
   list.forEach(function(p) {
     var q = picked[p.name] || 0;
     var isPicked = q > 0;
     var safeName = p.name.replace(/'/g, "\\'");
+    var flashBadge = isSale ? '<div class="flash-corner-tag"><i class="ti ti-flame"></i> 9.9 ลด 39.-</div>' : '';
+
+    var priceHtml = '';
+    if (isSale) {
+      var salePrice = Math.max(0, p.priceOrig - FLASH_SALE_DISCOUNT);
+      priceHtml = '<div class="gprice-row">'
+        + '<span class="gprice-orig">' + p.priceOrig.toLocaleString() + ' ฿</span>'
+        + '<span class="gprice-sale">' + salePrice.toLocaleString() + ' ฿</span>'
+        + '<span class="gprice-discount-tag">-39฿</span>'
+        + '</div>';
+    } else {
+      priceHtml = '<div class="gprice">' + p.priceOrig.toLocaleString() + ' ฿</div>';
+    }
+
     html += '<div class="gcard' + (isPicked ? ' picked' : '') + '" onclick="togglePattern(\'' + safeName + '\')">'
+      + flashBadge
       + '<img class="gimg" src="' + p.img + '" onerror="handleImgError(this, \'' + safeName + '\')" alt="' + escHtml(p.name) + '" />'
       + '<div class="gzoom" onclick="event.stopPropagation();openImgLightbox(\'' + p.img + '\')"><i class="ti ti-zoom-in"></i></div>'
       + '<div class="glabel">'
       + '<div class="gname">' + escHtml(p.name) + '</div>'
       + '<div class="gsize">' + escHtml(p.size) + '</div>'
-      + '<div class="gprice">' + p.priceOrig.toLocaleString() + ' ฿</div>'
+      + priceHtml
       + '</div>'
       + '<div class="gcheck"><i class="ti ti-check"></i></div>';
     if (isPicked) {
@@ -1310,6 +1440,10 @@ function updateSummary() {
 
   html += '<hr class="sum-divider">';
   html += '<div class="sum-total"><span>จำนวนทั้งหมด</span><span>' + tb + ' ใบ</span></div>';
+
+  if (pricing.savings > 0) {
+    html += '<div class="sum-row" style="color:#ff2a60;font-weight:800;margin-top:4px;"><span>🔥 ส่วนลด 9.9 Flash Sale (-39฿ × ' + tb + ' ใบ)</span><span>-' + pricing.savings.toLocaleString() + ' ฿</span></div>';
+  }
 
   var addrEl = document.getElementById('faddress');
   var addr = (addrEl ? addrEl.value : '').trim();
@@ -1670,8 +1804,46 @@ function setActiveDesignerBtn(btn) {
   btn.classList.add('active');
 }
 
+function initCountdown() {
+  var banner = document.getElementById('flashSaleBar');
+  if (!banner) return;
+  if (!isFlashSaleActive()) {
+    banner.style.display = 'none';
+    renderPromoWrap();
+    return;
+  }
+  banner.style.display = 'flex';
+  renderPromoWrap();
+
+  function tick() {
+    var now = Date.now();
+    var diff = FLASH_SALE_END_TIME - now;
+    if (diff <= 0) {
+      if (window._countdownTimer) clearInterval(window._countdownTimer);
+      banner.style.display = 'none';
+      renderPromoWrap();
+      buildGallery();
+      updateSummary();
+      return;
+    }
+    var h = Math.floor(diff / (1000 * 60 * 60));
+    var m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    var s = Math.floor((diff % (1000 * 60)) / 1000);
+    var hEl = document.getElementById('cd-h');
+    var mEl = document.getElementById('cd-m');
+    var sEl = document.getElementById('cd-s');
+    if (hEl) hEl.textContent = ('0' + h).slice(-2);
+    if (mEl) mEl.textContent = ('0' + m).slice(-2);
+    if (sEl) sEl.textContent = ('0' + s).slice(-2);
+  }
+  tick();
+  if (window._countdownTimer) clearInterval(window._countdownTimer);
+  window._countdownTimer = setInterval(tick, 1000);
+}
+
 /* 13. INITIALIZATION */
 document.addEventListener('DOMContentLoaded', function() {
+  initCountdown();
   buildGallery();
   updateSelectedBar();
   stickerBuildGallery();
@@ -1684,7 +1856,8 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.ptab').forEach(function(t) { t.classList.remove('active'); });
     document.querySelectorAll('.promo-panel').forEach(function(p) { p.classList.remove('show'); });
     tab.classList.add('active');
-    document.getElementById(tab.dataset.panel).classList.add('show');
+    var target = document.getElementById(tab.dataset.panel);
+    if (target) target.classList.add('show');
   });
 
   // Size Filter Tabs

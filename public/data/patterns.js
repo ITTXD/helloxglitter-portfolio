@@ -91,15 +91,39 @@ var REMOTE_PROVINCES = [
 var STATUS_LABELS = ['รอยืนยัน', 'ยืนยันแล้ว', 'กำลังผลิต', 'จัดส่งแล้ว'];
 var STATUS_ICONS = ['ti-clock', 'ti-circle-check', 'ti-tool', 'ti-truck'];
 
+// ==================== 9.9 FLASH SALE CONFIG ====================
+var FLASH_SALE_DISCOUNT = 39;
+var FLASH_SALE_END_TIME = new Date('2026-09-09T23:59:59+07:00').getTime();
+
+function isFlashSaleActive() {
+  return Date.now() <= FLASH_SALE_END_TIME;
+}
+
 // ==================== PROMO LOGIC ====================
 function computePromoPrice(patternQtys) {
   var total = 0;
+  var totalBags = 0;
   for (var name in patternQtys) {
     var p = ALL_PATTERNS.find(function(x) { return x.name === name; });
     if (!p) continue;
-    total += p.priceOrig * patternQtys[name];
+    var q = patternQtys[name] || 0;
+    total += p.priceOrig * q;
+    totalBags += q;
   }
-  return { original: total, promo: total, savings: 0 };
+
+  var active = isFlashSaleActive();
+  var discountPerItem = active ? FLASH_SALE_DISCOUNT : 0;
+  var totalDiscount = discountPerItem * totalBags;
+  var finalPrice = Math.max(0, total - totalDiscount);
+
+  return {
+    original: total,
+    promo: finalPrice,
+    savings: totalDiscount,
+    discountPerItem: discountPerItem,
+    totalBags: totalBags,
+    isFlashSale: active
+  };
 }
 
 function isRemoteArea(address) {

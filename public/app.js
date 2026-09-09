@@ -126,20 +126,127 @@ function getTouchDist(t1, t2) {
   });
 })();
 
+function renderPromoWrap() {
+  var wrap = document.getElementById('promoPanels');
+  var header = document.getElementById('promoHeader');
+  if (!wrap) return;
+
+  var activeTab = document.querySelector('.ptab.active');
+  var activePanelId = activeTab ? activeTab.dataset.panel : 'pnormal';
+  var isSale = isFlashSaleActive();
+
+  if (header) {
+    if (isSale) {
+      header.innerHTML = '<i class="ti ti-flame" style="color:#ff2a60;"></i> ⚡ 9.9 FLASH SALE — ลด 39.- ทุกใบ! (2 ใบ ลด 78.- / 3 ใบ ลด 117.-) + ของแถม & ส่งฟรี';
+    } else {
+      header.innerHTML = '<i class="ti ti-gift"></i> โปรโมชั่นของแถม & ส่งฟรี';
+    }
+  }
+
+  var panels = [
+    {
+      id: 'pnormal',
+      orig: 399,
+      tiers: [
+        { qty: '1 ใบ', freebie: '' },
+        { qty: '2 ใบ', freebie: '+ Griptok + พวงกุญแจ' },
+        { qty: '3 ใบขึ้นไป', freebie: '🚚 ส่งฟรี + Griptok + พวงกุญแจ + กระเป๋าหูรูดสุ่มลาย 1 ใบ' }
+      ]
+    },
+    {
+      id: 'plarge',
+      orig: 499,
+      tiers: [
+        { qty: '1 ใบ', freebie: '' },
+        { qty: '2 ใบ', freebie: '+ Griptok 2 + พวงกุญแจ 2' },
+        { qty: '3 ใบขึ้นไป', freebie: '🚚 ส่งฟรี + Griptok 2 + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 2 ใบ' }
+      ]
+    },
+    {
+      id: 'peasy',
+      orig: 425,
+      tiers: [
+        { qty: '1 ใบ', freebie: '' },
+        { qty: '2 ใบ', freebie: '+ Griptok + พวงกุญแจ' },
+        { qty: '3 ใบขึ้นไป', freebie: '🚚 ส่งฟรี + Griptok + พวงกุญแจ + กระเป๋าหูรูดสุ่มลาย 1 ใบ' }
+      ]
+    },
+    {
+      id: 'pmaxi',
+      orig: 550,
+      tiers: [
+        { qty: '1 ใบ', freebie: 'แถม Keychain 1' },
+        { qty: '2 ใบ', freebie: '+ Griptok + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 1 ใบ' },
+        { qty: '3 ใบขึ้นไป', freebie: '🚚 ส่งฟรี + Griptok + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 1 ใบ' }
+      ]
+    }
+  ];
+
+  var html = '';
+  panels.forEach(function(panel) {
+    var isShown = panel.id === activePanelId;
+    html += '<div class="promo-panel' + (isShown ? ' show' : '') + '" id="' + panel.id + '"><div class="pgrid">';
+    panel.tiers.forEach(function(tier, idx) {
+      var count = idx + 1;
+      var origTotal = panel.orig * count;
+      var disc = isSale ? (FLASH_SALE_DISCOUNT * count) : 0;
+      var promoTotal = origTotal - disc;
+
+      html += '<div class="pitem"><div class="pqty">' + tier.qty + '</div>';
+      if (isSale) {
+        html += '<div class="pori">' + origTotal.toLocaleString() + ' ฿</div>';
+        html += '<div class="pprice">' + promoTotal.toLocaleString() + ' ฿</div>';
+        if (tier.freebie) {
+          html += '<div class="pbadge">' + tier.freebie + '</div>';
+        }
+        html += '<div class="psave">🔥 ลด ' + disc.toLocaleString() + ' ฿' + (count > 1 ? ' (39×' + count + ')' : '') + '</div>';
+      } else {
+        html += '<div class="pprice">' + origTotal.toLocaleString() + ' ฿</div>';
+        if (tier.freebie) {
+          html += '<div class="pbadge">' + tier.freebie + '</div>';
+        } else {
+          html += '<div class="pbadge" style="background:#fff0f5;color:#c07088;">ราคาปกติ</div>';
+        }
+      }
+      html += '</div>';
+    });
+    html += '</div></div>';
+  });
+
+  wrap.innerHTML = html;
+}
+
 function buildGallery() {
   var list = getList();
   var html = '';
+  var isSale = isFlashSaleActive();
+
   list.forEach(function(p) {
     var q = picked[p.name] || 0;
     var isPicked = q > 0;
     var attrName = escAttr(p.name);
+    var flashBadge = isSale ? '<div class="flash-corner-tag"><i class="ti ti-flame"></i> 9.9 ลด 39.-</div>' : '';
+
+    var priceHtml = '';
+    if (isSale) {
+      var salePrice = Math.max(0, p.priceOrig - FLASH_SALE_DISCOUNT);
+      priceHtml = '<div class="gprice-row">'
+        + '<span class="gprice-orig">' + p.priceOrig.toLocaleString() + ' ฿</span>'
+        + '<span class="gprice-sale">' + salePrice.toLocaleString() + ' ฿</span>'
+        + '<span class="gprice-discount-tag">-39฿</span>'
+        + '</div>';
+    } else {
+      priceHtml = '<div class="gprice">' + p.priceOrig.toLocaleString() + ' ฿</div>';
+    }
+
     html += '<div class="gcard' + (isPicked ? ' picked' : '') + '" onclick="togglePattern(\'' + attrName + '\')">'
+      + flashBadge
       + '<img class="gimg" src="' + p.img + '" alt="' + escHtml(p.name) + '" />'
       + '<div class="gzoom" onclick="event.stopPropagation();openImgLightbox(\'' + p.img.replace(/'/g, "\\'") + '\')"><i class="ti ti-zoom-in"></i></div>'
       + '<div class="glabel">'
       + '<div class="gname">' + escHtml(p.name) + '</div>'
       + '<div class="gsize">' + escHtml(p.size) + '</div>'
-      + '<div class="gprice">' + p.priceOrig.toLocaleString() + ' ฿</div>'
+      + priceHtml
       + '</div>'
       + '<div class="gcheck"><i class="ti ti-check"></i></div>';
     if (isPicked) {
@@ -204,7 +311,11 @@ function updateSummary() {
 
   html += '<hr class="sum-divider">';
 
-  html += '<div class="sum-total"><span>จำนวนทั้งงหมด</span><span>' + tb + ' ใบ</span></div>';
+  html += '<div class="sum-total"><span>จำนวนทั้งหมด</span><span>' + tb + ' ใบ</span></div>';
+
+  if (pricing.savings > 0) {
+    html += '<div class="sum-row" style="color:#ff2a60;font-weight:800;margin-top:4px;"><span>🔥 ส่วนลด 9.9 Flash Sale (-39฿ × ' + tb + ' ใบ)</span><span>-' + pricing.savings.toLocaleString() + ' ฿</span></div>';
+  }
 
   var addrEl = document.getElementById('faddress') || document.getElementById('finfo');
   var addr = (addrEl ? addrEl.value : '').trim();
@@ -213,7 +324,7 @@ function updateSummary() {
   html += '<div class="sum-total"><span>' + shippingLabel + '</span><span>' + (shipping === 0 ? 'ฟรี' : shipping + ' ฿') + '</span></div>';
 
   var grandTotal = pricing.promo + shipping;
-  html += '<div class="sum-total" style="color:#d45a8a;font-size:16px;font-weight:800"><span>ยอดรวมทั้งหมด</span><span>' + grandTotal.toLocaleString() + ' ฿</span></div>';
+  html += '<div class="sum-total" style="color:#d45a8a;font-size:16px;font-weight:800;margin-top:6px;"><span>ยอดรวมทั้งหมด</span><span>' + grandTotal.toLocaleString() + ' ฿</span></div>';
 
   var szGroups = {};
   names.forEach(function(name) {
@@ -424,6 +535,7 @@ function doSubmit() {
     total_bags: tb,
     original_price: pricing.original,
     total_price: pricing.promo,
+    savings: pricing.savings,
     shipping_cost: shippingCost,
     is_remote: isRemote,
     note: note,
@@ -442,6 +554,9 @@ function showConfirm(data) {
     + '<div class="modal-row"><span class="modal-row-label">จำนวนทั้งหมด</span><span class="modal-row-val">' + data.total_bags + ' ใบ</span></div>';
 
   var shippingLabel = data.is_remote && data.shipping_cost > 0 ? 'ค่าจัดส่ง (พื้นที่ห่างไกล)' : 'ค่าจัดส่ง';
+  if (data.savings > 0) {
+    html += '<div class="modal-row" style="color:#ff2a60;font-weight:700;"><span class="modal-row-label">🔥 ส่วนลด 9.9</span><span class="modal-row-val">-' + data.savings.toLocaleString() + ' ฿</span></div>';
+  }
   html += '<div class="modal-row"><span class="modal-row-label">' + shippingLabel + '</span><span class="modal-row-val">' + (data.shipping_cost === 0 ? 'ฟรี' : data.shipping_cost + ' ฿') + '</span></div>';
   html += '<div class="modal-row"><span class="modal-row-label">ยอดรวม</span><span class="modal-row-val price">' + (data.total_price + data.shipping_cost).toLocaleString() + ' ฿</span></div>';
 
@@ -532,8 +647,11 @@ function renderThankYou(order) {
   if (order.total_bags >= 3) shippingCost = 0;
   var grandTotal = order.total_price + shippingCost;
   var shippingLabel = order.is_remote && shippingCost > 0 ? 'ค่าจัดส่ง (พื้นที่ห่างไกล)' : 'ค่าจัดส่ง';
-  html += '<div class="ty-total-row"><span>ยอดสินค้า</span><span>' + order.total_price.toLocaleString() + ' ฿</span></div>'
-    + '<div class="ty-total-row"><span>' + shippingLabel + '</span><span>' + (shippingCost === 0 ? 'ฟรี' : shippingCost + ' ฿') + '</span></div>'
+  html += '<div class="ty-total-row"><span>ยอดสินค้า</span><span>' + (order.original_price || order.total_price).toLocaleString() + ' ฿</span></div>';
+  if (order.savings > 0) {
+    html += '<div class="ty-total-row" style="color:#ff2a60;font-weight:700;"><span>🔥 ส่วนลด 9.9 Flash Sale</span><span>-' + order.savings.toLocaleString() + ' ฿</span></div>';
+  }
+  html += '<div class="ty-total-row"><span>' + shippingLabel + '</span><span>' + (shippingCost === 0 ? 'ฟรี' : shippingCost + ' ฿') + '</span></div>'
     + '<div class="ty-total-row" style="font-weight:800;color:#d45a8a"><span>ยอดรวมทั้งหมด</span><span>' + grandTotal.toLocaleString() + ' ฿</span></div>'
     + '<div class="ty-total-row"><span>จำนวน</span><span>' + order.total_bags + ' ใบ</span></div>'
     + '</div>'
@@ -1467,8 +1585,46 @@ function wpCheckDownload() {
     });
 }
 
+function initCountdown() {
+  var banner = document.getElementById('flashSaleBar');
+  if (!banner) return;
+  if (!isFlashSaleActive()) {
+    banner.style.display = 'none';
+    renderPromoWrap();
+    return;
+  }
+  banner.style.display = 'flex';
+  renderPromoWrap();
+
+  function tick() {
+    var now = Date.now();
+    var diff = FLASH_SALE_END_TIME - now;
+    if (diff <= 0) {
+      if (window._countdownTimer) clearInterval(window._countdownTimer);
+      banner.style.display = 'none';
+      renderPromoWrap();
+      buildGallery();
+      updateSummary();
+      return;
+    }
+    var h = Math.floor(diff / (1000 * 60 * 60));
+    var m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    var s = Math.floor((diff % (1000 * 60)) / 1000);
+    var hEl = document.getElementById('cd-h');
+    var mEl = document.getElementById('cd-m');
+    var sEl = document.getElementById('cd-s');
+    if (hEl) hEl.textContent = ('0' + h).slice(-2);
+    if (mEl) mEl.textContent = ('0' + m).slice(-2);
+    if (sEl) sEl.textContent = ('0' + s).slice(-2);
+  }
+  tick();
+  if (window._countdownTimer) clearInterval(window._countdownTimer);
+  window._countdownTimer = setInterval(tick, 1000);
+}
+
 // ==================== INIT ====================
 document.addEventListener('DOMContentLoaded', function() {
+  initCountdown();
   showWelcomePopup();
   autoPlayMusic();
   document.getElementById('promoTabs').addEventListener('click', function(e) {

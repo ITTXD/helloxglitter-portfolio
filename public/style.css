@@ -2,6 +2,22 @@
 *{box-sizing:border-box;margin:0;padding:0}
 .hidden{display:none!important}
 body{font-family:'Nunito',sans-serif;background:#fff5f9;padding-bottom:40px;color:#333}
+
+/* 9.9 FLASH SALE STYLES */
+.flash-sale-bar{background:linear-gradient(90deg,#e82458 0%,#ff4d6d 50%,#e82458 100%);background-size:200% auto;animation:flashShimmer 3s linear infinite;color:white;padding:10px 16px;display:flex;align-items:center;justify-content:center;gap:12px;font-size:13px;font-weight:700;box-shadow:0 3px 12px rgba(232,36,88,0.35);position:sticky;top:0;z-index:99;flex-wrap:wrap}
+@keyframes flashShimmer{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+.flash-badge{background:white;color:#e82458;font-size:11px;font-weight:900;padding:3px 10px;border-radius:99px;display:inline-flex;align-items:center;gap:4px;box-shadow:0 2px 6px rgba(0,0,0,0.18);letter-spacing:0.04em;animation:pulseBadge 1.5s ease infinite}
+@keyframes pulseBadge{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+.flash-msg{display:inline-flex;align-items:center;gap:6px;letter-spacing:-0.01em;font-size:13px}
+.flash-countdown{display:inline-flex;align-items:center;gap:4px;background:rgba(0,0,0,0.25);padding:3px 10px;border-radius:8px;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums}
+.flash-countdown-box{background:white;color:#d41e4d;padding:1px 6px;border-radius:4px;min-width:24px;text-align:center;display:inline-block;font-weight:900}
+
+/* Gallery Flash Sale Badge & Prices */
+.flash-corner-tag{position:absolute;top:7px;left:7px;background:linear-gradient(135deg,#ff2a60,#ff5c80);color:white;font-size:10px;font-weight:900;padding:3px 8px;border-radius:6px;box-shadow:0 2px 8px rgba(255,42,96,0.45);z-index:2;display:flex;align-items:center;gap:3px;letter-spacing:0.02em}
+.gprice-row{display:flex;align-items:baseline;gap:5px;margin-top:2px;flex-wrap:wrap}
+.gprice-orig{font-size:10px;color:#a898a8;text-decoration:line-through}
+.gprice-sale{font-size:13px;font-weight:800;color:#ff2a60}
+.gprice-discount-tag{font-size:9px;font-weight:800;background:#ffe6ee;color:#ff2a60;padding:1px 5px;border-radius:4px}
 .hero{text-align:center;padding:36px 20px 24px;background:#fff0f5}
 .hero-tag{display:inline-block;background:#ffd6e7;color:#c0457e;font-size:11px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;padding:4px 13px;border-radius:99px;margin-bottom:12px}
 .hero h1{font-size:34px;font-weight:800;color:#d45a8a;letter-spacing:-.02em;line-height:1.1}
