@@ -12,8 +12,8 @@ var PROMO_NORMAL = [{ bags: 1, price: 299 }, { bags: 2, price: 559 }, { bags: 3,
 var PROMO_LARGE  = [{ bags: 1, price: 449 }, { bags: 2, price: 699 }, { bags: 3, price: 990 }];
 var PROMO_EASY   = [{ bags: 1, price: 355 }, { bags: 2, price: 630 }, { bags: 3, price: 800 }];
 
-var BASE_SHIPPING = 50;
-var REMOTE_SHIPPING = 65;
+var BASE_SHIPPING = 0;
+var REMOTE_SHIPPING = 40;
 var REMOTE_PROVINCES = [
   'ยะลา','ปัตตานี','นราธิวาส','ระนอง','แม่ฮ่องสอน',
 ];
@@ -61,7 +61,7 @@ function isRemoteArea(address) {
 }
 
 function calcShipping(address, totalBags) {
-  if (totalBags >= 3) return 0;
+  if (!totalBags || totalBags <= 0) return 0;
   return isRemoteArea(address) ? REMOTE_SHIPPING : BASE_SHIPPING;
 }
 
@@ -172,47 +172,47 @@ test('Order without pattern_qtys: 2 Large', function() {
 // ==================== SHIPPING RECALC ====================
 console.log('\n--- SHIPPING RECALC ---');
 
-test('Normal address: 2 bags → shipping 50', function() {
+test('Normal address: 1 bag → free shipping (0)', function() {
+  var order = {
+    patterns: ['Merilah Pink'],
+    pattern_qtys: { 'Merilah Pink': 1 },
+    customer_info: 'Test\n081-234-5678\nกรุงเทพ',
+  };
+  var result = simulateOrderUpdate(order);
+  assert.strictEqual(result.shipping_cost, 0);
+  assert.strictEqual(result.is_remote, false);
+});
+
+test('Normal address: 2 bags → free shipping (0)', function() {
   var order = {
     patterns: ['Merilah Pink', 'Blair'],
     pattern_qtys: { 'Merilah Pink': 1, 'Blair': 1 },
     customer_info: 'Test\n081-234-5678\nกรุงเทพ',
   };
   var result = simulateOrderUpdate(order);
-  assert.strictEqual(result.shipping_cost, 50);
+  assert.strictEqual(result.shipping_cost, 0);
   assert.strictEqual(result.is_remote, false);
 });
 
-test('Remote address (ปัตตานี): 2 bags → shipping 65', function() {
+test('Remote address (ปัตตานี): 1 bag → shipping 40', function() {
   var order = {
-    patterns: ['Merilah Pink', 'Blair'],
-    pattern_qtys: { 'Merilah Pink': 1, 'Blair': 1 },
+    patterns: ['Merilah Pink'],
+    pattern_qtys: { 'Merilah Pink': 1 },
     customer_info: 'Test\n081-234-5678\nปัตตานี',
   };
   var result = simulateOrderUpdate(order);
-  assert.strictEqual(result.shipping_cost, 65);
+  assert.strictEqual(result.shipping_cost, 40);
   assert.strictEqual(result.is_remote, true);
 });
 
-test('Any address: 3 bags → free shipping', function() {
+test('Remote address (ยะลา): 3 bags → shipping 40', function() {
   var order = {
     patterns: ['Merilah Pink', 'Merilah Pink', 'Merilah Pink'],
     pattern_qtys: { 'Merilah Pink': 3 },
-    customer_info: 'Test\n081-234-5678\nนราธิวาส',
-  };
-  var result = simulateOrderUpdate(order);
-  assert.strictEqual(result.shipping_cost, 0);
-  assert.strictEqual(result.is_remote, true);
-});
-
-test('Remote address: 4 bags → free shipping (no +15)', function() {
-  var order = {
-    patterns: ['Merilah Pink', 'Merilah Pink', 'Merilah Pink', 'Merilah Pink'],
-    pattern_qtys: { 'Merilah Pink': 4 },
     customer_info: 'Test\n081-234-5678\nยะลา',
   };
   var result = simulateOrderUpdate(order);
-  assert.strictEqual(result.shipping_cost, 0);
+  assert.strictEqual(result.shipping_cost, 40);
   assert.strictEqual(result.is_remote, true);
 });
 

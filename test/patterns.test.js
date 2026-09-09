@@ -207,27 +207,27 @@ describe('isRemoteArea', () => {
 });
 
 describe('getShippingCost', () => {
-  test('free shipping for 3+ bags', () => {
+  test('free shipping for any bags in normal area', () => {
+    expect(getShippingCost('กรุงเทพ', 1)).toBe(0);
+    expect(getShippingCost('กรุงเทพ', 2)).toBe(0);
     expect(getShippingCost('กรุงเทพ', 3)).toBe(0);
     expect(getShippingCost('กรุงเทพ', 5)).toBe(0);
   });
-  test('free shipping for 3+ bags even remote', () => {
-    expect(getShippingCost('ภูเก็ต', 3)).toBe(0);
-    expect(getShippingCost('ยะลา', 5)).toBe(0);
+  test('40 THB for remote area', () => {
+    expect(getShippingCost('ภูเก็ต', 1)).toBe(40);
+    expect(getShippingCost('ยะลา', 2)).toBe(40);
+    expect(getShippingCost('ภูเก็ต', 3)).toBe(40);
+    expect(getShippingCost('ยะลา', 5)).toBe(40);
   });
-  test('50 THB for <3 bags normal area', () => {
-    expect(getShippingCost('กรุงเทพ', 1)).toBe(50);
-    expect(getShippingCost('กรุงเทพ', 2)).toBe(50);
+  test('0 THB when address is null (normal area free shipping)', () => {
+    expect(getShippingCost(null, 1)).toBe(0);
   });
-  test('65 THB for <3 bags remote area', () => {
-    expect(getShippingCost('ภูเก็ต', 1)).toBe(65);
-    expect(getShippingCost('ยะลา', 2)).toBe(65);
+  test('0 THB when address is empty (normal area free shipping)', () => {
+    expect(getShippingCost('', 1)).toBe(0);
   });
-  test('50 THB when address is null', () => {
-    expect(getShippingCost(null, 1)).toBe(50);
-  });
-  test('50 THB when address is empty', () => {
-    expect(getShippingCost('', 1)).toBe(50);
+  test('0 THB when totalBags is 0', () => {
+    expect(getShippingCost('ภูเก็ต', 0)).toBe(0);
+    expect(getShippingCost('กรุงเทพ', 0)).toBe(0);
   });
 });
 

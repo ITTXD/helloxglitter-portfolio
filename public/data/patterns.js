@@ -69,8 +69,8 @@ var WP_PATTERNS = [
 // var PROMO_MAXI   = [{ bags: 1, price: 499 }, { bags: 2, price: 900 }];
 
 // ==================== SHIPPING ====================
-var BASE_SHIPPING = 50;
-var REMOTE_SHIPPING = 65;
+var BASE_SHIPPING = 0;
+var REMOTE_SHIPPING = 40;
 var REMOTE_PROVINCES = [
   'ยะลา','ปัตตานี','นราธิวาส',
   'ระนอง',
@@ -136,7 +136,7 @@ function isRemoteArea(address) {
 }
 
 function getShippingCost(address, totalBags) {
-  if (totalBags >= 3) return 0;
+  if (!totalBags || totalBags <= 0) return 0;
   return isRemoteArea(address) ? REMOTE_SHIPPING : BASE_SHIPPING;
 }
 

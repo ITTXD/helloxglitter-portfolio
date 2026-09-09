@@ -228,7 +228,7 @@ async function handleApi(req, res) {
       original_price: body.original_price || body.total_price || 0,
       total_price: body.total_price || 0,
       savings: body.savings || 0,
-      shipping_cost: body.shipping_cost != null ? body.shipping_cost : 50,
+      shipping_cost: body.shipping_cost != null ? body.shipping_cost : (body.is_remote ? 40 : 0),
       is_remote: body.is_remote || false,
       status: 0,
       note: body.note || '',
@@ -524,10 +524,7 @@ async function handleApi(req, res) {
 
     const orderId = orderData.id || generateOrderId();
     const totalPrice = Number(orderData.total_price || 0);
-    let shippingCost = orderData.shipping_cost != null ? Number(orderData.shipping_cost) : 50;
-    if (orderData.total_bags >= 3 && !orderData.is_remote) {
-      shippingCost = 0;
-    }
+    let shippingCost = orderData.shipping_cost != null ? Number(orderData.shipping_cost) : (orderData.is_remote ? 40 : 0);
     const grandTotal = totalPrice + shippingCost;
 
     // ตรวจสอบสลิปผ่าน EasySlip API ก่อนบันทึก Database

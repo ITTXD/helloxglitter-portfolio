@@ -102,8 +102,8 @@ function computePromoPrice(patternQtys) {
 }
 
 // ==================== SHIPPING ====================
-const BASE_SHIPPING = 50;
-const REMOTE_SHIPPING = 65;
+const BASE_SHIPPING = 0;
+const REMOTE_SHIPPING = 40;
 const REMOTE_PROVINCES = [
   'ยะลา','ปัตตานี','นราธิวาส','ระนอง','แม่ฮ่องสอน','ตราด','เกาะกูด','เกาะช้าง',
   'กระบี่','เกาะลันตา','เกาะพีพี','ภูเก็ต','เกาะสมุย','เกาะพะงัน','เกาะเต่า',
@@ -149,7 +149,7 @@ async function main() {
       // Calculate shipping
       var totalBags = Object.values(patternQtys).reduce((sum, q) => sum + q, 0);
       var isRemote = isRemoteArea(order.customer_info);
-      var shippingCost = totalBags >= 3 ? 0 : (isRemote ? REMOTE_SHIPPING : BASE_SHIPPING);
+      var shippingCost = isRemote ? REMOTE_SHIPPING : BASE_SHIPPING;
 
       // Build updates
       var updates = {

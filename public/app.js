@@ -137,9 +137,9 @@ function renderPromoWrap() {
 
   if (header) {
     if (isSale) {
-      header.innerHTML = '<i class="ti ti-flame" style="color:#ff2a60;"></i> ⚡ 9.9 FLASH SALE — ลด 39.- ทุกใบ! (2 ใบ ลด 78.- / 3 ใบ ลด 117.-) + ของแถม & ส่งฟรี';
+      header.innerHTML = '<i class="ti ti-flame" style="color:#ff2a60;"></i> ⚡ 9.9 FLASH SALE — ลด 39.- ทุกใบ! (ส่งฟรีทุกออเดอร์ · พื้นที่ห่างไกล +40.-)';
     } else {
-      header.innerHTML = '<i class="ti ti-gift"></i> โปรโมชั่นของแถม & ส่งฟรี';
+      header.innerHTML = '<i class="ti ti-truck" style="color:#d45a8a;"></i> 🚚 สั่งซื้อกระเป๋าผ้า ส่งฟรีทุกใบ! (พื้นที่ห่างไกล +40.-)';
     }
   }
 
@@ -148,8 +148,8 @@ function renderPromoWrap() {
       id: 'pnormal',
       orig: 399,
       tiers: [
-        { qty: '1 ใบ', freebie: '' },
-        { qty: '2 ใบ', freebie: '+ Griptok + พวงกุญแจ' },
+        { qty: '1 ใบ', freebie: '🚚 ส่งฟรี' },
+        { qty: '2 ใบ', freebie: '🚚 ส่งฟรี + Griptok + พวงกุญแจ' },
         { qty: '3 ใบขึ้นไป', freebie: '🚚 ส่งฟรี + Griptok + พวงกุญแจ + กระเป๋าหูรูดสุ่มลาย 1 ใบ' }
       ]
     },
@@ -157,8 +157,8 @@ function renderPromoWrap() {
       id: 'plarge',
       orig: 499,
       tiers: [
-        { qty: '1 ใบ', freebie: '' },
-        { qty: '2 ใบ', freebie: '+ Griptok 2 + พวงกุญแจ 2' },
+        { qty: '1 ใบ', freebie: '🚚 ส่งฟรี' },
+        { qty: '2 ใบ', freebie: '🚚 ส่งฟรี + Griptok 2 + พวงกุญแจ 2' },
         { qty: '3 ใบขึ้นไป', freebie: '🚚 ส่งฟรี + Griptok 2 + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 2 ใบ' }
       ]
     },
@@ -166,8 +166,8 @@ function renderPromoWrap() {
       id: 'peasy',
       orig: 425,
       tiers: [
-        { qty: '1 ใบ', freebie: '' },
-        { qty: '2 ใบ', freebie: '+ Griptok + พวงกุญแจ' },
+        { qty: '1 ใบ', freebie: '🚚 ส่งฟรี' },
+        { qty: '2 ใบ', freebie: '🚚 ส่งฟรี + Griptok + พวงกุญแจ' },
         { qty: '3 ใบขึ้นไป', freebie: '🚚 ส่งฟรี + Griptok + พวงกุญแจ + กระเป๋าหูรูดสุ่มลาย 1 ใบ' }
       ]
     },
@@ -175,8 +175,8 @@ function renderPromoWrap() {
       id: 'pmaxi',
       orig: 550,
       tiers: [
-        { qty: '1 ใบ', freebie: 'แถม Keychain 1' },
-        { qty: '2 ใบ', freebie: '+ Griptok + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 1 ใบ' },
+        { qty: '1 ใบ', freebie: '🚚 ส่งฟรี + แถม Keychain 1' },
+        { qty: '2 ใบ', freebie: '🚚 ส่งฟรี + Griptok + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 1 ใบ' },
         { qty: '3 ใบขึ้นไป', freebie: '🚚 ส่งฟรี + Griptok + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 1 ใบ' }
       ]
     }
@@ -340,8 +340,11 @@ function updateSummary() {
   }
   if (notes.length > 0) {
     html += '<div class="sum-note"><i class="ti ti-gift"></i> ' + notes.join('<br>') + '</div>';
-  } else if (tb > 0 && tb < 3) {
-    html += '<div class="sum-warn"><i class="ti ti-info-circle"></i> เลือก 3 ใบขึ้นไปเพื่อรับของแถมและส่งฟรีค่ะ!</div>';
+  }
+  if (isRemoteArea(addr)) {
+    html += '<div class="sum-warn" style="background:#fff3e0;border-color:#ffcc80;color:#d86000;"><i class="ti ti-map-pin"></i> ตรวจพบที่อยู่ในพื้นที่ห่างไกล (+40 บาท)</div>';
+  } else if (tb > 0) {
+    html += '<div class="sum-warn" style="background:#e8f5e9;border-color:#a5d6a7;color:#2e7d32;"><i class="ti ti-truck"></i> กระเป๋าผ้าส่งฟรีทุกใบ! (ไม่มีค่าจัดส่ง)</div>';
   }
 
   el.innerHTML = html;
@@ -467,15 +470,13 @@ function getPromoTier(sizeKey, totalBags) {
 // computePromoPrice loaded from /data/patterns.js
 
 function getPromoNote(sizeKey, totalBags) {
-  if (sizeKey !== 'maxi' && totalBags < 2) return '';
-  if (sizeKey === 'maxi' && totalBags < 1) return '';
   var notes = {
-    normal: { 2: '+ Griptok + พวงกุญแจ', 3: '🚚 ส่งฟรี + Griptok + พวงกุญแจ + กระเป๋าหูรูดสุ่มลาย 1 ใบ' },
-    large:  { 2: '+ Griptok 2 + พวงกุญแจ 2', 3: '🚚 ส่งฟรี + Griptok 2 + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 2 ใบ' },
-    easy:   { 2: '+ Griptok + พวงกุญแจ', 3: '🚚 ส่งฟรี + Griptok + พวงกุญแจ + กระเป๋าหูรูดสุ่มลาย 1 ใบ' },
-    maxi:   { 1: 'แถม Keychain 1', 2: '+ Griptok + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 1 ใบ', 3: '🚚 ส่งฟรี + Griptok + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 1 ใบ' }
+    normal: { 1: '🚚 ส่งฟรี', 2: '🚚 ส่งฟรี + Griptok + พวงกุญแจ', 3: '🚚 ส่งฟรี + Griptok + พวงกุญแจ + กระเป๋าหูรูดสุ่มลาย 1 ใบ' },
+    large:  { 1: '🚚 ส่งฟรี', 2: '🚚 ส่งฟรี + Griptok 2 + พวงกุญแจ 2', 3: '🚚 ส่งฟรี + Griptok 2 + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 2 ใบ' },
+    easy:   { 1: '🚚 ส่งฟรี', 2: '🚚 ส่งฟรี + Griptok + พวงกุญแจ', 3: '🚚 ส่งฟรี + Griptok + พวงกุญแจ + กระเป๋าหูรูดสุ่มลาย 1 ใบ' },
+    maxi:   { 1: '🚚 ส่งฟรี + แถม Keychain 1', 2: '🚚 ส่งฟรี + Griptok + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 1 ใบ', 3: '🚚 ส่งฟรี + Griptok + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 1 ใบ' }
   };
-  var tier = totalBags >= 3 ? 3 : totalBags >= 2 ? 2 : (sizeKey === 'maxi' && totalBags >= 1 ? 1 : 0);
+  var tier = totalBags >= 3 ? 3 : totalBags >= 2 ? 2 : (totalBags >= 1 ? 1 : 0);
   return tier ? (notes[sizeKey] || {})[tier] || '' : '';
 }
 
@@ -547,7 +548,7 @@ function doSubmit() {
   var tb = totalBags();
   var pricing = computePromoPrice(picked);
   var isRemote = isRemoteArea(addr);
-  var shippingCost = tb >= 3 ? 0 : (isRemote ? REMOTE_SHIPPING : BASE_SHIPPING);
+  var shippingCost = getShippingCost(addr, tb);
 
   showConfirm({
     customer_name: name,
@@ -667,8 +668,7 @@ function renderThankYou(order) {
     + freebieHtml
     + '<hr class="sum-divider">';
 
-  var shippingCost = (order.shipping_cost != null ? order.shipping_cost : BASE_SHIPPING);
-  if (order.total_bags >= 3) shippingCost = 0;
+  var shippingCost = order.shipping_cost != null ? order.shipping_cost : (order.is_remote ? 40 : 0);
   var grandTotal = order.total_price + shippingCost;
   var shippingLabel = order.is_remote && shippingCost > 0 ? 'ค่าจัดส่ง (พื้นที่ห่างไกล)' : 'ค่าจัดส่ง';
   html += '<div class="ty-total-row"><span>ยอดสินค้า</span><span>' + (order.original_price || order.total_price).toLocaleString() + ' ฿</span></div>';
@@ -806,8 +806,8 @@ function renderOrderCard(order) {
     + '<div style="font-size:12px;font-weight:800;color:#c04878;margin-bottom:8px;">สินค้าที่สั่ง</div>'
     + itemsHtml
     + '<div class="tr-detail-row"><span class="tr-detail-label">ยอดสินค้า</span><span class="tr-detail-val">' + (order.total_price || 0).toLocaleString() + ' ฿</span></div>'
-    + '<div class="tr-detail-row"><span class="tr-detail-label">ค่าจัดส่ง' + (order.is_remote && order.total_bags < 3 ? ' (พื้นที่ห่างไกล)' : '') + '</span><span class="tr-detail-val">' + (order.total_bags >= 3 ? 'ฟรี' : ((order.shipping_cost != null ? order.shipping_cost : 50) + ' ฿')) + '</span></div>'
-    + '<div class="tr-detail-row"><span class="tr-detail-label">ยอดรวมทั้งหมด</span><span class="tr-detail-val" style="font-weight:800;color:#d45a8a">' + ((order.total_price || 0) + (order.total_bags >= 3 ? 0 : (order.shipping_cost != null ? order.shipping_cost : 50))).toLocaleString() + ' ฿</span></div>'
+    + '<div class="tr-detail-row"><span class="tr-detail-label">ค่าจัดส่ง' + (order.is_remote && (order.shipping_cost > 0 || order.shipping_cost == null) ? ' (พื้นที่ห่างไกล)' : '') + '</span><span class="tr-detail-val">' + ((order.shipping_cost === 0 || (!order.is_remote && order.shipping_cost == null)) ? 'ฟรี' : ((order.shipping_cost != null ? order.shipping_cost : 40) + ' ฿')) + '</span></div>'
+    + '<div class="tr-detail-row"><span class="tr-detail-label">ยอดรวมทั้งหมด</span><span class="tr-detail-val" style="font-weight:800;color:#d45a8a">' + ((order.total_price || 0) + (order.shipping_cost != null ? order.shipping_cost : (order.is_remote ? 40 : 0))).toLocaleString() + ' ฿</span></div>'
     + '<div class="tr-detail-row"><span class="tr-detail-label">จำนวน</span><span class="tr-detail-val">' + (order.total_bags || 0) + ' ' + unitLabel + '</span></div>'
     + '<div class="tr-detail-row"><span class="tr-detail-label">สั่งเมื่อ</span><span class="tr-detail-val">' + dateStr + '</span></div>';
 
