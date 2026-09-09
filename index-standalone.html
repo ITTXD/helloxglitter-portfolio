@@ -1,0 +1,1705 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>helloxglitter — Order กระเป๋าผ้า (Designer Standalone Edition)</title>
+<!-- Tabler Icons & Google Fonts -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+
+<style>
+/* ==========================================================================
+   1. CORE & GLOBAL STYLES (from public/style.css)
+   ========================================================================== */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+.hidden { display: none !important; }
+body {
+  font-family: 'Nunito', sans-serif;
+  background: #fff5f9;
+  padding-bottom: 40px;
+  color: #333;
+  padding-top: 0;
+}
+html { scroll-behavior: smooth; }
+
+/* HERO */
+.hero { text-align: center; padding: 36px 20px 24px; background: #fff0f5; }
+.hero-tag {
+  display: inline-block;
+  background: #ffd6e7;
+  color: #c0457e;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  padding: 4px 13px;
+  border-radius: 99px;
+  margin-bottom: 12px;
+}
+.hero h1 { font-size: 34px; font-weight: 800; color: #d45a8a; letter-spacing: -.02em; line-height: 1.1; }
+.hero h1 span { color: #e8809e; }
+.hero-sub { font-size: 14px; color: #c08090; margin-top: 6px; }
+
+/* NOTICES */
+.notice-wrap { max-width: 700px; margin: 0 auto; padding: 16px 18px 0; }
+.notice-card {
+  background: linear-gradient(135deg, #fff8e6 0%, #fff0f5 100%);
+  border: 1.5px solid #f5d88a;
+  border-radius: 14px;
+  padding: 16px 18px;
+}
+.notice-title { font-size: 14px; font-weight: 800; color: #b07020; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+.notice-body { font-size: 12px; color: #806040; line-height: 1.7; }
+.notice-body p { margin-bottom: 6px; }
+.notice-body strong { color: #a05010; }
+.notice-highlight {
+  background: white;
+  border: 1.5px solid #f0d080;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 8px 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #a06010;
+  line-height: 1.6;
+}
+.notice-sub { font-size: 11px; color: #a09070; margin-bottom: 0; }
+
+.notice-pink { background: linear-gradient(135deg, #fff0f8 0%, #f8f0ff 100%); border-color: #f0b8d0; }
+.notice-pink .notice-title { color: #c04080; }
+.notice-pink .notice-body { color: #805070; }
+.notice-pink .notice-body strong { color: #b03060; }
+.notice-pink .notice-highlight { border-color: #f0b0d0; color: #b04070; }
+.notice-pink .notice-sub { color: #b090a0; }
+
+/* BANNERS & PROMO */
+.info-banner { max-width: 700px; margin: 20px auto 0; padding: 0 18px; display: flex; flex-direction: column; gap: 10px; }
+.banner-card { background: white; border: 1.5px solid #fadadd; border-radius: 14px; padding: 14px 18px; display: flex; align-items: flex-start; gap: 12px; }
+.banner-icon { font-size: 20px; color: #e07090; flex-shrink: 0; margin-top: 1px; }
+.banner-title { font-size: 13px; font-weight: 800; color: #c05070; margin-bottom: 3px; }
+.banner-body { font-size: 12px; color: #b07080; line-height: 1.6; }
+
+.promo-wrap { background: white; border: 1.5px solid #fadadd; border-radius: 14px; padding: 16px 18px; }
+.promo-header { font-size: 13px; font-weight: 800; color: #c05070; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+.ptabs { display: flex; gap: 8px; margin-bottom: 12px; }
+.ptab {
+  flex: 1;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1.5px solid #f5c8d8;
+  background: #fff5f8;
+  text-align: center;
+  cursor: pointer;
+  transition: all .15s;
+  position: relative;
+  overflow: hidden;
+}
+.ptab.active { border-color: #d45a8a; background: #ffe4ef; }
+.pt-name { font-size: 12px; font-weight: 800; color: #c04878; }
+.pt-sub { font-size: 10px; color: #d4a8b8; margin-top: 2px; }
+
+.promo-panel { display: none; opacity: 0; transition: opacity .25s ease; }
+.promo-panel.show { display: block; animation: panelFade .25s ease forwards; }
+@keyframes panelFade { from { opacity: 0; } to { opacity: 1; } }
+
+.pgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.pitem { background: #fff5f8; border-radius: 10px; padding: 10px 8px; text-align: center; border: 1px solid #fadadd; }
+.pqty { font-size: 11px; color: #c08090; margin-bottom: 2px; }
+.pprice { font-size: 15px; font-weight: 800; color: #d45a8a; line-height: 1.2; }
+.pori { font-size: 10px; color: #d4a8b8; text-decoration: line-through; margin-bottom: 2px; }
+.pbadge { font-size: 10px; font-weight: 700; background: #ffd6e7; color: #c0457e; border-radius: 99px; padding: 2px 8px; margin-top: 4px; display: inline-block; }
+.psave { font-size: 10px; font-weight: 800; color: #208030; background: #e0ffe6; border-radius: 99px; padding: 2px 8px; margin-top: 3px; display: inline-block; }
+
+/* SECTIONS & TABS */
+.sec { max-width: 700px; margin: 0 auto; padding: 24px 18px 0; }
+.sec-title { font-size: 14px; font-weight: 800; color: #c45078; margin-bottom: 14px; display: flex; align-items: center; gap: 7px; text-transform: uppercase; letter-spacing: .05em; }
+.size-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.stab {
+  padding: 7px 16px;
+  border-radius: 99px;
+  border: 1.5px solid #f5c8d8;
+  background: white;
+  font-size: 12px;
+  font-weight: 700;
+  color: #c0607e;
+  cursor: pointer;
+  transition: all .15s;
+}
+.stab.active { background: #ffe0eb; border-color: #d45a8a; color: #a03860; }
+
+/* GALLERY & CARDS */
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+  transition: opacity .2s ease;
+}
+.gcard {
+  background: white;
+  border: 2px solid #f5d0de;
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color .15s, transform .12s;
+  position: relative;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.gcard:hover { border-color: #e090a8; transform: translateY(-2px) !important; }
+.gcard.picked { border-color: #d45a8a; box-shadow: 0 0 0 3px #ffd0e4; }
+.gimg { width: 100%; aspect-ratio: 1/1; object-fit: cover; display: block; pointer-events: none; background: #fff0f5; }
+.gzoom {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: #d45a8a;
+  cursor: pointer;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity .15s;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(212, 90, 138, 0.3);
+}
+.gcard:hover .gzoom, .gcard:active .gzoom { opacity: 1; }
+@media (hover: none) { .gzoom { opacity: 0.7; } }
+.glabel { padding: 7px 10px 9px; }
+.gname { font-size: 12px; font-weight: 700; color: #c04070; }
+.gprice { font-size: 11px; font-weight: 800; color: #d45a8a; margin-top: 2px; }
+.gcheck {
+  display: none;
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 22px;
+  height: 22px;
+  background: #d45a8a;
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 13px;
+  z-index: 2;
+}
+.gcard.picked .gcheck { display: flex; }
+.gqty {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(212, 90, 138, 0.95);
+  backdrop-filter: blur(4px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 6px 0;
+  border-radius: 0 0 12px 12px;
+  z-index: 2;
+}
+.gcard.picked .gqty { display: flex; }
+.gqbtn {
+  width: 30px;
+  height: 28px;
+  border: none;
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s;
+}
+.gqbtn:first-child { border-radius: 8px 0 0 8px; }
+.gqbtn:last-child { border-radius: 0 8px 8px 0; }
+.gqbtn:hover { background: rgba(255, 255, 255, 0.4); }
+.gqnum { min-width: 32px; text-align: center; color: white; font-size: 14px; font-weight: 800; background: rgba(255, 255, 255, 0.15); height: 28px; line-height: 28px; }
+
+/* SELECTED BAR */
+.selected-bar { background: white; border: 1.5px solid #f5e0ea; border-radius: 14px; padding: 13px 16px; margin-bottom: 8px; }
+.sb-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.sb-label { font-size: 12px; color: #c0909e; white-space: nowrap; }
+.sb-count { font-size: 13px; font-weight: 800; color: #c45a80; }
+.sb-clear { font-size: 12px; color: #e0a0b8; cursor: pointer; margin-left: auto; }
+.sb-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sb-chip { background: #ffe4ef; color: #c0457e; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 99px; display: flex; align-items: center; gap: 5px; }
+.sb-chip .rm { cursor: pointer; color: #e090b0; font-size: 13px; line-height: 1; }
+.sb-empty { font-size: 13px; color: #e0c0cc; font-style: italic; }
+
+/* FORMS */
+.form-card { background: white; border-radius: 18px; border: 1.5px solid #f5d0de; padding: 22px; margin-top: 20px; }
+.form-row { margin-bottom: 14px; }
+.form-row label { display: block; font-size: 12px; font-weight: 800; color: #c04878; margin-bottom: 5px; text-transform: uppercase; letter-spacing: .05em; }
+.form-row textarea, .form-row input {
+  width: 100%;
+  border: 1.5px solid #f5c8d8;
+  border-radius: 10px;
+  padding: 10px 13px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #333;
+  background: #fffafc;
+  outline: none;
+  transition: border-color .15s;
+  box-sizing: border-box;
+}
+.form-row textarea { resize: vertical; }
+.form-row textarea:focus, .form-row input:focus { border-color: #d45a8a; }
+
+/* SUMMARY BOX */
+.summary-box { background: #fff5f8; border: 1.5px solid #f5d0de; border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+.sum-title { font-size: 12px; font-weight: 800; color: #c04878; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; }
+.sum-row { display: flex; justify-content: space-between; font-size: 13px; color: #b08090; margin-bottom: 6px; }
+.sum-row span:last-child { font-weight: 700; color: #a06070; }
+.sum-divider { border: none; border-top: 1px dashed #f5d0de; margin: 8px 0; }
+.sum-total { display: flex; justify-content: space-between; font-size: 15px; font-weight: 800; }
+.sum-total span:first-child { color: #c04878; }
+.sum-total span:last-child { color: #d45a8a; }
+.sum-note { font-size: 11px; color: #d06090; font-weight: 700; margin-top: 6px; display: flex; align-items: center; gap: 4px; }
+.sum-warn { font-size: 11px; color: #e07890; font-weight: 700; margin-top: 6px; display: flex; align-items: center; gap: 4px; }
+.sum-empty { font-size: 13px; color: #e0c0cc; font-style: italic; text-align: center; padding: 6px 0; }
+
+.submit-btn {
+  width: 100%;
+  background: #d45a8a;
+  color: white;
+  border: none;
+  border-radius: 13px;
+  padding: 15px;
+  font-size: 15px;
+  font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+  margin-top: 6px;
+  transition: transform .12s ease, background .15s ease;
+}
+.submit-btn:active { transform: scale(.96); }
+.err { font-size: 12px; color: #d45a8a; margin-bottom: 10px; display: none; }
+
+.success {
+  display: none;
+  text-align: center;
+  background: white;
+  border-radius: 18px;
+  border: 1.5px solid #f5d8e4;
+  padding: 32px 20px;
+  margin-top: 20px;
+}
+.success.show { display: block; animation: successPop .4s cubic-bezier(.22, 1, .36, 1) forwards; }
+@keyframes successPop { from { opacity: 0; transform: translateY(12px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.success .si { font-size: 38px; color: #d45a8a; margin-bottom: 10px; }
+.success h3 { font-size: 18px; font-weight: 800; color: #c04070; margin-bottom: 5px; }
+.success p { font-size: 13px; color: #c08090; line-height: 1.7; }
+.footer { text-align: center; font-size: 11px; color: #d4a8b8; padding: 20px 20px 0; line-height: 1.7; }
+
+/* NAVBAR */
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 1.5px solid #f5d0de;
+  padding: 0 16px;
+  height: 52px;
+  backdrop-filter: blur(8px);
+}
+.navbar-brand { font-size: 16px; font-weight: 800; color: #d45a8a; letter-spacing: -.02em; white-space: nowrap; }
+.navbar-brand span { color: #e8809e; }
+.navbar-links { display: flex; gap: 2px; }
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #c08090;
+  cursor: pointer;
+  transition: all .15s;
+  text-decoration: none;
+  white-space: nowrap;
+  font-family: inherit;
+  border: none;
+  background: none;
+}
+.nav-link:hover { background: #fff5f8; color: #d45a8a; }
+.nav-link.active { background: #ffe4ef; color: #d45a8a; }
+.nav-link i { font-size: 16px; }
+
+/* PAGE SYSTEM */
+.page { display: block; opacity: 0; visibility: hidden; height: 0; overflow: hidden; transition: opacity .35s ease, visibility .35s ease; }
+.page.active { opacity: 1; visibility: visible; height: auto; overflow: visible; }
+
+/* THANK YOU PAGE */
+.ty-wrap { max-width: 600px; margin: 0 auto; padding: 30px 18px; }
+.ty-card { background: white; border-radius: 18px; border: 1.5px solid #f5d0de; padding: 30px 24px; text-align: center; }
+.ty-icon { font-size: 54px; color: #d45a8a; margin-bottom: 14px; }
+.ty-title { font-size: 22px; font-weight: 800; color: #c04070; margin-bottom: 6px; }
+.ty-sub { font-size: 14px; color: #c08090; margin-bottom: 20px; line-height: 1.7; }
+.ty-orderid { background: #fff5f8; border: 1.5px solid #f5d0de; border-radius: 12px; padding: 14px 18px; margin-bottom: 18px; }
+.ty-orderid-label { font-size: 11px; font-weight: 800; color: #c04878; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+.ty-orderid-val { font-size: 20px; font-weight: 800; color: #d45a8a; letter-spacing: .04em; }
+.ty-items { text-align: left; background: #fff5f8; border: 1.5px solid #fadadd; border-radius: 14px; padding: 16px; margin-bottom: 18px; }
+.ty-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px dashed #f5d0de; font-size: 13px; color: #b08090; }
+.ty-item:last-child { border-bottom: none; }
+.ty-item-name { font-weight: 700; color: #c04070; }
+.ty-total-row { display: flex; justify-content: space-between; font-size: 15px; font-weight: 800; margin-top: 10px; }
+.ty-total-row span:first-child { color: #c04878; }
+.ty-total-row span:last-child { color: #d45a8a; }
+.ty-steps { text-align: left; margin-bottom: 20px; }
+.ty-step { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px dashed #fadadd; }
+.ty-step:last-child { border-bottom: none; }
+.ty-step-num { width: 28px; height: 28px; background: #d45a8a; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; flex-shrink: 0; }
+.ty-step-text { font-size: 13px; color: #b08090; line-height: 1.6; }
+.ty-step-text strong { color: #c04070; }
+.ty-btn { display: block; background: #d45a8a; color: white; border: none; border-radius: 13px; padding: 13px; font-size: 14px; font-weight: 800; font-family: inherit; cursor: pointer; text-align: center; margin-top: 16px; text-decoration: none; width: 100%; }
+.ty-btn-out { display: block; background: white; color: #d45a8a; border: 2px solid #d45a8a; border-radius: 13px; padding: 11px; font-size: 14px; font-weight: 800; font-family: inherit; cursor: pointer; text-align: center; margin-top: 10px; text-decoration: none; width: 100%; }
+
+/* TRACKING */
+.tr-wrap { max-width: 600px; margin: 0 auto; padding: 30px 18px; }
+.tr-card { background: white; border-radius: 18px; border: 1.5px solid #f5d0de; padding: 26px 22px; margin-bottom: 16px; }
+.tr-title { font-size: 16px; font-weight: 800; color: #c04070; margin-bottom: 6px; text-align: center; }
+.tr-sub { font-size: 13px; color: #a08090; text-align: center; margin-bottom: 16px; }
+.tr-input { width: 100%; border: 1.5px solid #f5c8d8; border-radius: 10px; padding: 11px 14px; font-size: 14px; font-family: inherit; color: #333; background: #fffafc; outline: none; margin-bottom: 10px; }
+.tr-input:focus { border-color: #d45a8a; }
+.tr-btn { width: 100%; background: #d45a8a; color: white; border: none; border-radius: 10px; padding: 12px; font-size: 14px; font-weight: 800; font-family: inherit; cursor: pointer; }
+.tr-result { margin-top: 16px; display: none; }
+.tr-result.show { display: block; animation: successPop .35s cubic-bezier(.22, 1, .36, 1) forwards; }
+.tr-not-found { text-align: center; font-size: 14px; color: #e07090; font-weight: 700; padding: 20px; }
+.tr-order-card { background: #fff5f8; border: 1.5px solid #f5d0de; border-radius: 14px; padding: 18px; margin-bottom: 12px; }
+.tr-order-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px; }
+.tr-order-id { font-size: 13px; font-weight: 800; color: #c04070; }
+.tr-status-badge { font-size: 12px; font-weight: 800; padding: 5px 12px; border-radius: 99px; }
+.tr-status-badge.s0 { background: #fff0c0; color: #b08000; }
+.tr-status-badge.s1 { background: #d0f0ff; color: #0060a0; }
+.tr-status-badge.s2 { background: #e0d0ff; color: #6000c0; }
+.tr-status-badge.s3 { background: #d0f0d0; color: #006020; }
+.tr-timeline { display: flex; flex-direction: column; gap: 0; margin-bottom: 14px; }
+.tr-tl-step { display: flex; gap: 12px; }
+.tr-tl-dot-col { display: flex; flex-direction: column; align-items: center; }
+.tr-tl-dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #f5c8d8; background: white; flex-shrink: 0; margin-top: 3px; }
+.tr-tl-dot.done { background: #d45a8a; border-color: #d45a8a; }
+.tr-tl-dot.current { background: white; border-color: #d45a8a; box-shadow: 0 0 0 3px #ffd0e4; }
+.tr-tl-line { width: 2px; background: #f5d0de; flex: 1; min-height: 22px; }
+.tr-tl-text { padding-bottom: 18px; }
+.tr-tl-label { font-size: 13px; font-weight: 700; color: #c04070; }
+.tr-tl-sub { font-size: 11px; color: #c0909e; margin-top: 2px; }
+.tr-detail-row { display: flex; justify-content: space-between; font-size: 13px; color: #b08090; padding: 5px 0; border-bottom: 1px dashed #f5d0de; }
+.tr-detail-row:last-child { border-bottom: none; }
+.tr-detail-label { color: #c0909e; }
+.tr-detail-val { font-weight: 700; color: #a06070; }
+.tr-back-btn { width: 100%; background: #fff5f8; color: #d45a8a; border: 1.5px solid #fadadd; border-radius: 10px; padding: 11px; font-size: 13px; font-weight: 800; font-family: inherit; cursor: pointer; margin-top: 12px; }
+
+/* SLIP UPLOAD */
+.slip-section { background: linear-gradient(135deg, #fff0f5, #f8f0ff); border: 1.5px solid #f0d0e0; border-radius: 16px; padding: 20px; margin: 16px 0; text-align: center; }
+.slip-title { font-size: 15px; font-weight: 800; color: #c04878; margin-bottom: 6px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.slip-desc { font-size: 12px; color: #a09098; margin-bottom: 14px; }
+.slip-drop { border: 2px dashed #d45a8a; border-radius: 14px; padding: 30px 20px; cursor: pointer; transition: all .2s; background: white; }
+.slip-drop:hover, .slip-drop.dragover { background: #fff0f5; border-color: #c04080; }
+.slip-preview { margin-top: 12px; }
+.slip-preview img { width: 100%; max-width: 350px; border-radius: 12px; border: 2px solid #f0d0e0; margin-bottom: 12px; }
+.slip-actions { display: flex; gap: 10px; justify-content: center; }
+.slip-btn { padding: 10px 20px; border-radius: 10px; font-size: 13px; font-weight: 800; font-family: inherit; cursor: pointer; display: flex; align-items: center; gap: 5px; border: 1.5px solid; transition: all .15s; }
+.slip-btn-cancel { background: white; color: #a09098; border-color: #e0d0d8; }
+.slip-done { margin-top: 12px; font-size: 14px; font-weight: 800; color: #30a030; display: flex; align-items: center; justify-content: center; gap: 6px; }
+
+/* WALLPAPER PAGE */
+.wp-hero { background: #f5f0ff; }
+.notice-purple { background: linear-gradient(135deg, #f5f0ff 0%, #ede4ff 100%); border-color: #d8c8f0; }
+.notice-purple .notice-title { color: #6b3fa0; }
+.notice-purple .notice-body { color: #605080; }
+.notice-purple .notice-body strong { color: #7c3aed; }
+.notice-purple .notice-highlight { border-color: #d8c0f0; color: #6b3fa0; background: white; }
+.wp-submit-btn { background: #7c3aed; }
+.wp-submit-btn:hover { background: #6d28d9; }
+.wp-card { position: relative; background: white; border: 2px solid #d0c0e8; border-radius: 16px; overflow: hidden; cursor: pointer; transition: all .2s; width: 100%; }
+.wp-card:hover { border-color: #a78bfa; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(124, 58, 237, 0.15); }
+.wp-card.picked { border-color: #7c3aed; box-shadow: 0 0 0 3px #ede0ff; }
+.wp-card-img { width: 100%; display: block; object-fit: contain; }
+.wp-card-info { padding: 12px 16px; text-align: center; }
+.wp-card-name { font-size: 15px; font-weight: 800; color: #6b3fa0; margin-bottom: 4px; }
+.wp-card-price { font-size: 18px; font-weight: 800; color: #7c3aed; }
+.wp-card-check { display: none; position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; background: #7c3aed; border-radius: 50%; align-items: center; justify-content: center; color: white; font-size: 16px; z-index: 2; }
+.wp-card.picked .wp-card-check { display: flex; }
+.wp-card-qty { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(124, 58, 237, 0.95); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; gap: 0; padding: 8px 0; z-index: 2; }
+.wp-card.picked .wp-card-qty { display: flex; }
+.wp-orderid-box { background: #f5f0ff; border: 1.5px solid #d0c0e8; border-radius: 12px; padding: 14px 18px; margin: 12px 0; text-align: center; }
+.wp-orderid-label { font-size: 11px; font-weight: 800; color: #7c3aed; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+.wp-orderid-val { font-size: 18px; font-weight: 800; color: #6b3fa0; letter-spacing: .04em; }
+
+/* MODALS & POPUPS */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .25s ease, visibility .25s ease;
+}
+.modal-overlay:not(.hidden) { opacity: 1; visibility: visible; }
+.modal-card { background: white; border-radius: 18px; width: 100%; max-width: 480px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); overflow: hidden; }
+.modal-head { font-size: 16px; font-weight: 800; color: #c04070; padding: 18px 22px 0; }
+.modal-body { padding: 16px 22px; max-height: 50vh; overflow-y: auto; font-size: 13px; color: #555; line-height: 1.7; }
+.modal-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dashed #f0e8ec; font-size: 13px; }
+.modal-row:last-child { border-bottom: none; }
+.modal-row-label { color: #a09098; }
+.modal-row-val { font-weight: 700; color: #555; }
+.modal-row-val.price { color: #d45a8a; font-size: 15px; }
+.modal-customer { background: #fff8fa; border-radius: 10px; padding: 10px 14px; font-size: 12px; color: #605060; line-height: 1.6; white-space: pre-line; margin: 8px 0; }
+.modal-actions { display: flex; gap: 10px; padding: 0 22px 18px; }
+.modal-btn { flex: 1; padding: 12px; border-radius: 10px; font-size: 14px; font-weight: 800; font-family: inherit; cursor: pointer; text-align: center; border: 1.5px solid; }
+.modal-btn-cancel { background: white; color: #a09098; border-color: #e8d8e0; }
+.modal-btn-confirm { background: #d45a8a; color: white; border-color: #d45a8a; }
+
+/* WELCOME POPUP */
+.welcome-popup {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 99999;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  display: flex;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity .35s ease, visibility .35s ease;
+}
+.welcome-popup.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+.welcome-popup-card {
+  background: white;
+  border-radius: 28px;
+  padding: 44px 32px 40px;
+  max-width: 440px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(200, 100, 150, 0.3);
+  animation: welcomePopIn .4s cubic-bezier(.22, 1, .36, 1) forwards;
+}
+@keyframes welcomePopIn { from { opacity: 0; transform: scale(.85) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+.welcome-popup-icon { font-size: 56px; margin-bottom: 12px; }
+.welcome-popup-title { font-size: 26px; font-weight: 800; color: #d45a8a; margin-bottom: 4px; }
+.welcome-popup-sub { font-size: 14px; color: #c08090; margin-bottom: 18px; }
+.welcome-popup-msg { font-size: 16px; font-weight: 700; color: #888; margin-bottom: 24px; }
+.welcome-popup-btns { display: flex; flex-direction: column; gap: 10px; }
+.welcome-btn {
+  border-radius: 16px;
+  padding: 14px 18px;
+  border: 2px solid #f5d0de;
+  background: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: all .2s ease;
+  font-family: inherit;
+  text-align: left;
+}
+.welcome-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(212, 90, 138, 0.15); }
+.welcome-btn-icon { font-size: 28px; }
+.welcome-btn-text { font-size: 14px; font-weight: 800; color: #c04878; line-height: 1.3; }
+.welcome-btn-sub { font-size: 11px; font-weight: 600; color: #b0a0b8; }
+
+/* MAXI POPUP */
+.maxi-popup { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); z-index: 9998; align-items: center; justify-content: center; padding: 20px; display: none; }
+.maxi-popup.show { display: flex; }
+.maxi-popup-card { background: white; border-radius: 20px; padding: 28px 24px; max-width: 340px; width: 100%; text-align: center; box-shadow: 0 12px 40px rgba(200, 100, 150, 0.25); }
+.maxi-popup-icon { font-size: 40px; margin-bottom: 8px; }
+.maxi-popup-title { font-size: 16px; font-weight: 800; color: #d45a8a; margin-bottom: 8px; }
+.maxi-popup-msg { font-size: 13px; color: #666; line-height: 1.6; margin-bottom: 18px; }
+.maxi-popup-btn { background: #d45a8a; color: white; border: none; border-radius: 10px; padding: 10px 28px; font-size: 14px; font-weight: 800; font-family: inherit; cursor: pointer; }
+
+/* LIGHTBOX */
+.img-lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  opacity: 0;
+  visibility: hidden;
+  display: flex;
+  transition: opacity .3s ease, visibility .3s ease;
+}
+.img-lightbox.show { opacity: 1; visibility: visible; }
+.img-lb-close { position: absolute; top: 14px; right: 16px; color: white; font-size: 28px; background: rgba(255, 255, 255, 0.15); border: none; border-radius: 50%; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 10; }
+.img-lb-wrap { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.img-lb-wrap img { max-width: 92vw; max-height: 88vh; object-fit: contain; border-radius: 8px; }
+
+/* MUSIC PLAYER */
+.music-btn { position: fixed; bottom: 20px; right: 20px; width: 50px; height: 50px; border-radius: 50%; background: #d45a8a; color: white; display: flex; align-items: center; justify-content: center; font-size: 22px; cursor: pointer; z-index: 990; box-shadow: 0 4px 16px rgba(212, 90, 138, 0.4); border: none; }
+.music-player { position: fixed; bottom: 80px; right: 20px; width: 300px; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); z-index: 990; border: 1.5px solid #f0d0e0; }
+.music-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #fff0f5; border-bottom: 1px solid #f0d0e0; }
+.music-title { font-size: 13px; font-weight: 800; color: #c04070; display: flex; align-items: center; gap: 6px; }
+.music-close { background: none; border: none; font-size: 18px; color: #c0909e; cursor: pointer; }
+.music-controls { display: flex; align-items: center; gap: 8px; padding: 12px 14px; }
+.mc-btn { width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid #f0d0e0; background: white; color: #d45a8a; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+/* ==========================================================================
+   2. DESIGNER TOOLBAR DOCK (Helper for Designers to preview all states)
+   ========================================================================== */
+.designer-bar {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(30, 30, 40, 0.94);
+  backdrop-filter: blur(12px);
+  color: white;
+  border-radius: 99px;
+  padding: 6px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  z-index: 999999;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  max-width: 95vw;
+  overflow-x: auto;
+}
+.designer-badge {
+  font-size: 11px;
+  font-weight: 800;
+  background: #ff5f9e;
+  padding: 4px 9px;
+  border-radius: 20px;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+.designer-btn {
+  background: rgba(255, 255, 255, 0.12);
+  border: none;
+  color: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all .15s ease;
+}
+.designer-btn:hover { background: rgba(255, 255, 255, 0.28); color: #fff; }
+.designer-btn.active { background: #ff5f9e; color: white; }
+</style>
+</head>
+<body>
+
+<!-- DESIGNER HELPER QUICK-SWITCH BAR -->
+<div class="designer-bar" id="designerBar">
+  <span class="designer-badge">🎨 Designer Bar</span>
+  <button class="designer-btn active" onclick="showPage('preorder');setActiveDesignerBtn(this)">Order</button>
+  <button class="designer-btn" onclick="showPage('wallpaper');setActiveDesignerBtn(this)">Wallpaper</button>
+  <button class="designer-btn" onclick="showPage('sticker');setActiveDesignerBtn(this)">Sticker</button>
+  <button class="designer-btn" onclick="showPage('tracking');setActiveDesignerBtn(this)">Tracking</button>
+  <button class="designer-btn" onclick="showPage('thankyou');renderThankYou(mockSampleOrder);setActiveDesignerBtn(this)">Thank You</button>
+  <button class="designer-btn" onclick="showPage('wpcheck');setActiveDesignerBtn(this)">Checklink</button>
+  <button class="designer-btn" onclick="showWelcomePopup()" style="background:#5a4fcf">🎀 Welcome Popup</button>
+  <button class="designer-btn" onclick="fillMockCart()" style="background:#208050">✨ สุ่มของลงตะกร้า</button>
+</div>
+
+<!-- ==========================================================================
+     NAVBAR
+     ========================================================================== -->
+<nav class="navbar" id="navbar">
+  <div class="navbar-brand">hello<span>x</span>glitter</div>
+  <div class="navbar-links">
+    <a class="nav-link active" data-page="preorder" onclick="showPage('preorder')"><i class="ti ti-shopping-bag"></i> Order</a>
+    <a class="nav-link" data-page="wallpaper" onclick="showPage('wallpaper')"><i class="ti ti-brush"></i> Wallpaper</a>
+    <a class="nav-link" data-page="sticker" onclick="showPage('sticker')"><i class="ti ti-star"></i> Sticker</a>
+    <a class="nav-link" data-page="wpcheck" onclick="showPage('wpcheck')"><i class="ti ti-download"></i> เช็คลิงก์</a>
+    <a class="nav-link" data-page="tracking" onclick="showPage('tracking')"><i class="ti ti-truck"></i> ติดตามออเดอร์</a>
+  </div>
+</nav>
+
+<!-- ==========================================================================
+     PAGE 1: PREORDER (BAGS)
+     ========================================================================== -->
+<div id="page-preorder" class="page active">
+  <div class="hero">
+    <div class="hero-tag">Order เปิดรับแล้ว!</div>
+    <h1>hello<span>x</span>glitter</h1>
+    <div class="hero-sub">กระเป๋าผ้าลายน่ารัก · 46 ลาย · 4 ไซส์</div>
+  </div>
+
+  <div class="notice-wrap">
+    <div class="notice-card">
+      <div class="notice-title">⏰ ระยะเวลารอสินค้า</div>
+      <div class="notice-body">
+        <p>ทางร้านจะเริ่มทยอยส่งยอดให้ช่างผลิตตั้งแต่วันที่ <strong>19/06/69</strong> เพื่อช่วยลดระยะเวลาการรอสินค้า</p>
+        <p>และจะเปิดรับออเดอร์เพิ่มเติมจนถึงวันที่ <strong>23/06/69</strong></p>
+        <div class="notice-highlight">📌 คำสั่งซื้อที่ชำระเงินหลังวันที่ 19.06 จะถูกส่งเข้ารอบผลิตวันที่ 23.06 จึงอาจได้รับสินค้าช้ากว่ารอบแรกเล็กน้อย ทางร้านแนะนำให้ชำระเงินภายในวันที่ 19 เพื่อเข้ารอบผลิตแรกค่ะ ദ്ดิ(ᵔᗜᵔ)</div>
+        <p class="notice-sub">สินค้าจะใช้เวลาผลิตประมาณ 7 วัน โดยไม่นับวันเสาร์–อาทิตย์ เนื่องจากเป็นวันหยุดของพี่ช่าง แต่ร้านจะเร่งให้ไวที่สุดค่ะ! หากสินค้าเสร็จก่อนกำหนด ทางร้านจะรีบตรวจสอบและจัดส่งให้ลูกค้าในทันทีค่ะ</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="notice-wrap">
+    <div class="notice-card notice-pink">
+      <div class="notice-title">💝 พิเศษสำหรับรอบนี้ — เปิดให้สั่งซื้อเกือบทุกลายที่ร้านทำมาเลย!</div>
+      <div class="notice-body">
+        <p>ทางร้านนำลายเก่าที่ไม่ได้รีสต็อกมานานกลับมาเปิดให้สั่งซื้ออีกครั้ง ต้อนรับการกลับมาของทางร้านที่อยู่คู่กับลูกค้ามายาวนาน <strong>13 ปี</strong> มาหวนความคิดถึงไปด้วยกันนะคะ ⸜( ˶>ᴗ<˶)⸝♡</p>
+        <p>ทางร้านตั้งใจผลิตและของแถมทุกชิ้นอย่างดีที่สุด ลูกค้าจะไม่ผิดหวังกับการกลับมาของร้านครั้งนี้อย่างแน่นอนค่ะ</p>
+        <p>ลูกค้าที่เคยพลาดได้มีโอกาสเก็บลายที่ชอบในราคาพิเศษจากทางร้าน โดยไม่ต้องตามหาสินค้ามือสองในราคาที่สูงกว่าค่ะ</p>
+        <div class="notice-highlight">⚠️ บางลายอาจเป็นการเปิดผลิตครั้งสุดท้าย และจะไม่มีการนำกลับมาผลิตหรือรีสต็อกอีก</div>
+        <p class="notice-sub">การเปิดรับออเดอร์ครั้งนี้ ทางร้านจะนำยอดความสนใจของลูกค้าในแต่ละลายไปประกอบการพิจารณาผลิตในอนาคตค่ะ 🗂️৻(  •̀ ᗜ •́  ৻)</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-banner">
+    <div class="banner-card">
+      <i class="ti ti-truck banner-icon"></i>
+      <div>
+        <div class="banner-title">🚚 ค่าจัดส่ง</div>
+        <div class="banner-body">
+          • ค่าส่งเหมา <strong>50 บาท</strong><br>
+          • พื้นที่ห่างไกล <strong>+15 บาท</strong> (เลือก 3 ใบขึ้นไปส่งฟรี!)<br><br>
+          📦 แจ้งเลขแทร็คผ่าน openchat ใน note เลยนะคะ<br>
+          กดลิ้งค์เพื่อเข้ากลุ่ม → <a href="https://urlkub.co/FUY9pP" target="_blank" style="color:#d45a8a;font-weight:700">🎀 เข้ากลุ่ม</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="promo-wrap">
+      <div class="promo-header"><i class="ti ti-gift"></i> โปรโมชั่นของแถม & ส่งฟรี</div>
+      <div class="ptabs" id="promoTabs">
+        <div class="ptab active" data-panel="pnormal"><div class="pt-name">Normal</div><div class="pt-sub">15×16"</div></div>
+        <div class="ptab" data-panel="plarge"><div class="pt-name">Large</div><div class="pt-sub">15.5×4×16"</div></div>
+        <div class="ptab" data-panel="peasy"><div class="pt-name">Easy Bag</div><div class="pt-sub">10.5×5×14"</div></div>
+        <div class="ptab" data-panel="pmaxi"><div class="pt-name">Maxi</div><div class="pt-sub">18×20"</div></div>
+      </div>
+      <div class="promo-panel show" id="pnormal">
+        <div class="pgrid">
+          <div class="pitem"><div class="pqty">1 ใบ</div><div class="pprice">399 ฿</div><div class="pbadge" style="background:#fff0f5;color:#c07088;">ราคาปกติ</div></div>
+          <div class="pitem"><div class="pqty">2 ใบ</div><div class="pprice">798 ฿</div><div class="pbadge">+ Griptok + พวงกุญแจ</div></div>
+          <div class="pitem"><div class="pqty">3 ใบขึ้นไป</div><div class="pprice">1,197 ฿</div><div class="pbadge">🚚 ส่งฟรี + Griptok + พวงกุญแจ + กระเป๋าหูรูดสุ่มลาย 1 ใบ</div></div>
+        </div>
+      </div>
+      <div class="promo-panel" id="plarge">
+        <div class="pgrid">
+          <div class="pitem"><div class="pqty">1 ใบ</div><div class="pprice">499 ฿</div><div class="pbadge" style="background:#fff0f5;color:#c07088;">ราคาปกติ</div></div>
+          <div class="pitem"><div class="pqty">2 ใบ</div><div class="pprice">998 ฿</div><div class="pbadge">+ Griptok 2 + พวงกุญแจ 2</div></div>
+          <div class="pitem"><div class="pqty">3 ใบขึ้นไป</div><div class="pprice">1,497 ฿</div><div class="pbadge">🚚 ส่งฟรี + Griptok 2 + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 2 ใบ</div></div>
+        </div>
+      </div>
+      <div class="promo-panel" id="peasy">
+        <div class="pgrid">
+          <div class="pitem"><div class="pqty">1 ใบ</div><div class="pprice">425 ฿</div><div class="pbadge" style="background:#fff0f5;color:#c07088;">ราคาปกติ</div></div>
+          <div class="pitem"><div class="pqty">2 ใบ</div><div class="pprice">850 ฿</div><div class="pbadge">+ Griptok + พวงกุญแจ</div></div>
+          <div class="pitem"><div class="pqty">3 ใบขึ้นไป</div><div class="pprice">1,275 ฿</div><div class="pbadge">🚚 ส่งฟรี + Griptok + พวงกุญแจ + กระเป๋าหูรูดสุ่มลาย 1 ใบ</div></div>
+        </div>
+      </div>
+      <div class="promo-panel" id="pmaxi">
+        <div class="pgrid">
+          <div class="pitem"><div class="pqty">1 ใบ</div><div class="pprice">550 ฿</div><div class="pbadge">แถม Keychain 1</div></div>
+          <div class="pitem"><div class="pqty">2 ใบ</div><div class="pprice">1,100 ฿</div><div class="pbadge">+ Griptok + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 1 ใบ</div></div>
+          <div class="pitem"><div class="pqty">3 ใบขึ้นไป</div><div class="pprice">1,650 ฿</div><div class="pbadge">🚚 ส่งฟรี + Griptok + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 1 ใบ</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title"><i class="ti ti-photo"></i> เลือกลายที่ชอบ <span style="font-size:12px;color:#d4a0b0;font-weight:400;text-transform:none;letter-spacing:0;margin-left:4px">— เลือกได้หลายลาย</span></div>
+    <div class="size-tabs" id="sizeTabs">
+      <div class="stab active" data-size="all">ทั้งหมด (46)</div>
+      <div class="stab" data-size="normal">Normal (36)</div>
+      <div class="stab" data-size="large">Large (7)</div>
+      <div class="stab" data-size="easy">Easy Bag (2)</div>
+      <div class="stab" data-size="maxi">Maxi (1)</div>
+    </div>
+
+    <!-- Gallery Grid populated dynamically -->
+    <div class="gallery" id="gallery"></div>
+
+    <!-- Selected items floating chips -->
+    <div class="selected-bar">
+      <div class="sb-top">
+        <i class="ti ti-sparkles" style="color:#e0a0b8;font-size:17px"></i>
+        <span class="sb-label">ลายที่เลือก</span>
+        <span class="sb-count" id="sbCount">0 ลาย</span>
+        <span class="sb-clear" id="sbClear" style="display:none" onclick="clearAll()">ล้างทั้งหมด ✕</span>
+      </div>
+      <div class="sb-chips" id="sbChips"><span class="sb-empty">ยังไม่ได้เลือกลาย กดที่รูปเพื่อเลือกได้เลยค่ะ</span></div>
+    </div>
+
+    <!-- Order Form -->
+    <div class="sec-title" style="margin-top:16px"><i class="ti ti-clipboard-text"></i> ข้อมูลสั่งซื้อ</div>
+    <div class="form-card" id="formCard">
+      <div class="form-row">
+        <label>ชื่อ-นามสกุล *</label>
+        <input type="text" id="fname" placeholder="ชื่อ-นามสกุล ผู้รับ"/>
+      </div>
+      <div class="form-row">
+        <label>เบอร์โทรศัพท์ *</label>
+        <input type="tel" id="fphone" placeholder="เช่น 0812345678 (ตัวเลข 10 หลัก)" maxlength="12"/>
+      </div>
+      <div class="form-row">
+        <label>ที่อยู่จัดส่ง *</label>
+        <textarea id="faddress" rows="3" placeholder="บ้านเลขที่ ซอย ถนน แขวง/ตำบล เขต/อำเภอ จังหวัด รหัสไปรษณีย์"></textarea>
+      </div>
+      <div class="form-row">
+        <label>หมายเหตุ</label>
+        <textarea id="fnote" rows="2" placeholder="มีอะไรอยากแจ้งร้าน พิมพ์ไว้ตรงนี้ได้เลยนะคะ ( ദ്ดิ ˙ᗜ˙ )"></textarea>
+      </div>
+      <div class="summary-box">
+        <div class="sum-title"><i class="ti ti-receipt"></i> สรุปยอดสั่งซื้อ</div>
+        <div id="sumItems"><div class="sum-empty">เลือกลายและใส่จำนวนเพื่อดูยอดรวมค่ะ</div></div>
+      </div>
+      <div class="err" id="errMsg"></div>
+      <button class="submit-btn" onclick="doSubmit()"><i class="ti ti-heart"></i> ตกลงการสั่งซื้อ ✓</button>
+    </div>
+
+    <div class="success" id="successBox">
+      <div class="si"><i class="ti ti-circle-check"></i></div>
+      <h3>ได้รับข้อมูลแล้ว ขอบคุณมากนะคะ!</h3>
+      <p>ทีมงาน helloxglitter จะติดต่อกลับเพื่อแจ้งยอดและวิธีชำระเงินภายใน 1–2 วันทำการค่ะ<br>ค่าจัดส่งเหมา 50 บาท 🚚✨</p>
+    </div>
+  </div>
+  <div class="footer">helloxglitter · กระเป๋าผ้าลายน่ารัก<br>สอบถามเพิ่มเติมได้ทาง Instagram ค่ะ</div>
+</div>
+
+<!-- ==========================================================================
+     PAGE 2: THANK YOU
+     ========================================================================== -->
+<div id="page-thankyou" class="page">
+  <div class="hero">
+    <div class="hero-tag">ขอบคุณค่ะ! 🎉</div>
+    <h1>hello<span>x</span>glitter</h1>
+    <div class="hero-sub">ได้รับ order ของคุณแล้วค่ะ</div>
+  </div>
+  <div class="ty-wrap" id="ty-content">
+    <!-- Populated by renderThankYou() -->
+  </div>
+</div>
+
+<!-- ==========================================================================
+     PAGE 3: TRACKING
+     ========================================================================== -->
+<div id="page-tracking" class="page">
+  <div class="hero">
+    <div class="hero-tag">ติดตามออเดอร์</div>
+    <h1>hello<span>x</span>glitter</h1>
+    <div class="hero-sub">ตรวจสอบสถานะ order ของคุณค่ะ</div>
+  </div>
+  <div class="tr-wrap">
+    <div class="tr-card">
+      <div class="tr-title"><i class="ti ti-search"></i> ค้นหาออเดอร์ของคุณ</div>
+      <div class="tr-sub">กรอกเบอร์โทรศัพท์ที่ใช้สั่งซื้อเพื่อดูสถานะและเลข tracking ได้เลยค่ะ</div>
+      <input class="tr-input" id="tr-phone" type="tel" placeholder="เบอร์โทรศัพท์ เช่น 0812345678" oninput="trackSearch()"/>
+      <div class="tr-result" id="tr-result"></div>
+    </div>
+    <div id="tr-all-orders"></div>
+    <button class="tr-back-btn" onclick="showPage('preorder')"><i class="ti ti-arrow-left"></i> กลับไปสั่งซื้อ</button>
+  </div>
+</div>
+
+<!-- ==========================================================================
+     PAGE 4: STICKER
+     ========================================================================== -->
+<div id="page-sticker" class="page">
+  <div class="hero sticker-hero">
+    <div class="hero-tag">✨ ลายสติกเกอร์ตัวอย่าง (Coming Soon) ⭐</div>
+    <h1>hello<span>x</span>glitter</h1>
+    <div class="hero-sub">สติกเกอร์แผงละ 69 บาท · เปิดให้ชมลายตัวอย่างก่อนเปิดรับออเดอร์เร็วๆ นี้นะคะ 💖</div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title"><i class="ti ti-star"></i> ชมลายสติกเกอร์ <span style="font-size:12px;color:#80b0d0;font-weight:400;text-transform:none;letter-spacing:0;margin-left:4px">— แตะที่รูปเพื่อดูรูปขยายใหญ่</span></div>
+    <div class="gallery sticker-gallery" id="stickerGallery"></div>
+
+    <div class="sticker-coming-soon-card" style="margin-top:20px;padding:32px 20px;background:#ffffff;border-radius:20px;text-align:center;box-shadow:0 8px 24px rgba(224,90,143,0.08);border:2px dashed #f5c8d8;">
+      <div style="font-size:36px;margin-bottom:10px;">💌</div>
+      <div style="font-size:18px;font-weight:800;color:#c04878;margin-bottom:8px;">เปิดให้ชมลายตัวอย่างก่อนน้า ✨</div>
+      <p style="font-size:14px;color:#7a6b75;line-height:1.6;margin-bottom:16px;">
+        รอบสั่งซื้อสติกเกอร์จะเปิดรับเร็วๆ นี้นะคะ ลูกค้าสามารถแตะที่รูปเพื่อดูดีเทลความน่ารักของแต่ละลายได้เลยค่ะ 💖<br>
+        ติดตามประกาศเปิดรอบพรีออเดอร์ได้ทาง Instagram ของร้านเลยนะคะ
+      </p>
+      <a href="https://www.instagram.com/helloxglitter" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,#ff7597,#f35588);color:#fff;padding:10px 24px;border-radius:24px;text-decoration:none;font-weight:700;font-size:14px;">
+        <i class="ti ti-brand-instagram"></i> ติดตามรอบเปิดพรีทาง IG
+      </a>
+    </div>
+  </div>
+  <div class="footer">helloxglitter · สติกเกอร์ลายน่ารัก</div>
+</div>
+
+<!-- ==========================================================================
+     PAGE 5: WALLPAPER
+     ========================================================================== -->
+<div id="page-wallpaper" class="page">
+  <div class="hero wp-hero">
+    <div class="hero-tag">Wallpaper น่ารักๆ 🎨</div>
+    <h1>hello<span>x</span>glitter</h1>
+    <div class="hero-sub">Wallpaper ลายน่ารัก · ลายละ 99 บาท · ไม่มีค่าส่ง</div>
+  </div>
+
+  <div class="notice-wrap">
+    <div class="notice-card notice-purple">
+      <div class="notice-title">🎨 Wallpaper Digital Download</div>
+      <div class="notice-body">
+        <p>เปลี่ยนหน้าจอเดิม ๆ ให้กลายเป็นมุมน่ารักที่เห็นแล้วใจฟูทุกวัน 💖</p>
+        <div class="notice-highlight">
+          💌 รายละเอียดไฟล์: ภาพความละเอียดสูง · ไม่มีลายน้ำ · ดาวน์โหลดแล้วใช้งานได้ทันที · ราคา 99 บาท / SET
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-banner">
+    <div class="banner-card">
+      <i class="ti ti-device-mobile banner-icon"></i>
+      <div>
+        <div class="banner-title">📱 Wallpaper ดิจิทัล</div>
+        <div class="banner-body">
+          <strong>99 ฿</strong> ต่อ 1 เซ็ต · ชำระผ่านบัญชีธนาคาร<br>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+            <strong>กสิกร 749-2439-414</strong> (Nichakarn E.)
+            <button onclick="copyBank(this)" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;">📋 คัดลอก</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title"><i class="ti ti-photo"></i> Wallpaper <span style="font-size:12px;color:#b8a0d0;font-weight:400">— เลือกจำนวนได้</span></div>
+    <div class="wp-card" id="wpCard" onclick="wpTogglePattern('Wallpaper')">
+      <img class="wp-card-img" src="./images/wallphone.png" onerror="handleImgError(this, 'Wallpaper')" alt="Wallpaper"/>
+      <div class="wp-card-info">
+        <div class="wp-card-name">Wallpaper Special Set</div>
+        <div class="wp-card-price">99 ฿</div>
+      </div>
+      <div class="wp-card-check" id="wpCardCheck"><i class="ti ti-check"></i></div>
+      <div class="wp-card-qty" id="wpCardQty" onclick="event.stopPropagation()">
+        <button class="gqbtn" onclick="event.stopPropagation();wpChangeQty('Wallpaper',-1)">−</button>
+        <span class="gqnum" id="wpCardQtyNum">1</span>
+        <button class="gqbtn" onclick="event.stopPropagation();wpChangeQty('Wallpaper',1)">+</button>
+      </div>
+    </div>
+
+    <!-- Wallpaper Form -->
+    <div class="sec-title" style="margin-top:16px"><i class="ti ti-clipboard-text"></i> ข้อมูลสั่งซื้อ</div>
+    <div class="form-card" id="wpFormCard">
+      <div class="form-row">
+        <label>E-mail สำหรับรับไฟล์ *</label>
+        <input type="email" id="wpfemail" placeholder="example@gmail.com"/>
+      </div>
+      <div class="form-row">
+        <label>หมายเหตุ</label>
+        <textarea id="wpfnote" rows="2" placeholder="มีอะไรอยากแจ้งร้าน พิมพ์ไว้ตรงนี้ได้เลยนะคะ"></textarea>
+      </div>
+      <div class="summary-box">
+        <div class="sum-title"><i class="ti ti-receipt"></i> สรุปยอดสั่งซื้อ</div>
+        <div id="wpSumItems"><div class="sum-empty">เลือกลายเพื่อดูยอดรวมค่ะ</div></div>
+      </div>
+
+      <div class="slip-section">
+        <div class="slip-title"><i class="ti ti-upload"></i> อัปโหลดสลิปโอนเงิน</div>
+        <div class="slip-drop" id="wpSlipDrop" onclick="document.getElementById('wpSlipInput').click()">
+          <i class="ti ti-cloud-upload" style="font-size:36px;color:#7c3aed;margin-bottom:8px;display:block"></i>
+          <div style="font-size:13px;font-weight:700;color:#6b3fa0">แตะเพื่อเลือกรูป หรือลากมาวาง</div>
+          <div style="font-size:11px;color:#a09098;margin-top:4px">JPG, PNG ไม่เกิน 5 MB</div>
+        </div>
+        <input type="file" id="wpSlipInput" accept="image/*" style="display:none" onchange="wpHandleSlip(this.files[0])"/>
+        <div class="slip-preview hidden" id="wpSlipPreview">
+          <img id="wpSlipPreviewImg" src="" alt="สลิป"/>
+          <div class="slip-actions">
+            <button class="slip-btn slip-btn-cancel" onclick="wpCancelSlip()"><i class="ti ti-x"></i> ยกเลิก</button>
+          </div>
+        </div>
+        <div class="slip-done hidden" id="wpSlipDone"><i class="ti ti-circle-check"></i> อัปโหลดสลิปเรียบร้อยแล้วค่ะ!</div>
+      </div>
+
+      <div class="err" id="wpErrMsg"></div>
+      <button class="submit-btn wp-submit-btn" id="wpSubmitBtn" onclick="wpDoSubmit()"><i class="ti ti-heart"></i> ตกลงการสั่งซื้อ ✓</button>
+    </div>
+
+    <div class="success hidden" id="wpSuccessBox">
+      <div class="si"><i class="ti ti-circle-check"></i></div>
+      <h3>ชำระเงินสำเร็จ ขอบคุณมากนะคะ! 🎉</h3>
+      <p>ระบบยืนยันออเดอร์ให้คุณแล้วค่ะ สามารถกดรับวอลเปเปอร์ได้ทันทีเลย 💕✨<br><br>
+      <button onclick="showPage('wpcheck')" class="submit-btn wp-submit-btn" style="display:inline-block;padding:12px 24px;width:auto">📥 ไปหน้าดาวน์โหลด Wallpaper →</button></p>
+      <div class="wp-orderid-box" id="wpOrderIdBox">
+        <div class="wp-orderid-label">รหัสออเดอร์ของคุณ</div>
+        <div class="wp-orderid-val" id="wpOrderIdVal">HXG-WP-8821</div>
+      </div>
+    </div>
+  </div>
+  <div class="footer">helloxglitter · Wallpaper ลายน่ารัก</div>
+</div>
+
+<!-- ==========================================================================
+     PAGE 6: WALLPAPER CHECK LINK
+     ========================================================================== -->
+<div id="page-wpcheck" class="page">
+  <div class="hero wp-hero">
+    <div class="hero-tag">📥 เช็คลิงก์ดาวน์โหลด</div>
+    <h1>hello<span>x</span>glitter</h1>
+    <div class="hero-sub">เช็คลิงก์ดาวน์โหลด Wallpaper ของคุณ</div>
+  </div>
+  <div class="sec">
+    <div class="form-card">
+      <div class="sec-title" style="margin-bottom:12px"><i class="ti ti-download"></i> เช็คลิงก์ดาวน์โหลด</div>
+      <div class="form-row">
+        <label>E-mail ที่ใช้สั่งซื้อ *</label>
+        <input type="email" id="wpCheckEmail" placeholder="example@gmail.com"/>
+      </div>
+      <div class="err" id="wpCheckErr"></div>
+      <div id="wpCheckResult" style="display:none"></div>
+      <button class="submit-btn wp-submit-btn" id="wpCheckBtn" onclick="wpCheckDownload()"><i class="ti ti-search"></i> เช็คลิงก์ดาวน์โหลด</button>
+    </div>
+  </div>
+  <div class="footer">helloxglitter · เช็คลิงก์ดาวน์โหลด</div>
+</div>
+
+<!-- ==========================================================================
+     MODALS & POPUPS
+     ========================================================================== -->
+
+<!-- MAXI POPUP -->
+<div class="maxi-popup" id="maxiPopup" onclick="closeMaxiPopup(event)">
+  <div class="maxi-popup-card" onclick="event.stopPropagation()">
+    <div class="maxi-popup-icon">🎀</div>
+    <div class="maxi-popup-title">สินค้า Order พิเศษน้าค้า~</div>
+    <div class="maxi-popup-msg">ลาย Diary's Musketeers เป็นรอบผลิตตามออเดอร์พิเศษค่ะ<br>ต้องรอระยะเวลาผลิตประมาณ <strong>10 วัน</strong> น้า 🥰</div>
+    <button class="maxi-popup-btn" onclick="closeMaxiPopup()">เข้าใจแล้วค้า~</button>
+  </div>
+</div>
+
+<!-- CONFIRM ORDER MODAL -->
+<div class="modal-overlay hidden" id="confirmModal" onclick="closeConfirm(event)">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="modal-head">ตกลงการสั่งซื้อ</div>
+    <div class="modal-body" id="confirmBody"></div>
+    <div class="modal-actions">
+      <button class="modal-btn modal-btn-cancel" onclick="closeConfirm()">ยกเลิก</button>
+      <button class="modal-btn modal-btn-confirm" id="confirmBtn" onclick="submitOrder()">ตกลง ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- WELCOME POPUP -->
+<div class="welcome-popup hidden" id="welcomePopup">
+  <div class="welcome-popup-card">
+    <div class="welcome-popup-icon">🎀</div>
+    <div class="welcome-popup-title">สวัสดีค่ะ!</div>
+    <div class="welcome-popup-sub">helloxglitter ยินดีต้อนรับ</div>
+    <div class="welcome-popup-msg">ต้องการเข้าหน้าไหนคะ?</div>
+    <div class="welcome-popup-btns">
+      <button class="welcome-btn" onclick="selectPage('preorder')">
+        <span class="welcome-btn-icon">🛍️</span>
+        <div><div class="welcome-btn-text">Order กระเป๋าผ้า</div><div class="welcome-btn-sub">46 ลาย 4 ไซส์ยอดฮิต</div></div>
+      </button>
+      <button class="welcome-btn" onclick="selectPage('wallpaper')">
+        <span class="welcome-btn-icon">🎨</span>
+        <div><div class="welcome-btn-text" style="color:#7c3aed">Wallpaper Digital</div><div class="welcome-btn-sub">ลายละ 99 บาท ไม่มีค่าส่ง</div></div>
+      </button>
+      <button class="welcome-btn" onclick="selectPage('sticker')">
+        <span class="welcome-btn-icon">⭐</span>
+        <div><div class="welcome-btn-text">Sticker Collection</div><div class="welcome-btn-sub">ชมลายตัวอย่างก่อนเปิดรอบ</div></div>
+      </button>
+      <button class="welcome-btn" onclick="selectPage('tracking')">
+        <span class="welcome-btn-icon">📦</span>
+        <div><div class="welcome-btn-text">ติดตามออเดอร์</div><div class="welcome-btn-sub">ตรวจสอบสถานะพัสดุ</div></div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- IMAGE LIGHTBOX -->
+<div id="imgLightbox" class="img-lightbox" onclick="closeImgLightbox(event)">
+  <button class="img-lb-close" onclick="closeImgLightbox()"><i class="ti ti-x"></i></button>
+  <div class="img-lb-wrap" id="imgLbWrap">
+    <img id="imgLbImg" src="" alt="ขยายรูป"/>
+  </div>
+</div>
+
+<!-- MUSIC PLAYER -->
+<div id="musicBtn" class="music-btn" onclick="toggleMusic()">
+  <i class="ti ti-music"></i>
+</div>
+<div id="musicPlayer" class="music-player hidden">
+  <div class="music-header">
+    <span class="music-title"><i class="ti ti-disc"></i> เพลงเพราะๆ</span>
+    <button class="music-close" onclick="toggleMusic()"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="music-controls">
+    <button class="mc-btn" id="mcPlayBtn" onclick="musicPlay()"><i class="ti ti-player-play"></i></button>
+    <button class="mc-btn" onclick="musicPause()"><i class="ti ti-player-pause"></i></button>
+    <input type="range" class="mc-volume" id="mcVolume" min="0" max="1" step="0.05" value="0.5" oninput="musicVolume(this.value)"/>
+  </div>
+</div>
+
+<!-- ==========================================================================
+     JAVASCRIPT: MASTER DATA + APP LOGIC + OFFLINE MOCKS
+     ========================================================================== -->
+<script>
+/* 1. MASTER PATTERN DATA */
+var NORMAL_PATTERNS = [
+  {name:'Merilah Pink',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-01.jpg'},
+  {name:'Merilah Blue',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-02.jpg'},
+  {name:'Tea Party (pink)',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-03.jpg'},
+  {name:'Tea Party (blue)',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-04.jpg'},
+  {name:'Castle Pink',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-05.jpg'},
+  {name:'Castle Purple',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-06.jpg'},
+  {name:'Girl Like You (blue)',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-07.jpg'},
+  {name:'Girl Like You (pink)',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-08.jpg'},
+  {name:'Blair',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-09.jpg'},
+  {name:'Delancy',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-10.jpg'},
+  {name:'Charming School',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-11.jpg'},
+  {name:'Rainbow Magic',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-12.jpg'},
+  {name:'Fairytopia',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-13.jpg'},
+  {name:'Mermaidia',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-14.jpg'},
+  {name:'Mariposa & Fairy Friend',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-15.jpg'},
+  {name:'Odette',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-16.jpg'},
+  {name:'Fairy Godmother',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-17.jpg'},
+  {name:'Swan Lake',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-18.jpg'},
+  {name:'Genevieve',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-19.jpg'},
+  {name:'Rapunzel v.1',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-20.jpg'},
+  {name:'Mariposa',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-21.jpg'},
+  {name:'Rapunzel',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-22.jpg'},
+  {name:'Rosella',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-23.jpg'},
+  {name:'God is Love',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-24.jpg'},
+  {name:'Mermaid Melody',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-25.jpg'},
+  {name:'Chocola',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-26.jpg'},
+  {name:'Vanilla',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-27.jpg'},
+  {name:'Pierre',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-28.jpg'},
+  {name:'Magic Girl',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-29.jpg'},
+  {name:'Sugar Rune',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-30.jpg'},
+  {name:'Totally Cute',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-31.jpg'},
+  {name:'Forevermore',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-32.jpg'},
+  {name:'Sugarplum',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-33.jpg'},
+  {name:'Veggies',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-34.png'},
+  {name:'Floral Cottage',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-35.png'},
+  {name:'Picnic',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'./images/normal-36.png'}
+];
+
+var LARGE_PATTERNS = [
+  {name:'Magic Pegasus',size:'15.5 × 4 × 16 inch',sizeKey:'large',priceOrig:499,img:'./images/large-01.jpg'},
+  {name:'Cupid\'s Odette',size:'15.5 × 4 × 16 inch',sizeKey:'large',priceOrig:499,img:'./images/large-02.jpg'},
+  {name:'Lady Pink',size:'15.5 × 4 × 16 inch',sizeKey:'large',priceOrig:499,img:'./images/large-03.jpg'},
+  {name:'Lady Cherry',size:'15.5 × 4 × 16 inch',sizeKey:'large',priceOrig:499,img:'./images/large-04.jpg'},
+  {name:'Moving Castle',size:'15.5 × 4 × 16 inch',sizeKey:'large',priceOrig:499,img:'./images/large-05.jpg'},
+  {name:'Peter Pan (Midnight)',size:'15.5 × 4 × 16 inch',sizeKey:'large',priceOrig:499,img:'./images/large-06.jpg'},
+  {name:'Peter Pan (Sweet Dream)',size:'15.5 × 4 × 16 inch',sizeKey:'large',priceOrig:499,img:'./images/large-07.jpg'}
+];
+
+var EASY_PATTERNS = [
+  {name:'Diary\'s MARIE (mint)',size:'10.5 × 5 × 14 inch',sizeKey:'easy',priceOrig:425,img:'./images/easy-01.jpg'},
+  {name:'Diary\'s MARIE (purple)',size:'10.5 × 5 × 14 inch',sizeKey:'easy',priceOrig:425,img:'./images/easy-02.jpg'}
+];
+
+var MAXI_PATTERNS = [
+  {name:'Diary\'s Musketeers',size:'13.5 × 6 × 17 inch',sizeKey:'maxi',priceOrig:550,img:'./images/Maxxi2.png'}
+];
+
+var ALL_PATTERNS = NORMAL_PATTERNS.concat(LARGE_PATTERNS).concat(EASY_PATTERNS).concat(MAXI_PATTERNS);
+
+var STICKER_PATTERNS = [
+  {name:'Black Swan',img:'./sticker/BlackSwan.PNG',price:69},
+  {name:'Castle purple (Alexa)',img:'./sticker/Castle%20purple%20(Alexa).PNG',price:69},
+  {name:'Castle purple (Liana)',img:'./sticker/Castle%20purple%20(Liana)PNG.PNG',price:69},
+  {name:'Elina (Rainbow Magic)',img:'./sticker/Elina%20(Rainbow%20Magic).png',price:69},
+  {name:'Elina Mermaidia',img:'./sticker/Elina%20Mermaidia.PNG',price:69},
+  {name:'Nori Mermaidia',img:'./sticker/Nori%20Mermaidia.PNG',price:69},
+  {name:'Nutcracker🍬',img:'./sticker/Nutcracker%F0%9F%8D%AC.PNG',price:69},
+  {name:'Rapunzel (Paint)',img:'./sticker/Rapunzel%20(Paint).PNG',price:69},
+  {name:'Rapunzel (princess)',img:'./sticker/Rapunzel%20(princess).PNG',price:69},
+  {name:'Swan Lake',img:'./sticker/SwanlakePNG.PNG',price:69}
+];
+
+var WP_PATTERNS = [
+  {name:'Wallpaper',price:99,img:'./images/wallphone.png'}
+];
+
+var BASE_SHIPPING = 50;
+var REMOTE_SHIPPING = 65;
+var REMOTE_PROVINCES = [
+  'ยะลา','ปัตตานี','นราธิวาส','ระนอง','แม่ฮ่องสอน','ตราด','เกาะกูด','เกาะช้าง',
+  'กระบี่','เกาะลันตา','เกาะพีพี','ภูเก็ต','เกาะสมุย','เกาะพะงัน','เกาะเต่า',
+  'ชุมพร','สตูล','พังงา','ตรัง','น่าน','แพร่','อุตรดิตถ์'
+];
+
+/* 2. PROMO & SHIPPING CALCULATORS */
+function computePromoPrice(patternQtys) {
+  var total = 0;
+  for (var name in patternQtys) {
+    var p = ALL_PATTERNS.find(function(x) { return x.name === name; });
+    if (!p) continue;
+    total += p.priceOrig * patternQtys[name];
+  }
+  return { original: total, promo: total, savings: 0 };
+}
+
+function isRemoteArea(address) {
+  if (!address) return false;
+  var addr = address.toLowerCase();
+  for (var i = 0; i < REMOTE_PROVINCES.length; i++) {
+    if (addr.indexOf(REMOTE_PROVINCES[i]) !== -1) return true;
+  }
+  return false;
+}
+
+function getShippingCost(address, totalBags) {
+  if (totalBags >= 3) return 0;
+  return isRemoteArea(address) ? REMOTE_SHIPPING : BASE_SHIPPING;
+}
+
+function getPatternByName(name) {
+  return ALL_PATTERNS.find(function(x) { return x.name === name; });
+}
+
+function getPromoNote(sizeKey, totalBags) {
+  if (sizeKey !== 'maxi' && totalBags < 2) return '';
+  if (sizeKey === 'maxi' && totalBags < 1) return '';
+  var notes = {
+    normal: { 2: '+ Griptok + พวงกุญแจ', 3: '🚚 ส่งฟรี + Griptok + พวงกุญแจ + กระเป๋าหูรูดสุ่มลาย 1 ใบ' },
+    large:  { 2: '+ Griptok 2 + พวงกุญแจ 2', 3: '🚚 ส่งฟรี + Griptok 2 + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 2 ใบ' },
+    easy:   { 2: '+ Griptok + พวงกุญแจ', 3: '🚚 ส่งฟรี + Griptok + พวงกุญแจ + กระเป๋าหูรูดสุ่มลาย 1 ใบ' },
+    maxi:   { 1: 'แถม Keychain 1', 2: '+ Griptok + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 1 ใบ', 3: '🚚 ส่งฟรี + Griptok + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 1 ใบ' }
+  };
+  var tier = totalBags >= 3 ? 3 : totalBags >= 2 ? 2 : (sizeKey === 'maxi' && totalBags >= 1 ? 1 : 0);
+  return tier ? (notes[sizeKey] || {})[tier] || '' : '';
+}
+
+/* 3. APP STATE */
+var activeSize = 'all';
+var picked = {};
+var wpPicked = { 'Wallpaper': 1 };
+
+/* Fallback pastel image generator so designer never sees broken images */
+function handleImgError(img, label) {
+  img.onerror = null;
+  var cleanName = (label || 'helloxglitter').replace(/'/g, '');
+  img.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300' viewBox='0 0 300 300'><rect width='300' height='300' fill='%23ffeef4'/><circle cx='150' cy='130' r='50' fill='%23ffd6e7'/><text x='150' y='142' font-family='Nunito,sans-serif' font-size='34' fill='%23d45a8a' text-anchor='middle'>🎀</text><text x='150' y='210' font-family='Nunito,sans-serif' font-size='13' font-weight='800' fill='%23c04878' text-anchor='middle'>" + encodeURIComponent(cleanName) + "</text></svg>";
+}
+
+function getList() {
+  if (activeSize === 'all') return ALL_PATTERNS;
+  return ALL_PATTERNS.filter(function(p) { return p.sizeKey === activeSize; });
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function totalBags() {
+  var t = 0; for (var k in picked) t += picked[k]; return t;
+}
+
+/* 4. GALLERY & UI BUILDERS */
+function buildGallery() {
+  var list = getList();
+  var html = '';
+  list.forEach(function(p) {
+    var q = picked[p.name] || 0;
+    var isPicked = q > 0;
+    var safeName = p.name.replace(/'/g, "\\'");
+    html += '<div class="gcard' + (isPicked ? ' picked' : '') + '" onclick="togglePattern(\'' + safeName + '\')">'
+      + '<img class="gimg" src="' + p.img + '" onerror="handleImgError(this, \'' + safeName + '\')" alt="' + escHtml(p.name) + '" />'
+      + '<div class="gzoom" onclick="event.stopPropagation();openImgLightbox(\'' + p.img + '\')"><i class="ti ti-zoom-in"></i></div>'
+      + '<div class="glabel">'
+      + '<div class="gname">' + escHtml(p.name) + '</div>'
+      + '<div class="gsize">' + escHtml(p.size) + '</div>'
+      + '<div class="gprice">' + p.priceOrig.toLocaleString() + ' ฿</div>'
+      + '</div>'
+      + '<div class="gcheck"><i class="ti ti-check"></i></div>';
+    if (isPicked) {
+      html += '<div class="gqty" onclick="event.stopPropagation()">'
+        + '<button class="gqbtn" onclick="event.stopPropagation();changeQty(\'' + safeName + '\',-1)">−</button>'
+        + '<span class="gqnum">' + q + '</span>'
+        + '<button class="gqbtn" onclick="event.stopPropagation();changeQty(\'' + safeName + '\',1)">+</button>'
+        + '</div>';
+    }
+    html += '</div>';
+  });
+  var el = document.getElementById('gallery');
+  if (el) el.innerHTML = html;
+}
+
+function togglePattern(name) {
+  if (picked[name]) {
+    delete picked[name];
+  } else {
+    var pat = getPatternByName(name);
+    if (pat && pat.sizeKey === 'maxi') {
+      document.getElementById('maxiPopup').classList.add('show');
+    }
+    picked[name] = 1;
+  }
+  buildGallery();
+  updateSelectedBar();
+}
+
+function changeQty(name, delta) {
+  if (!picked[name]) return;
+  var newQty = picked[name] + delta;
+  if (newQty <= 0) {
+    delete picked[name];
+  } else {
+    picked[name] = newQty;
+  }
+  buildGallery();
+  updateSelectedBar();
+}
+
+function clearAll() {
+  picked = {};
+  buildGallery();
+  updateSelectedBar();
+}
+
+function updateSelectedBar() {
+  var names = Object.keys(picked);
+  var count = names.length;
+  document.getElementById('sbCount').textContent = count + ' ลาย';
+  document.getElementById('sbClear').style.display = count > 0 ? 'inline' : 'none';
+  var chips = document.getElementById('sbChips');
+  if (count === 0) {
+    chips.innerHTML = '<span class="sb-empty">ยังไม่ได้เลือกลาย กดที่รูปเพื่อเลือกได้เลยค่ะ</span>';
+  } else {
+    chips.innerHTML = names.map(function(n) {
+      var safeName = n.replace(/'/g, "\\'");
+      return '<span class="sb-chip">' + escHtml(n) + ' ×' + picked[n] + '<span class="rm" onclick="changeQty(\'' + safeName + '\', -999)">✕</span></span>';
+    }).join('');
+  }
+  updateSummary();
+}
+
+function updateSummary() {
+  var el = document.getElementById('sumItems');
+  var tb = totalBags();
+  var names = Object.keys(picked);
+  if (names.length === 0) {
+    el.innerHTML = '<div class="sum-empty">เลือกลายเพื่อดูยอดรวมค่ะ</div>';
+    return;
+  }
+
+  var pricing = computePromoPrice(picked);
+  var html = '';
+  names.forEach(function(name) {
+    var p = ALL_PATTERNS.find(function(x) { return x.name === name; });
+    var q = picked[name];
+    var lineTotal = p ? p.priceOrig * q : 0;
+    html += '<div class="sum-row"><span>' + escHtml(name) + ' × ' + q + '</span><span>' + lineTotal.toLocaleString() + ' ฿</span></div>';
+  });
+
+  html += '<hr class="sum-divider">';
+  html += '<div class="sum-total"><span>จำนวนทั้งหมด</span><span>' + tb + ' ใบ</span></div>';
+
+  var addrEl = document.getElementById('faddress');
+  var addr = (addrEl ? addrEl.value : '').trim();
+  var shipping = getShippingCost(addr, tb);
+  var shippingLabel = shipping === 0 ? 'ค่าจัดส่ง' : (isRemoteArea(addr) ? 'ค่าจัดส่ง (พื้นที่ห่างไกล)' : 'ค่าจัดส่ง');
+  html += '<div class="sum-total"><span>' + shippingLabel + '</span><span>' + (shipping === 0 ? 'ฟรี 🎉' : shipping + ' ฿') + '</span></div>';
+
+  var grandTotal = pricing.promo + shipping;
+  html += '<div class="sum-total" style="color:#d45a8a;font-size:16px;font-weight:800;margin-top:6px;"><span>ยอดรวมทั้งหมด</span><span>' + grandTotal.toLocaleString() + ' ฿</span></div>';
+
+  var szGroups = {};
+  names.forEach(function(name) {
+    var p = ALL_PATTERNS.find(function(x) { return x.name === name; });
+    if (!p) return;
+    if (!szGroups[p.sizeKey]) szGroups[p.sizeKey] = 0;
+    szGroups[p.sizeKey] += picked[name];
+  });
+  var notes = [];
+  for (var sk in szGroups) {
+    var n = getPromoNote(sk, szGroups[sk]);
+    if (n) notes.push(n);
+  }
+  if (notes.length > 0) {
+    html += '<div class="sum-note"><i class="ti ti-gift"></i> ' + notes.join('<br>') + '</div>';
+  } else if (tb > 0 && tb < 3) {
+    html += '<div class="sum-warn"><i class="ti ti-info-circle"></i> เลือก 3 ใบขึ้นไปเพื่อรับของแถมและส่งฟรีค่ะ!</div>';
+  }
+
+  el.innerHTML = html;
+}
+
+/* 5. STICKER GALLERY */
+function stickerBuildGallery() {
+  var gallery = document.getElementById('stickerGallery');
+  if (!gallery) return;
+  gallery.innerHTML = STICKER_PATTERNS.map(function(p) {
+    var safeImg = p.img.replace(/'/g, "\\'");
+    var safeName = p.name.replace(/'/g, "\\'");
+    return '<div class="gcard" onclick="openImgLightbox(\'' + safeImg + '\')" style="cursor:zoom-in;">'
+      + '<img class="gimg" src="' + p.img + '" onerror="handleImgError(this, \'' + safeName + '\')" alt="' + escHtml(p.name) + '"/>'
+      + '<div class="gzoom"><i class="ti ti-zoom-in"></i></div>'
+      + '<div class="glabel">'
+      + '<div class="gname">' + escHtml(p.name) + '</div>'
+      + '<div class="gsize">สติกเกอร์</div>'
+      + '<div class="gprice">69 ฿</div>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+/* 6. PAGE SWITCHER & NAVIGATION */
+function showPage(page) {
+  document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
+  var target = document.getElementById('page-' + page);
+  if (target) target.classList.add('active');
+
+  document.querySelectorAll('.nav-link').forEach(function(l) {
+    l.classList.toggle('active', l.dataset.page === page);
+  });
+  window.scrollTo(0, 0);
+
+  if (page === 'sticker') stickerBuildGallery();
+}
+
+function selectPage(page) {
+  closeWelcomePopup();
+  showPage(page);
+}
+
+function showWelcomePopup() {
+  var p = document.getElementById('welcomePopup');
+  if (p) p.classList.remove('hidden');
+}
+
+function closeWelcomePopup() {
+  var p = document.getElementById('welcomePopup');
+  if (p) p.classList.add('hidden');
+}
+
+/* 7. MODALS & LIGHTBOX */
+function openImgLightbox(src) {
+  var el = document.getElementById('imgLightbox');
+  var img = document.getElementById('imgLbImg');
+  img.src = src;
+  img.onerror = function() { handleImgError(this, 'รูปภาพ'); };
+  el.classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeImgLightbox(e) {
+  if (e && e.target !== document.getElementById('imgLightbox') && e.target.tagName !== 'BUTTON' && !e.target.closest('.img-lb-close')) return;
+  document.getElementById('imgLightbox').classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+function closeMaxiPopup(e) {
+  if (e && e.target !== document.getElementById('maxiPopup')) return;
+  document.getElementById('maxiPopup').classList.remove('show');
+}
+
+function closeConfirm(e) {
+  if (e && e.target !== document.getElementById('confirmModal') && !e.target.classList.contains('modal-btn-cancel')) return;
+  document.getElementById('confirmModal').classList.add('hidden');
+}
+
+/* 8. SUBMIT ORDER & OFFLINE SIMULATION */
+function doSubmit() {
+  var name = (document.getElementById('fname').value || '').trim();
+  var phone = (document.getElementById('fphone').value || '').trim();
+  var addr = (document.getElementById('faddress').value || '').trim();
+  var err = document.getElementById('errMsg');
+  var names = Object.keys(picked);
+
+  if (names.length === 0) {
+    err.style.display = 'block';
+    err.textContent = 'กรุณาเลือกลายอย่างน้อย 1 ลายนะคะ';
+    return;
+  }
+  if (!name) { err.style.display = 'block'; err.textContent = 'กรุณากรอกชื่อ-นามสกุลนะคะ'; return; }
+  if (!phone) { err.style.display = 'block'; err.textContent = 'กรุณากรอกเบอร์โทรศัพท์นะคะ'; return; }
+  if (!addr) { err.style.display = 'block'; err.textContent = 'กรุณากรอกที่อยู่จัดส่งนะคะ'; return; }
+  err.style.display = 'none';
+
+  var tb = totalBags();
+  var pricing = computePromoPrice(picked);
+  var shipping = getShippingCost(addr, tb);
+  var grandTotal = pricing.promo + shipping;
+
+  var modalHtml = '<div class="modal-customer"><strong>ผู้รับ:</strong> ' + escHtml(name) + ' (' + escHtml(phone) + ')<br><strong>ที่อยู่:</strong> ' + escHtml(addr) + '</div>';
+  names.forEach(function(n) {
+    modalHtml += '<div class="modal-row"><span class="modal-row-label">' + escHtml(n) + ' × ' + picked[n] + '</span></div>';
+  });
+  modalHtml += '<div class="modal-row"><span class="modal-row-label">ค่าจัดส่ง</span><span class="modal-row-val">' + (shipping === 0 ? 'ฟรี' : shipping + ' ฿') + '</span></div>';
+  modalHtml += '<div class="modal-row" style="margin-top:6px;"><span class="modal-row-label"><strong>ยอดรวมสุทธิ</strong></span><span class="modal-row-val price"><strong>' + grandTotal.toLocaleString() + ' ฿</strong></span></div>';
+
+  document.getElementById('confirmBody').innerHTML = modalHtml;
+  document.getElementById('confirmModal').classList.remove('hidden');
+}
+
+function submitOrder() {
+  document.getElementById('confirmModal').classList.add('hidden');
+  var name = document.getElementById('fname').value.trim() || 'ลูกค้าคนสวย';
+  var phone = document.getElementById('fphone').value.trim() || '0812345678';
+  var addr = document.getElementById('faddress').value.trim() || 'กรุงเทพมหานคร';
+  var tb = totalBags();
+  var pricing = computePromoPrice(picked);
+  var shipping = getShippingCost(addr, tb);
+
+  var mockOrder = {
+    id: 'HXG-20260909-' + Math.floor(1000 + Math.random() * 9000),
+    customer_name: name,
+    customer_phone: phone,
+    customer_address: addr,
+    patterns: Object.keys(picked),
+    pattern_qtys: Object.assign({}, picked),
+    total_bags: tb,
+    total_price: pricing.promo + shipping,
+    shipping_cost: shipping,
+    created_at: new Date().toISOString(),
+    status: 0
+  };
+
+  renderThankYou(mockOrder);
+  showPage('thankyou');
+}
+
+function renderThankYou(order) {
+  var pq = order.pattern_qtys || {};
+  var itemsHtml = (order.patterns || []).map(function(name) {
+    var p = ALL_PATTERNS.find(function(x) { return x.name === name; });
+    var price = p ? (p.priceOrig * (pq[name] || 1)) : 0;
+    return '<div class="ty-item"><span class="ty-item-name">' + escHtml(name) + ' × ' + (pq[name] || 1) + '</span><span>' + price.toLocaleString() + ' ฿</span></div>';
+  }).join('');
+
+  var html = '<div class="ty-card">'
+    + '<div class="ty-icon"><i class="ti ti-circle-check"></i></div>'
+    + '<div class="ty-title">สั่งซื้อเรียบร้อยแล้วค่ะ!</div>'
+    + '<div class="ty-sub">ขอบคุณที่สนับสนุน helloxglitter นะคะ 💖</div>'
+    + '<div class="ty-orderid"><div class="ty-orderid-label">รหัสออเดอร์ของคุณ</div><div class="ty-orderid-val">' + order.id + '</div></div>'
+    + '<div class="ty-items">' + itemsHtml + '<div class="ty-total-row"><span>ยอดรวม</span><span>' + (order.total_price || 0).toLocaleString() + ' ฿</span></div></div>'
+    + '<div class="ty-steps">'
+    + '<div class="ty-step"><div class="ty-step-num">1</div><div class="ty-step-text">แอดมินได้รับออเดอร์แล้ว และจะติดต่อกลับเพื่อแจ้งยืนยันยอดค่ะ</div></div>'
+    + '<div class="ty-step"><div class="ty-step-num">2</div><div class="ty-step-text">ติดตามสถานะออเดอร์ได้ที่หน้า <strong>"ติดตามออเดอร์"</strong> โดยใช้เบอร์โทรศัพท์นะคะ</div></div>'
+    + '</div>'
+    + '<button class="ty-btn" onclick="showPage(\'tracking\')"><i class="ti ti-truck"></i> ติดตามสถานะออเดอร์</button>'
+    + '<button class="ty-btn-out" onclick="showPage(\'preorder\')">กลับไปหน้าสั่งซื้อ</button>'
+    + '</div>';
+
+  document.getElementById('ty-content').innerHTML = html;
+}
+
+/* 9. TRACKING SEARCH SIMULATION */
+function trackSearch() {
+  var val = (document.getElementById('tr-phone').value || '').trim();
+  var resEl = document.getElementById('tr-result');
+  if (!val) { resEl.innerHTML = ''; resEl.classList.remove('show'); return; }
+
+  // Sample realistic order card for designer preview
+  var sampleOrder = {
+    id: 'HXG-20260909-7742',
+    customer_name: 'คุณพรีออเดอร์',
+    customer_phone: val,
+    created_at: new Date().toISOString(),
+    status: 1, // 0: รอยืนยัน, 1: ยืนยันแล้ว, 2: กำลังผลิต, 3: จัดส่งแล้ว
+    tracking_number: 'TH123456789EX',
+    patterns: ['Merilah Pink', 'Magic Pegasus'],
+    pattern_qtys: {'Merilah Pink': 1, 'Magic Pegasus': 1},
+    total_price: 848,
+    shipping_cost: 50
+  };
+
+  var statuses = ['รอยืนยัน', 'ยืนยันแล้ว', 'กำลังผลิต', 'จัดส่งแล้ว'];
+  var tlHtml = statuses.map(function(s, i) {
+    var isDone = i < sampleOrder.status;
+    var isCurrent = i === sampleOrder.status;
+    var dotClass = isDone ? 'done' : (isCurrent ? 'current' : '');
+    return '<div class="tr-tl-step">'
+      + '<div class="tr-tl-dot-col"><div class="tr-tl-dot ' + dotClass + '"></div>' + (i < statuses.length - 1 ? '<div class="tr-tl-line"></div>' : '') + '</div>'
+      + '<div class="tr-tl-text"><div class="tr-tl-label">' + s + '</div></div>'
+      + '</div>';
+  }).join('');
+
+  var itemsHtml = sampleOrder.patterns.map(function(n) {
+    var p = ALL_PATTERNS.find(function(x) { return x.name === n; });
+    return '<div class="tr-detail-row"><span class="tr-detail-label">' + escHtml(n) + ' (×' + (sampleOrder.pattern_qtys[n] || 1) + ')</span><span class="tr-detail-val">' + (p ? p.priceOrig : 0) + ' ฿</span></div>';
+  }).join('');
+
+  resEl.innerHTML = '<div class="tr-order-card">'
+    + '<div class="tr-order-head">'
+    + '<span class="tr-order-id">' + sampleOrder.id + '</span>'
+    + '<span class="tr-status-badge s' + sampleOrder.status + '">● ยืนยันแล้ว</span>'
+    + '</div>'
+    + '<div class="tr-timeline">' + tlHtml + '</div>'
+    + '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #fadadd;">'
+    + itemsHtml
+    + '<div class="tr-detail-row"><span class="tr-detail-label">ยอดรวมทั้งหมด</span><span class="tr-detail-val" style="color:#d45a8a">' + sampleOrder.total_price + ' ฿</span></div>'
+    + '</div>'
+    + '</div>';
+  resEl.classList.add('show');
+}
+
+/* 10. WALLPAPER INTERACTION */
+function wpTogglePattern(name) {
+  var card = document.getElementById('wpCard');
+  card.classList.toggle('picked');
+  wpUpdateSummary();
+}
+function wpChangeQty(name, delta) {
+  var q = (wpPicked[name] || 1) + delta;
+  if (q < 1) q = 1;
+  wpPicked[name] = q;
+  document.getElementById('wpCardQtyNum').textContent = q;
+  wpUpdateSummary();
+}
+function wpUpdateSummary() {
+  var q = wpPicked['Wallpaper'] || 1;
+  var sum = document.getElementById('wpSumItems');
+  sum.innerHTML = '<div class="sum-row"><span>Wallpaper Special Set × ' + q + '</span><span>' + (q * 99) + ' ฿</span></div>'
+    + '<hr class="sum-divider">'
+    + '<div class="sum-total"><span>ค่าจัดส่ง</span><span>ฟรี (Digital)</span></div>'
+    + '<div class="sum-total" style="color:#7c3aed;font-size:16px;margin-top:6px"><span>ยอดรวม</span><span>' + (q * 99) + ' ฿</span></div>';
+}
+function copyBank(btn) {
+  navigator.clipboard.writeText('7492439414');
+  btn.textContent = '✓ คัดลอกแล้ว!';
+  setTimeout(function() { btn.textContent = '📋 คัดลอก'; }, 2000);
+}
+function wpHandleSlip(file) {
+  if (!file) return;
+  var preview = document.getElementById('wpSlipPreview');
+  var previewImg = document.getElementById('wpSlipPreviewImg');
+  previewImg.src = URL.createObjectURL(file);
+  preview.classList.remove('hidden');
+  document.getElementById('wpSlipDrop').classList.add('hidden');
+  document.getElementById('wpSlipDone').classList.remove('hidden');
+}
+function wpCancelSlip() {
+  document.getElementById('wpSlipPreview').classList.add('hidden');
+  document.getElementById('wpSlipDrop').classList.remove('hidden');
+  document.getElementById('wpSlipDone').classList.add('hidden');
+  document.getElementById('wpSlipInput').value = '';
+}
+function wpDoSubmit() {
+  var email = document.getElementById('wpfemail').value.trim();
+  var err = document.getElementById('wpErrMsg');
+  if (!email || !email.includes('@')) {
+    err.style.display = 'block';
+    err.textContent = 'กรุณากรอก E-mail ให้ถูกต้องนะคะ';
+    return;
+  }
+  err.style.display = 'none';
+  document.getElementById('wpFormCard').style.display = 'none';
+  document.getElementById('wpSuccessBox').classList.remove('hidden');
+  document.getElementById('wpSuccessBox').classList.add('show');
+}
+function wpCheckDownload() {
+  var email = document.getElementById('wpCheckEmail').value.trim();
+  var res = document.getElementById('wpCheckResult');
+  var err = document.getElementById('wpCheckErr');
+  if (!email || !email.includes('@')) {
+    err.style.display = 'block';
+    err.textContent = 'กรุณากรอก E-mail ให้ถูกต้อง';
+    return;
+  }
+  err.style.display = 'none';
+  res.style.display = 'block';
+  res.innerHTML = '<div style="background:#f0fff0;border:1.5px solid #b0e0b0;color:#208020;padding:16px;border-radius:12px;text-align:center;">'
+    + '<div style="font-size:24px;margin-bottom:6px">📥</div>'
+    + '<div style="font-weight:800;font-size:15px;margin-bottom:8px">พบไฟล์วอลเปเปอร์พร้อมดาวน์โหลด!</div>'
+    + '<a href="#" onclick="alert(\'จำลองการดาวน์โหลดไฟล์สำเร็จ\');return false;" style="display:inline-block;background:#7c3aed;color:#fff;padding:10px 24px;border-radius:20px;text-decoration:none;font-weight:700;">ดาวน์โหลดเซ็ต Wallpaper (ZIP)</a>'
+    + '</div>';
+}
+
+/* 11. MUSIC CONTROLS */
+function toggleMusic() {
+  document.getElementById('musicPlayer').classList.toggle('hidden');
+}
+function musicPlay() {
+  document.getElementById('mcPlayBtn').style.background = '#ffe4ef';
+}
+function musicPause() {
+  document.getElementById('mcPlayBtn').style.background = 'white';
+}
+function musicVolume(val) {}
+
+/* 12. DESIGNER MOCK DATA HELPER */
+var mockSampleOrder = {
+  id: 'HXG-20260909-5891',
+  customer_name: 'คุณแพรววา (ดีไซเนอร์)',
+  customer_phone: '0891234567',
+  customer_address: '123/45 ถนนสุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพฯ 10110',
+  patterns: ['Merilah Pink', 'Magic Pegasus', 'Diary\'s MARIE (mint)'],
+  pattern_qtys: {'Merilah Pink': 1, 'Magic Pegasus': 1, 'Diary\'s MARIE (mint)': 1},
+  total_bags: 3,
+  total_price: 1223,
+  shipping_cost: 0,
+  created_at: new Date().toISOString(),
+  status: 1
+};
+
+function fillMockCart() {
+  picked = {
+    'Merilah Pink': 1,
+    'Magic Pegasus': 2
+  };
+  showPage('preorder');
+  buildGallery();
+  updateSelectedBar();
+  document.getElementById('fname').value = 'คุณแพรววา ดีไซน์';
+  document.getElementById('fphone').value = '0891234567';
+  document.getElementById('faddress').value = '123/45 ซอยทองหล่อ แขวงคลองตันเหนือ เขตวัฒนา กรุงเทพฯ 10110';
+  document.getElementById('fnote').value = 'ขอของแถมเป็นพวงกุญแจลายโบว์นะคะ 💕';
+  window.scrollTo({ top: document.getElementById('formCard').offsetTop - 100, behavior: 'smooth' });
+}
+
+function setActiveDesignerBtn(btn) {
+  document.querySelectorAll('.designer-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+}
+
+/* 13. INITIALIZATION */
+document.addEventListener('DOMContentLoaded', function() {
+  buildGallery();
+  updateSelectedBar();
+  stickerBuildGallery();
+  wpUpdateSummary();
+
+  // Promo Tabs
+  document.getElementById('promoTabs').addEventListener('click', function(e) {
+    var tab = e.target.closest('.ptab');
+    if (!tab) return;
+    document.querySelectorAll('.ptab').forEach(function(t) { t.classList.remove('active'); });
+    document.querySelectorAll('.promo-panel').forEach(function(p) { p.classList.remove('show'); });
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.panel).classList.add('show');
+  });
+
+  // Size Filter Tabs
+  document.getElementById('sizeTabs').addEventListener('click', function(e) {
+    var tab = e.target.closest('.stab');
+    if (!tab) return;
+    document.querySelectorAll('.stab').forEach(function(t) { t.classList.remove('active'); });
+    tab.classList.add('active');
+    activeSize = tab.dataset.size;
+    buildGallery();
+  });
+
+  var addrEl = document.getElementById('faddress');
+  if (addrEl) addrEl.addEventListener('input', updateSummary);
+});
+</script>
+</body>
+</html>

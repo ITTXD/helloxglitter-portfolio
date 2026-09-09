@@ -332,14 +332,15 @@ function getPromoTier(sizeKey, totalBags) {
 // computePromoPrice loaded from /data/patterns.js
 
 function getPromoNote(sizeKey, totalBags) {
-  if (totalBags < 2) return '';
+  if (sizeKey !== 'maxi' && totalBags < 2) return '';
+  if (sizeKey === 'maxi' && totalBags < 1) return '';
   var notes = {
     normal: { 2: '+ Griptok + พวงกุญแจ', 3: '🚚 ส่งฟรี + Griptok + พวงกุญแจ + กระเป๋าหูรูดสุ่มลาย 1 ใบ' },
-    large:  { 2: '+ Griptok 1 + พวงกุญแจ 1', 3: '🚚 ส่งฟรี + Griptok 2 + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 2 ใบ' },
+    large:  { 2: '+ Griptok 2 + พวงกุญแจ 2', 3: '🚚 ส่งฟรี + Griptok 2 + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 2 ใบ' },
     easy:   { 2: '+ Griptok + พวงกุญแจ', 3: '🚚 ส่งฟรี + Griptok + พวงกุญแจ + กระเป๋าหูรูดสุ่มลาย 1 ใบ' },
-    maxi:   { 1: 'แถม Keychain 1', 2: '+ Griptok + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 1 ใบ' }
+    maxi:   { 1: 'แถม Keychain 1', 2: '+ Griptok + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 1 ใบ', 3: '🚚 ส่งฟรี + Griptok + พวงกุญแจ 2 + กระเป๋าหูรูดสุ่มลาย 1 ใบ' }
   };
-  var tier = totalBags >= 3 ? 3 : totalBags >= 2 ? 2 : 0;
+  var tier = totalBags >= 3 ? 3 : totalBags >= 2 ? 2 : (sizeKey === 'maxi' && totalBags >= 1 ? 1 : 0);
   return tier ? (notes[sizeKey] || {})[tier] || '' : '';
 }
 
