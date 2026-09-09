@@ -11,14 +11,80 @@
 <body>
 
 <nav class="navbar" id="navbar">
-  <div class="navbar-brand">hello<span>x</span>glitter</div>
+  <div class="navbar-brand" onclick="showPage('preorder')">hello<span>x</span>glitter</div>
   <div class="navbar-links">
     <a class="nav-link active" data-page="preorder" onclick="showPage('preorder')"><i class="ti ti-shopping-bag"></i> Order</a>
     <a class="nav-link" data-page="wallpaper" onclick="showPage('wallpaper')"><i class="ti ti-brush"></i> Wallpaper</a>
     <a class="nav-link" data-page="sticker" onclick="showPage('sticker')"><i class="ti ti-star"></i> Sticker</a>
     <a class="nav-link" data-page="checklink" onclick="window.location.href='/checklink/'"><i class="ti ti-download"></i> เช็คลิงก์</a>
+    <a class="nav-link" data-page="tracking" onclick="showPage('tracking')"><i class="ti ti-package"></i> ติดตาม</a>
   </div>
+  <button class="hamburger-btn" id="hamburgerBtn" onclick="toggleMenu()" aria-label="เมนู">
+    <i class="ti ti-menu-2"></i>
+  </button>
 </nav>
+
+<!-- MOBILE MENU DRAWER -->
+<div class="mobile-menu-overlay" id="menuOverlay" onclick="closeMenu()"></div>
+<div class="mobile-menu" id="mobileMenu">
+  <div class="mobile-menu-header">
+    <div class="mobile-menu-title">
+      <span class="mmenu-brand">hello<span>x</span>glitter</span>
+      <span class="mmenu-sub">เมนูหลัก</span>
+    </div>
+    <button class="mobile-menu-close" onclick="closeMenu()" aria-label="ปิดเมนู">
+      <i class="ti ti-x"></i>
+    </button>
+  </div>
+  <div class="mobile-menu-items">
+    <a class="nav-link mmenu-item active" data-page="preorder" onclick="showPage('preorder'); closeMenu();">
+      <span class="mmenu-icon"><i class="ti ti-shopping-bag"></i></span>
+      <div class="mmenu-text">
+        <div class="mmenu-label">สั่งซื้อกระเป๋าผ้า (Order)</div>
+        <div class="mmenu-desc">46 ลาย · 4 ไซส์ · โปร 9.9 ลด 39.-/ใบ</div>
+      </div>
+      <i class="ti ti-chevron-right mmenu-arrow"></i>
+    </a>
+    <a class="nav-link mmenu-item" data-page="wallpaper" onclick="showPage('wallpaper'); closeMenu();">
+      <span class="mmenu-icon"><i class="ti ti-brush"></i></span>
+      <div class="mmenu-text">
+        <div class="mmenu-label">Wallpaper</div>
+        <div class="mmenu-desc">วอลเปเปอร์มือถือลายน่ารัก</div>
+      </div>
+      <i class="ti ti-chevron-right mmenu-arrow"></i>
+    </a>
+    <a class="nav-link mmenu-item" data-page="sticker" onclick="showPage('sticker'); closeMenu();">
+      <span class="mmenu-icon"><i class="ti ti-star"></i></span>
+      <div class="mmenu-text">
+        <div class="mmenu-label">Sticker</div>
+        <div class="mmenu-desc">สติกเกอร์ไดคัทพร้อมส่ง</div>
+      </div>
+      <i class="ti ti-chevron-right mmenu-arrow"></i>
+    </a>
+    <a class="nav-link mmenu-item" data-page="checklink" onclick="window.location.href='/checklink/'">
+      <span class="mmenu-icon"><i class="ti ti-download"></i></span>
+      <div class="mmenu-text">
+        <div class="mmenu-label">เช็คลิงก์ดาวน์โหลด</div>
+        <div class="mmenu-desc">ตรวจสอบลิงก์ดาวน์โหลด Wallpaper</div>
+      </div>
+      <i class="ti ti-arrow-up-right mmenu-arrow"></i>
+    </a>
+    <a class="nav-link mmenu-item" data-page="tracking" onclick="showPage('tracking'); closeMenu();">
+      <span class="mmenu-icon"><i class="ti ti-package"></i></span>
+      <div class="mmenu-text">
+        <div class="mmenu-label">ติดตามสถานะออเดอร์</div>
+        <div class="mmenu-desc">เช็คสถานะการผลิต & เลข Tracking พัสดุ</div>
+      </div>
+      <i class="ti ti-chevron-right mmenu-arrow"></i>
+    </a>
+  </div>
+  <div class="mmenu-footer">
+    <button class="mmenu-music-btn" onclick="toggleMusic(); closeMenu();">
+      <i class="ti ti-music"></i> เปิด / ปิดเพลงประกอบ
+    </button>
+  </div>
+</div>
+
 
 <div class="flash-sale-bar" id="flashSaleBar">
   <span class="flash-badge"><i class="ti ti-flame"></i> 9.9 FLASH SALE</span>
@@ -505,6 +571,31 @@
     <input type="range" class="mc-volume" id="mcVolume" min="0" max="1" step="0.05" value="0.5" oninput="musicVolume(this.value)"/>
   </div>
 </div>
+
+<!-- BOTTOM NAVIGATION (MOBILE ONLY) -->
+<nav class="bottom-nav" id="bottomNav">
+  <button class="nav-link bnav-item active" data-page="preorder" onclick="showPage('preorder')">
+    <i class="ti ti-shopping-bag bnav-icon"></i>
+    <span class="bnav-label">สั่งซื้อ</span>
+  </button>
+  <button class="nav-link bnav-item" data-page="wallpaper" onclick="showPage('wallpaper')">
+    <i class="ti ti-brush bnav-icon"></i>
+    <span class="bnav-label">Wallpaper</span>
+  </button>
+  <button class="nav-link bnav-item" data-page="sticker" onclick="showPage('sticker')">
+    <i class="ti ti-star bnav-icon"></i>
+    <span class="bnav-label">Sticker</span>
+  </button>
+  <button class="nav-link bnav-item" data-page="checklink" onclick="window.location.href='/checklink/'">
+    <i class="ti ti-download bnav-icon"></i>
+    <span class="bnav-label">เช็คลิงก์</span>
+  </button>
+  <button class="nav-link bnav-item" data-page="tracking" onclick="showPage('tracking')">
+    <i class="ti ti-package bnav-icon"></i>
+    <span class="bnav-label">ติดตาม</span>
+  </button>
+</nav>
+
 <script src="/data/patterns.js"></script>
 <script src="app.js"></script>
 </body>

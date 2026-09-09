@@ -333,7 +333,7 @@ html { scroll-behavior: smooth; }
   height: 52px;
   backdrop-filter: blur(8px);
 }
-.navbar-brand { font-size: 16px; font-weight: 800; color: #d45a8a; letter-spacing: -.02em; white-space: nowrap; }
+.navbar-brand { font-size: 16px; font-weight: 800; color: #d45a8a; letter-spacing: -.02em; white-space: nowrap; cursor: pointer; }
 .navbar-brand span { color: #e8809e; }
 .navbar-links { display: flex; gap: 2px; }
 .nav-link {
@@ -352,10 +352,97 @@ html { scroll-behavior: smooth; }
   font-family: inherit;
   border: none;
   background: none;
+  -webkit-tap-highlight-color: transparent;
 }
 .nav-link:hover { background: #fff5f8; color: #d45a8a; }
 .nav-link.active { background: #ffe4ef; color: #d45a8a; }
 .nav-link i { font-size: 16px; }
+
+/* Hamburger Menu Button */
+.hamburger-btn { display: none; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 10px; background: #fff0f5; border: 1.5px solid #f5d0de; color: #d45a8a; font-size: 20px; cursor: pointer; transition: all .15s ease; -webkit-tap-highlight-color: transparent; }
+.hamburger-btn:active { background: #ffe4ef; transform: scale(0.92); }
+
+/* ====== MOBILE DRAWER MENU ====== */
+.mobile-menu-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 1000; opacity: 0; visibility: hidden; transition: opacity .25s ease, visibility .25s ease; }
+.mobile-menu-overlay.open { opacity: 1; visibility: visible; }
+.mobile-menu { position: fixed; top: 0; right: 0; bottom: 0; width: min(84vw, 320px); background: #ffffff; z-index: 1001; box-shadow: -8px 0 28px rgba(212,90,138,0.16); transform: translateX(100%); transition: transform .3s cubic-bezier(0.16,1,0.3,1); display: flex; flex-direction: column; padding: 20px 16px; overflow-y: auto; }
+.mobile-menu.open { transform: translateX(0); }
+.mobile-menu-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 14px; border-bottom: 1.5px solid #fce8f0; margin-bottom: 14px; }
+.mmenu-brand { font-size: 18px; font-weight: 800; color: #d45a8a; letter-spacing: -.02em; }
+.mmenu-brand span { color: #e8809e; }
+.mmenu-sub { font-size: 12px; color: #b88ea0; margin-left: 6px; font-weight: 600; }
+.mobile-menu-close { width: 34px; height: 34px; border-radius: 50%; border: 1px solid #f5d0de; background: #fff5f8; color: #c04070; font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all .15s; -webkit-tap-highlight-color: transparent; }
+.mobile-menu-close:active { background: #ffe4ef; transform: scale(0.92); }
+.mobile-menu-items { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.mmenu-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: #fffafc; border: 1.5px solid #fae8f0; text-decoration: none; color: #555; cursor: pointer; transition: all .15s ease; font-family: inherit; -webkit-tap-highlight-color: transparent; }
+.mmenu-item:hover, .mmenu-item:active { background: #fff0f5; border-color: #f5c8d8; }
+.mmenu-item.active { background: #ffe6f0; border-color: #f0a0be; }
+.mmenu-item.active .mmenu-label { color: #d45a8a; font-weight: 800; }
+.mmenu-icon { width: 36px; height: 36px; border-radius: 10px; background: #fff0f5; color: #d45a8a; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+.mmenu-item.active .mmenu-icon { background: #d45a8a; color: white; }
+.mmenu-text { flex: 1; min-width: 0; }
+.mmenu-label { font-size: 13.5px; font-weight: 700; color: #444; line-height: 1.2; }
+.mmenu-desc { font-size: 11px; color: #999; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mmenu-arrow { font-size: 16px; color: #d0b0be; }
+
+/* ====== BOTTOM NAVIGATION BAR ====== */
+.bottom-nav { display: none; }
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .navbar-links { display: none !important; }
+  .hamburger-btn { display: flex !important; }
+  .bottom-nav {
+    display: flex !important;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: calc(56px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1.5px solid #f5d0de;
+    box-shadow: 0 -3px 16px rgba(212, 90, 138, 0.12);
+    z-index: 998;
+    align-items: center;
+    justify-content: space-around;
+    touch-action: manipulation;
+  }
+  .bnav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 5px 2px 3px;
+    border: none;
+    background: transparent;
+    color: #9d7787;
+    cursor: pointer;
+    text-decoration: none;
+    font-family: inherit;
+    transition: all .15s ease;
+    -webkit-tap-highlight-color: transparent;
+    position: relative;
+  }
+  .bnav-icon { font-size: 21px; line-height: 1; margin-bottom: 2px; transition: transform .15s ease, color .15s ease; }
+  .bnav-label { font-size: 10px; font-weight: 700; line-height: 1; letter-spacing: -0.01em; }
+  .bnav-item.active { color: #d45a8a; }
+  .bnav-item.active .bnav-icon { color: #d45a8a; transform: scale(1.16); }
+  .bnav-item.active .bnav-label { font-weight: 800; color: #d45a8a; }
+  .bnav-item.active::after { content: ''; position: absolute; bottom: 3px; width: 16px; height: 3px; border-radius: 99px; background: #d45a8a; }
+  body { padding-bottom: calc(75px + env(safe-area-inset-bottom, 0px)) !important; }
+}
+@media (max-width: 480px) {
+  .navbar { padding: 0 14px; }
+  .flash-sale-bar { padding: 7px 10px; gap: 6px; font-size: 11px; }
+  .flash-msg { font-size: 11px; }
+  .flash-badge { font-size: 10px; padding: 2px 7px; }
+  .flash-countdown { font-size: 11px; padding: 2px 8px; }
+}
 
 /* PAGE SYSTEM */
 .page { display: block; opacity: 0; visibility: hidden; height: 0; overflow: hidden; transition: opacity .35s ease, visibility .35s ease; }
@@ -640,7 +727,7 @@ html { scroll-behavior: smooth; }
      NAVBAR
      ========================================================================== -->
 <nav class="navbar" id="navbar">
-  <div class="navbar-brand">hello<span>x</span>glitter</div>
+  <div class="navbar-brand" onclick="showPage('preorder')">hello<span>x</span>glitter</div>
   <div class="navbar-links">
     <a class="nav-link active" data-page="preorder" onclick="showPage('preorder')"><i class="ti ti-shopping-bag"></i> Order</a>
     <a class="nav-link" data-page="wallpaper" onclick="showPage('wallpaper')"><i class="ti ti-brush"></i> Wallpaper</a>
@@ -648,7 +735,67 @@ html { scroll-behavior: smooth; }
     <a class="nav-link" data-page="wpcheck" onclick="showPage('wpcheck')"><i class="ti ti-download"></i> เช็คลิงก์</a>
     <a class="nav-link" data-page="tracking" onclick="showPage('tracking')"><i class="ti ti-truck"></i> ติดตามออเดอร์</a>
   </div>
+  <button class="hamburger-btn" id="hamburgerBtn" onclick="toggleMenu()" aria-label="เมนู">
+    <i class="ti ti-menu-2"></i>
+  </button>
 </nav>
+
+<!-- MOBILE MENU DRAWER -->
+<div class="mobile-menu-overlay" id="menuOverlay" onclick="closeMenu()"></div>
+<div class="mobile-menu" id="mobileMenu">
+  <div class="mobile-menu-header">
+    <div class="mobile-menu-title">
+      <span class="mmenu-brand">hello<span>x</span>glitter</span>
+      <span class="mmenu-sub">เมนูหลัก</span>
+    </div>
+    <button class="mobile-menu-close" onclick="closeMenu()" aria-label="ปิดเมนู">
+      <i class="ti ti-x"></i>
+    </button>
+  </div>
+  <div class="mobile-menu-items">
+    <a class="nav-link mmenu-item active" data-page="preorder" onclick="showPage('preorder'); closeMenu();">
+      <span class="mmenu-icon"><i class="ti ti-shopping-bag"></i></span>
+      <div class="mmenu-text">
+        <div class="mmenu-label">สั่งซื้อกระเป๋าผ้า (Order)</div>
+        <div class="mmenu-desc">46 ลาย · 4 ไซส์ · โปร 9.9 ลด 39.-/ใบ</div>
+      </div>
+      <i class="ti ti-chevron-right mmenu-arrow"></i>
+    </a>
+    <a class="nav-link mmenu-item" data-page="wallpaper" onclick="showPage('wallpaper'); closeMenu();">
+      <span class="mmenu-icon"><i class="ti ti-brush"></i></span>
+      <div class="mmenu-text">
+        <div class="mmenu-label">Wallpaper</div>
+        <div class="mmenu-desc">วอลเปเปอร์มือถือลายน่ารัก</div>
+      </div>
+      <i class="ti ti-chevron-right mmenu-arrow"></i>
+    </a>
+    <a class="nav-link mmenu-item" data-page="sticker" onclick="showPage('sticker'); closeMenu();">
+      <span class="mmenu-icon"><i class="ti ti-star"></i></span>
+      <div class="mmenu-text">
+        <div class="mmenu-label">Sticker</div>
+        <div class="mmenu-desc">สติกเกอร์ไดคัทพร้อมส่ง</div>
+      </div>
+      <i class="ti ti-chevron-right mmenu-arrow"></i>
+    </a>
+    <a class="nav-link mmenu-item" data-page="wpcheck" onclick="showPage('wpcheck'); closeMenu();">
+      <span class="mmenu-icon"><i class="ti ti-download"></i></span>
+      <div class="mmenu-text">
+        <div class="mmenu-label">เช็คลิงก์ดาวน์โหลด</div>
+        <div class="mmenu-desc">ตรวจสอบลิงก์ดาวน์โหลด Wallpaper</div>
+      </div>
+      <i class="ti ti-chevron-right mmenu-arrow"></i>
+    </a>
+    <a class="nav-link mmenu-item" data-page="tracking" onclick="showPage('tracking'); closeMenu();">
+      <span class="mmenu-icon"><i class="ti ti-truck"></i></span>
+      <div class="mmenu-text">
+        <div class="mmenu-label">ติดตามสถานะออเดอร์</div>
+        <div class="mmenu-desc">เช็คสถานะการผลิต & เลข Tracking พัสดุ</div>
+      </div>
+      <i class="ti ti-chevron-right mmenu-arrow"></i>
+    </a>
+  </div>
+</div>
+
 
 <div class="flash-sale-bar" id="flashSaleBar">
   <span class="flash-badge"><i class="ti ti-flame"></i> 9.9 FLASH SALE</span>
@@ -1494,8 +1641,32 @@ function stickerBuildGallery() {
   }).join('');
 }
 
+// ==================== MOBILE MENU DRAWER ====================
+function toggleMenu() {
+  var menu = document.getElementById('mobileMenu');
+  var overlay = document.getElementById('menuOverlay');
+  if (!menu) return;
+  var isOpen = menu.classList.contains('open');
+  if (isOpen) {
+    closeMenu();
+  } else {
+    menu.classList.add('open');
+    if (overlay) overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function closeMenu() {
+  var menu = document.getElementById('mobileMenu');
+  var overlay = document.getElementById('menuOverlay');
+  if (menu) menu.classList.remove('open');
+  if (overlay) overlay.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
 /* 6. PAGE SWITCHER & NAVIGATION */
 function showPage(page) {
+  closeMenu();
   document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
   var target = document.getElementById('page-' + page);
   if (target) target.classList.add('active');
@@ -1874,5 +2045,29 @@ document.addEventListener('DOMContentLoaded', function() {
   if (addrEl) addrEl.addEventListener('input', updateSummary);
 });
 </script>
+<!-- BOTTOM NAVIGATION (MOBILE ONLY) -->
+<nav class="bottom-nav" id="bottomNav">
+  <button class="nav-link bnav-item active" data-page="preorder" onclick="showPage('preorder'); closeMenu();">
+    <i class="ti ti-shopping-bag bnav-icon"></i>
+    <span class="bnav-label">สั่งซื้อ</span>
+  </button>
+  <button class="nav-link bnav-item" data-page="wallpaper" onclick="showPage('wallpaper'); closeMenu();">
+    <i class="ti ti-brush bnav-icon"></i>
+    <span class="bnav-label">Wallpaper</span>
+  </button>
+  <button class="nav-link bnav-item" data-page="sticker" onclick="showPage('sticker'); closeMenu();">
+    <i class="ti ti-star bnav-icon"></i>
+    <span class="bnav-label">Sticker</span>
+  </button>
+  <button class="nav-link bnav-item" data-page="wpcheck" onclick="showPage('wpcheck'); closeMenu();">
+    <i class="ti ti-download bnav-icon"></i>
+    <span class="bnav-label">เช็คลิงก์</span>
+  </button>
+  <button class="nav-link bnav-item" data-page="tracking" onclick="showPage('tracking'); closeMenu();">
+    <i class="ti ti-truck bnav-icon"></i>
+    <span class="bnav-label">ติดตาม</span>
+  </button>
+</nav>
+
 </body>
 </html>
