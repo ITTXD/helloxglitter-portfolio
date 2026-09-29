@@ -2,7 +2,7 @@
   "name": "helloxglitter-preorder",
   "version": "1.0.0",
   "description": "helloxglitter Pre-order กระเป๋าผ้า",
-  "main": "server.js",
+  "main": "api/[...path].js",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",

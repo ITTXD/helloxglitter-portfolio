@@ -1230,7 +1230,7 @@ function serveStatic(req, res) {
     return;
   }
   if (urlPath === '/designer' || urlPath === '/designer/') {
-    const designerFile = path.join(__dirname, 'From_Designer', 'helloxglitter_v8_order_review_receipt (34).html');
+    const designerFile = path.join(__dirname, 'From_Designer', 'designer.html');
     if (fs.existsSync(designerFile)) {
       res.writeHead(200, {
         'Content-Type': 'text/html; charset=utf-8',
