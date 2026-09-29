@@ -316,8 +316,11 @@ body{padding-top:0}
 .slip-btn-cancel{background:white;color:#a09098;border-color:#e0d0d8}
 .slip-btn-cancel:hover{background:#f8f4f6;border-color:#c0b0b8}
 .slip-btn-upload{background:#d45a8a;color:white;border-color:#d45a8a}
-.slip-btn-upload:hover{background:#c04080}
-.slip-btn-upload:disabled{opacity:.5;cursor:default}
+.slip-btn:disabled{opacity:.5;cursor:not-allowed;pointer-events:none}
+.slip-btn-upload:disabled{opacity:.5;cursor:not-allowed;pointer-events:none}
+.slip-section.is-verifying{position:relative}
+.slip-section.is-verifying .slip-drop,
+.slip-section.is-verifying .slip-preview button:not(#slipUploadBtn){pointer-events:none;opacity:.4;cursor:not-allowed}
 .slip-loading{display:none;flex-direction:column;align-items:center;justify-content:center;padding:30px 20px;gap:12px}
 .slip-loading.show{display:flex}
 .slip-spinner{width:44px;height:44px;border:4px solid #f0d0e0;border-top-color:#d45a8a;border-radius:50%;animation:slipSpin .8s linear infinite}

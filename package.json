@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node test/easyslip-verify.test.js && node test/customer-fields.test.js && node test-recalc.js && node test-promo.js"
+    "test": "node test/easyslip-verify.test.js && node test/customer-fields.test.js && node test/concurrency-lock.test.js && node test/coupon-system.test.js && node test-recalc.js && node test-promo.js",
+    "test:e2e": "node test/e2e-coupon-flow.test.js"
   },
   "dependencies": {
     "dotenv": "^17.4.2",

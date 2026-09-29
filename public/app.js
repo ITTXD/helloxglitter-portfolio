@@ -705,10 +705,10 @@ function renderThankYou(order) {
     + '<div class="slip-preview hidden" id="slipPreview">'
     + '<div style="position:relative;display:inline-block;max-width:100%;">'
     + '<img id="slipPreviewImg" src="" alt="สลีป" style="max-height:300px;border-radius:12px;border:2px solid #f0d0e0;"/>'
-    + '<button type="button" onclick="cancelSlip()" title="ลบรูป" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.65);color:#fff;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:background .2s;">✕</button>'
+    + '<button type="button" id="slipDeleteBtn" onclick="cancelSlip()" title="ลบรูป" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.65);color:#fff;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:background .2s;">✕</button>'
     + '</div>'
     + '<div class="slip-actions" style="margin-top:12px;">'
-    + '<button class="slip-btn slip-btn-cancel" onclick="cancelSlip()"><i class="ti ti-x"></i> เปลี่ยนรูป</button>'
+    + '<button class="slip-btn slip-btn-cancel" id="slipCancelBtn" onclick="cancelSlip()"><i class="ti ti-x"></i> เปลี่ยนรูป</button>'
     + '<button class="slip-btn slip-btn-upload" id="slipUploadBtn" onclick="confirmOrder(\'' + escAttr(order.id) + '\')"><i class="ti ti-circle-check"></i> ตรวจสอบสลิป & ยืนยันการสั่งซื้อ</button>'
     + '</div>'
     + '</div>'
@@ -829,7 +829,10 @@ function renderOrderCard(order) {
 }
 
 // ==================== SLIP UPLOAD ====================
+window._isVerifyingSlip = false;
+
 function handleSlipFile(file) {
+  if (window._isVerifyingSlip) return;
   if (!file) return;
   if (!file.type.startsWith('image/')) {
     alert('กรุณาเลือกไฟล์รูปภาพเท่านั้น');
@@ -854,6 +857,9 @@ function handleSlipFile(file) {
       // Auto verify slip after uploading
       var btn = document.getElementById('slipUploadBtn');
       if (btn) {
+        if (window._currentOrderId) {
+          btn.onclick = function() { confirmOrder(window._currentOrderId); };
+        }
         btn.click();
       }
     };
@@ -863,6 +869,7 @@ function handleSlipFile(file) {
 }
 
 function cancelSlip() {
+  if (window._isVerifyingSlip) return;
   window._slipData = null;
   window._slipFile = null;
   document.getElementById('slipInput').value = '';
@@ -876,8 +883,17 @@ function cancelSlip() {
   var btn = document.getElementById('slipUploadBtn');
   if (btn) {
     btn.disabled = false;
-    btn.innerHTML = '<i class="ti ti-circle-check"></i> ยืนยันการสั่งซื้อ';
+    btn.innerHTML = '<i class="ti ti-circle-check"></i> ตรวจสอบสลิป & ยืนยันการสั่งซื้อ';
+    if (window._currentOrderId) {
+      btn.onclick = function() { confirmOrder(window._currentOrderId); };
+    }
   }
+  var cancelBtn = document.getElementById('slipCancelBtn');
+  if (cancelBtn) cancelBtn.disabled = false;
+  var deleteBtn = document.getElementById('slipDeleteBtn');
+  if (deleteBtn) deleteBtn.disabled = false;
+  var slipSec = document.getElementById('slipSection');
+  if (slipSec) slipSec.classList.remove('is-verifying');
 }
 
 // ==================== SLIP VERIFY RESULT BUILDER ====================
@@ -979,23 +995,49 @@ function buildVerifyResultCard(order, isSuccess, errorMsg, expectedAmountOverrid
 }
 
 function confirmOrder(orderId) {
+  if (window._isVerifyingSlip) return;
   if (!window._slipData) return;
   if (!window._slipFile) { alert('กรุณาเลือกรูปสลีปใหม่'); return; }
+
+  window._isVerifyingSlip = true;
+  var slipSec = document.getElementById('slipSection');
+  if (slipSec) slipSec.classList.add('is-verifying');
+
   var btn = document.getElementById('slipUploadBtn');
-  btn.disabled = true;
-  btn.innerHTML = '<i class="ti ti-loader ti-spin"></i> กำลังตรวจสอบสลิป...';
+  var cancelBtn = document.getElementById('slipCancelBtn');
+  var deleteBtn = document.getElementById('slipDeleteBtn');
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader ti-spin"></i> กำลังตรวจสอบสลิปกับธนาคาร...';
+  }
+  if (cancelBtn) cancelBtn.disabled = true;
+  if (deleteBtn) deleteBtn.disabled = true;
+
   document.getElementById('slipErr').classList.add('hidden');
   document.getElementById('slipVerifyResult').classList.add('hidden');
   document.getElementById('slipVerifyResult').innerHTML = '';
 
   var orderData = window._pendingOrderData;
   if (!orderData) {
+    window._isVerifyingSlip = false;
+    if (slipSec) slipSec.classList.remove('is-verifying');
+    if (cancelBtn) cancelBtn.disabled = false;
+    if (deleteBtn) deleteBtn.disabled = false;
+
     document.getElementById('slipErr').textContent = 'ข้อมูลออเดอร์หายไป กรุณาสั่งซื้อใหม่';
     document.getElementById('slipErr').classList.remove('hidden');
-    btn.disabled = false;
-    btn.innerHTML = '<i class="ti ti-circle-check"></i> ยืนยันการสั่งซื้อ';
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ti ti-circle-check"></i> ตรวจสอบสลิป & ยืนยันการสั่งซื้อ';
+    }
     return;
   }
+
+  var appliedCpn = (typeof window.getAppliedCoupon === 'function') ? window.getAppliedCoupon() : null;
+  var lineUser = null;
+  try { lineUser = JSON.parse(localStorage.getItem('hlg_line_user_v1') || 'null'); } catch(e){}
+  var lineUid = lineUser ? lineUser.line_user_id : (localStorage.getItem('hlg_line_demo_v3') === '1' ? 'U_DEMO_CUSTOMER' : '');
 
   fetch('/api/orders/confirm', {
     method: 'POST',
@@ -1003,9 +1045,16 @@ function confirmOrder(orderId) {
     body: JSON.stringify({
       order: orderData,
       slip_data: window._slipData,
+      coupon_code: orderData.coupon_code || (appliedCpn ? appliedCpn.code : undefined),
+      line_user_id: orderData.line_user_id || (lineUid || undefined)
     }),
   }).then(function(r) { return r.json(); })
     .then(function(data) {
+      window._isVerifyingSlip = false;
+      if (slipSec) slipSec.classList.remove('is-verifying');
+      if (cancelBtn) cancelBtn.disabled = false;
+      if (deleteBtn) deleteBtn.disabled = false;
+
       if (data.error) {
         document.getElementById('slipErr').textContent = data.error;
         document.getElementById('slipErr').classList.remove('hidden');
@@ -1018,8 +1067,14 @@ function confirmOrder(orderId) {
         document.getElementById('slipVerifyResult').classList.remove('hidden');
 
         document.getElementById('slipPreview').classList.remove('hidden');
-        btn.disabled = false;
-        btn.innerHTML = '<i class="ti ti-circle-check"></i> ตรวจสอบสลิป & ยืนยันการสั่งซื้ออีกครั้ง';
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="ti ti-upload"></i> แตะเพื่อเลือกรูปสลิปใหม่';
+          btn.onclick = function() {
+            cancelSlip();
+            document.getElementById('slipInput').click();
+          };
+        }
         return;
       }
 
@@ -1041,11 +1096,21 @@ function confirmOrder(orderId) {
       window._pendingOrderData = null;
     })
     .catch(function(err) {
-      document.getElementById('slipErr').textContent = 'เกิดข้อผิดพลาด: ' + err.message;
+      window._isVerifyingSlip = false;
+      if (slipSec) slipSec.classList.remove('is-verifying');
+      if (cancelBtn) cancelBtn.disabled = false;
+      if (deleteBtn) deleteBtn.disabled = false;
+
+      document.getElementById('slipErr').textContent = 'เกิดข้อผิดพลาดในการเชื่อมต่อ: ' + err.message;
       document.getElementById('slipErr').classList.remove('hidden');
       document.getElementById('slipPreview').classList.remove('hidden');
-      btn.disabled = false;
-      btn.innerHTML = '<i class="ti ti-circle-check"></i> ยืนยันการสั่งซื้อ';
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ti ti-reload"></i> ลองตรวจสอบอีกครั้ง';
+        btn.onclick = function() {
+          confirmOrder(orderId);
+        };
+      }
     });
 }
 
@@ -1292,33 +1357,24 @@ function stickerClearAll() {
 }
 
 function stickerHandleSlip(file) {
+  if (window._isVerifyingSlip) return;
   if (!file) return;
   if (!file.type.startsWith('image/')) { alert('กรุณาเลือกไฟล์รูปภาพเท่านั้น'); return; }
   if (file.size > 5 * 1024 * 1024) { alert('ไฟล์รูปต้องไม่เกิน 5 MB ค่ะ'); return; }
   window._stickerSlipFile = file;
   var reader = new FileReader();
   reader.onload = function(e) {
-    var img = new Image();
-    img.onload = function() {
-      var canvas = document.createElement('canvas');
-      var maxW = 800;
-      var w = img.width, h = img.height;
-      if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
-      canvas.width = w;
-      canvas.height = h;
-      var ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, w, h);
-      window._stickerSlipData = canvas.toDataURL('image/jpeg', 0.7);
-      document.getElementById('stickerSlipPreviewImg').src = window._stickerSlipData;
-      document.getElementById('stickerSlipDrop').classList.add('hidden');
-      document.getElementById('stickerSlipPreview').classList.remove('hidden');
-    };
-    img.src = e.target.result;
+    // Keep original data to prevent QR code blurring on bank slips
+    window._stickerSlipData = e.target.result;
+    document.getElementById('stickerSlipPreviewImg').src = window._stickerSlipData;
+    document.getElementById('stickerSlipDrop').classList.add('hidden');
+    document.getElementById('stickerSlipPreview').classList.remove('hidden');
   };
   reader.readAsDataURL(file);
 }
 
 function stickerCancelSlip() {
+  if (window._isVerifyingSlip) return;
   window._stickerSlipData = null;
   window._stickerSlipFile = null;
   var inp = document.getElementById('stickerSlipInput');
@@ -1328,6 +1384,7 @@ function stickerCancelSlip() {
 }
 
 function stickerDoSubmit() {
+  if (window._isVerifyingSlip) return;
   var name = (document.getElementById('stickerFname') ? document.getElementById('stickerFname').value : '').trim();
   var phone = (document.getElementById('stickerFphone') ? document.getElementById('stickerFphone').value : '').trim();
   var addr = (document.getElementById('stickerFaddress') ? document.getElementById('stickerFaddress').value : '').trim();
@@ -1351,6 +1408,7 @@ function stickerDoSubmit() {
   if (!window._stickerSlipData) { err.style.display = 'block'; err.textContent = 'กรุณาแนบสลีปการโอนเงินนะคะ'; return; }
 
   err.style.display = 'none';
+  window._isVerifyingSlip = true;
   var pricing = computeStickerPrice(stickerPicked);
   var combinedInfo = name + '\n' + phone + '\n' + addr;
 
@@ -1372,15 +1430,21 @@ function stickerDoSubmit() {
     shipping_cost: pricing.shipping
   };
 
+  var lineU = null;
+  try { lineU = JSON.parse(localStorage.getItem('hlg_line_user_v1') || 'null'); } catch(e){}
+  var lineUid = lineU ? lineU.line_user_id : (localStorage.getItem('hlg_line_demo_v3') === '1' ? 'U_DEMO_CUSTOMER' : '');
+
   fetch('/api/sticker/order', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       order: orderPayload,
-      slip_data: window._stickerSlipData
+      slip_data: window._stickerSlipData,
+      line_user_id: lineUid || undefined
     })
   }).then(function(r) { return r.json(); })
     .then(function(data) {
+      window._isVerifyingSlip = false;
       if (data.error) {
         err.style.display = 'block';
         err.textContent = data.error;
@@ -1398,11 +1462,18 @@ function stickerDoSubmit() {
       var vrEl = document.getElementById('stickerSlipVerifyResult');
       if (vrEl && data.order) {
         vrEl.innerHTML = buildVerifyResultCard(data.order, true);
+        if (data.coupon) {
+          var cpnCard = document.createElement('div');
+          cpnCard.style.cssText = 'background:linear-gradient(135deg,#fff0f6,#eefbf4);border:2px dashed #e89ebf;border-radius:16px;padding:16px;margin:14px 0;text-align:center';
+          cpnCard.innerHTML = '<div style="font-size:32px">🎉🎟️</div><h4 style="color:#b53f6c;margin:6px 0">ยินดีด้วยค่ะ! คุณได้รับคูปองส่วนลด 100 บาท</h4><p style="font-size:12px;color:#78536a;margin:0 0 10px">สำหรับใช้ซื้อกระเป๋าผ้า รหัส: <strong style="font-family:monospace;font-size:14px;background:#fff;padding:4px 8px;border-radius:6px;border:1px solid #ecccdb;color:#a83f6c">' + data.coupon.code + '</strong></p><button type="button" style="border:0;background:#cf5588;color:#fff;border-radius:9px;padding:8px 16px;font:inherit;font-size:12px;font-weight:700;cursor:pointer" onclick="navigator.clipboard.writeText(\'' + data.coupon.code + '\');alert(\'คัดลอกโค้ดคูปองแล้ว ♡\')">คัดลอกโค้ดคูปอง</button>';
+          vrEl.insertAdjacentElement('afterend', cpnCard);
+        }
       }
       window._stickerSlipData = null;
       window._stickerSlipFile = null;
     })
     .catch(function(e) {
+      window._isVerifyingSlip = false;
       alert('เกิดข้อผิดพลาด: ' + e.message);
       btn.disabled = false;
       btn.innerHTML = '<i class="ti ti-heart"></i> ตกลงการสั่งซื้อ ✓';
@@ -1490,31 +1561,24 @@ function copyBank() {
 }
 
 function wpHandleSlip(file) {
+  if (window._isVerifyingSlip) return;
   if (!file) return;
   if (!file.type.startsWith('image/')) { alert('กรุณาเลือกไฟล์รูปภาพเท่านั้น'); return; }
   if (file.size > 5 * 1024 * 1024) { alert('ไฟล์รูปต้องไม่เกิน 5 MB ค่ะ'); return; }
   window._wpSlipFile = file;
   var reader = new FileReader();
   reader.onload = function(e) {
-    var img = new Image();
-    img.onload = function() {
-      var canvas = document.createElement('canvas');
-      var maxW = 800;
-      var w = img.width, h = img.height;
-      if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      window._wpSlipData = canvas.toDataURL('image/jpeg', 0.7);
-      document.getElementById('wpSlipPreviewImg').src = window._wpSlipData;
-      document.getElementById('wpSlipDrop').classList.add('hidden');
-      document.getElementById('wpSlipPreview').classList.remove('hidden');
-    };
-    img.src = e.target.result;
+    // Keep original data to prevent QR code blurring on bank slips
+    window._wpSlipData = e.target.result;
+    document.getElementById('wpSlipPreviewImg').src = window._wpSlipData;
+    document.getElementById('wpSlipDrop').classList.add('hidden');
+    document.getElementById('wpSlipPreview').classList.remove('hidden');
   };
   reader.readAsDataURL(file);
 }
 
 function wpCancelSlip() {
+  if (window._isVerifyingSlip) return;
   window._wpSlipData = null;
   window._wpSlipFile = null;
   document.getElementById('wpSlipInput').value = '';
@@ -1523,6 +1587,7 @@ function wpCancelSlip() {
 }
 
 function wpDoSubmit() {
+  if (window._isVerifyingSlip) return;
   var email = document.getElementById('wpfemail').value.trim();
   var note = document.getElementById('wpfnote').value.trim();
   var err = document.getElementById('wpErrMsg');
@@ -1532,6 +1597,7 @@ function wpDoSubmit() {
   if (names.length === 0) { err.style.display = 'block'; err.textContent = 'กรุณาเลือก wallpaper อย่างน้อย 1 อันนะคะ'; return; }
   if (!window._wpSlipData) { err.style.display = 'block'; err.textContent = 'กรุณาแนบสลีปการโอนเงินนะคะ'; return; }
   err.style.display = 'none';
+  window._isVerifyingSlip = true;
 
   var totalItems = 0;
   names.forEach(function(n) { totalItems += wpPicked[n]; });
@@ -1539,7 +1605,7 @@ function wpDoSubmit() {
 
   var btn = document.getElementById('wpSubmitBtn');
   btn.disabled = true;
-  btn.innerHTML = '<i class="ti ti-loader"></i> กำลังส่ง...';
+  btn.innerHTML = '<i class="ti ti-loader"></i> กำลังตรวจสอบสลิป...';
 
   fetch('/api/wallpaper/order', {
     method: 'POST',
@@ -1556,6 +1622,7 @@ function wpDoSubmit() {
     }),
   }).then(function(r) { return r.json(); })
     .then(function(data) {
+      window._isVerifyingSlip = false;
       if (data.error) { err.style.display = 'block'; err.textContent = data.error; btn.disabled = false; btn.innerHTML = '<i class="ti ti-heart"></i> ตกลงการสั่งซื้อ ✓'; return; }
       document.getElementById('wpFormCard').style.display = 'none';
       document.getElementById('wpSuccessBox').classList.remove('hidden');
@@ -1565,6 +1632,7 @@ function wpDoSubmit() {
       window._wpSlipData = null; window._wpSlipFile = null;
     })
     .catch(function(e) {
+      window._isVerifyingSlip = false;
       alert('เกิดข้อผิดพลาด: ' + e.message);
       btn.disabled = false;
       btn.innerHTML = '<i class="ti ti-heart"></i> ตกลงการสั่งซื้อ ✓';

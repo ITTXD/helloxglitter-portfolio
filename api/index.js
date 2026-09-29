@@ -3,6 +3,26 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { verifySlipWithEasySlip } = require('../slip-verify');
+const {
+  DEFAULT_COUPON_CAMPAIGN,
+  getCouponCampaign,
+  saveCouponCampaign,
+  findCouponByCode,
+  findCouponsByLineUser,
+  issueCouponForStickerOrder,
+  validateCouponForCheckout,
+  markCouponAsUsed,
+  parseLineUserFromRequest,
+} = require('../coupon-service');
+const { sendCouponFlexMessage, sendOrderReceiptFlexMessage } = require('../line-service');
+
+// In-flight slip verification lock set to prevent concurrent duplicate calls to EasySlip
+const inFlightSlipVerifications = new Set();
+function getSlipLockKey(slipData, amount) {
+  if (!slipData) return '';
+  const snippet = slipData.length > 200 ? slipData.slice(-200) : slipData;
+  return `${amount || 0}_${snippet}`;
+}
 const { initializeApp } = require('firebase/app');
 const { getFirestore, collection, addDoc, getDocs, query, orderBy, doc, getDoc, updateDoc, deleteDoc, where, limit } = require('firebase/firestore');
 
@@ -157,12 +177,25 @@ module.exports = async (req, res) => {
       const orderId = generateOrderId();
       const totalPrice = body.total_price || 99;
 
-      const verifyResult = await verifySlipWithEasySlip({
-        slipData: body.slip_data,
-        expectedAmount: totalPrice,
-        orderId: orderId,
-        db: db,
-      });
+      // ตรวจสอบสลิปผ่าน EasySlip API ก่อนบันทึก Database (พร้อมกัน Request ซ้ำซ้อน)
+      const lockKey = getSlipLockKey(body.slip_data, totalPrice);
+      if (lockKey && inFlightSlipVerifications.has(lockKey)) {
+        sendJson(res, 429, { error: 'สลิปนี้กำลังอยู่ระหว่างการตรวจสอบ กรุณารอสักครู่นะคะ' });
+        return;
+      }
+      if (lockKey) inFlightSlipVerifications.add(lockKey);
+
+      let verifyResult;
+      try {
+        verifyResult = await verifySlipWithEasySlip({
+          slipData: body.slip_data,
+          expectedAmount: totalPrice,
+          orderId: orderId,
+          db: db,
+        });
+      } finally {
+        if (lockKey) inFlightSlipVerifications.delete(lockKey);
+      }
 
       if (!verifyResult.success) {
         sendJson(res, 400, { error: verifyResult.error || 'การตรวจสอบสลิปล้มเหลว กรุณาตรวจสอบรูปสลิปอีกครั้ง' });
@@ -243,6 +276,186 @@ module.exports = async (req, res) => {
       return;
     }
 
+    // ==================== COUPON & LINE ROUTES ====================
+    // GET /api/coupons/campaign — ดึงกติกาแคมเปญคูปองปัจจุบัน
+    if (pathname === '/api/coupons/campaign' && method === 'GET') {
+      const campaign = await getCouponCampaign(db);
+      sendJson(res, 200, { success: true, campaign });
+      return;
+    }
+
+    // POST /api/coupons/campaign — แอดมินบันทึกกติกาคูปอง
+    if (pathname === '/api/coupons/campaign' && method === 'POST') {
+      const body = await readBody(req);
+      const authed = isAdmin(req) || (ADMIN_PASSWORD && body.admin_password === ADMIN_PASSWORD);
+      if (!authed) { send401(res); return; }
+      try {
+        const campaign = await saveCouponCampaign(db, body.campaign || body);
+        sendJson(res, 200, { success: true, campaign });
+      } catch (err) {
+        sendJson(res, 400, { error: err.message || 'บันทึกกติกาคูปองไม่สำเร็จ' });
+      }
+      return;
+    }
+
+    // POST /api/auth/line/verify — ยืนยันหรือจำลองการเข้าสู่ระบบ LINE
+    if (pathname === '/api/auth/line/verify' && method === 'POST') {
+      const body = await readBody(req);
+      const lineUserId = (body.line_user_id || body.userId || '').trim();
+      const displayName = (body.line_display_name || body.displayName || 'ลูกค้า LINE').trim();
+      const pictureUrl = (body.line_picture_url || body.pictureUrl || '').trim();
+
+      if (!lineUserId) {
+        sendJson(res, 400, { error: 'กรุณาระบุ LINE User ID' });
+        return;
+      }
+
+      const user = {
+        line_user_id: lineUserId,
+        line_display_name: displayName,
+        line_picture_url: pictureUrl,
+      };
+
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Set-Cookie': [
+          `line_user_id=${encodeURIComponent(lineUserId)}; Path=/; SameSite=Lax`,
+          `line_display_name=${encodeURIComponent(displayName)}; Path=/; SameSite=Lax`,
+        ],
+      });
+      res.end(JSON.stringify({ success: true, user }));
+      return;
+    }
+
+    // GET /api/auth/line/me — เช็คสถานะล็อกอิน LINE
+    if (pathname === '/api/auth/line/me' && method === 'GET') {
+      const user = parseLineUserFromRequest(req);
+      sendJson(res, 200, {
+        authenticated: !!user,
+        user: user || null,
+        liff_id: process.env.LINE_LIFF_ID || '2011786627-NobuH2ua',
+        bot: {
+          basic_id: process.env.LINE_BOT_BASIC_ID || '@328jnfpt',
+          display_name: process.env.LINE_BOT_DISPLAY_NAME || 'ผู้ช่วยHelloxglitter',
+          line_oa_url: `https://line.me/R/ti/p/${process.env.LINE_BOT_BASIC_ID || '@328jnfpt'}`,
+          connected: !!process.env.LINE_CHANNEL_ACCESS_TOKEN,
+        },
+      });
+      return;
+    }
+
+    // POST /api/auth/line/logout — ออกจากระบบ LINE
+    if (pathname === '/api/auth/line/logout' && method === 'POST') {
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Set-Cookie': [
+          'line_user_id=; Path=/; Max-Age=0',
+          'line_display_name=; Path=/; Max-Age=0',
+        ],
+      });
+      res.end(JSON.stringify({ success: true }));
+      return;
+    }
+
+    // GET /api/coupons/my-coupons — ดึงคูปองของลูกค้าตาม LINE User ID
+    if (pathname === '/api/coupons/my-coupons' && method === 'GET') {
+      const queryUser = url.searchParams ? url.searchParams.get('line_user_id') : null;
+      const user = parseLineUserFromRequest(req);
+      const lineUserId = queryUser || (user ? user.line_user_id : null);
+      if (!lineUserId) {
+        sendJson(res, 200, { success: true, coupons: [] });
+        return;
+      }
+      const coupons = await findCouponsByLineUser(db, lineUserId);
+      sendJson(res, 200, { success: true, coupons });
+      return;
+    }
+
+    // POST /api/coupons/claim — เคลมคูปองย้อนหลังด้วยเลขออเดอร์สติกเกอร์ที่ชำระแล้ว
+    if (pathname === '/api/coupons/claim' && method === 'POST') {
+      const body = await readBody(req);
+      const orderId = (body.order_id || '').trim();
+      const lineUser = parseLineUserFromRequest(req);
+      const lineUserId = (body.line_user_id || (lineUser ? lineUser.line_user_id : '')).trim();
+      const displayName = body.line_display_name || (lineUser ? lineUser.line_display_name : 'ลูกค้า LINE');
+
+      if (!orderId) { sendJson(res, 400, { error: 'กรุณาระบุเลขออเดอร์' }); return; }
+      if (!lineUserId) { sendJson(res, 400, { error: 'กรุณาเข้าสู่ระบบ LINE ก่อนเคลมคูปอง' }); return; }
+
+      const qOrder = query(collection(db, 'orders'), where('id', '==', orderId), limit(1));
+      const snapOrder = await getDocs(qOrder);
+      if (snapOrder.empty) {
+        sendJson(res, 404, { error: 'ไม่พบออเดอร์นี้ในระบบ' });
+        return;
+      }
+      const order = { _docId: snapOrder.docs[0].id, ...snapOrder.docs[0].data() };
+
+      if (order.type !== 'sticker') {
+        sendJson(res, 400, { error: 'ออเดอร์นี้ไม่ใช่สินค้าหมวด Sticker' });
+        return;
+      }
+      if (order.status !== 1) {
+        sendJson(res, 400, { error: 'ออเดอร์นี้ยังไม่ได้รับการยืนยันการชำระเงิน' });
+        return;
+      }
+
+      const campaign = await getCouponCampaign(db);
+      const stickerSpend = Number(order.total_price || 0);
+      if (stickerSpend < campaign.threshold_amount) {
+        sendJson(res, 400, { error: `ยอดซื้อสติกเกอร์ (${stickerSpend} ฿) ไม่ถึงเกณฑ์ขั้นต่ำ ${campaign.threshold_amount} ฿` });
+        return;
+      }
+
+      const coupon = await issueCouponForStickerOrder({
+        db,
+        orderId,
+        lineUserId,
+        lineDisplayName: displayName,
+      });
+
+      sendJson(res, 200, { success: true, coupon });
+      return;
+    }
+
+    // POST /api/coupons/validate — ตรวจสอบความถูกต้องของคูปองก่อนชำระเงิน
+    if (pathname === '/api/coupons/validate' && method === 'POST') {
+      const body = await readBody(req);
+      const code = body.code || body.coupon_code;
+      const lineUser = parseLineUserFromRequest(req);
+      const lineUserId = body.line_user_id || (lineUser ? lineUser.line_user_id : null);
+      const subtotal = Number(body.subtotal != null ? body.subtotal : (body.subtotal_satang != null ? body.subtotal_satang / 100 : 0));
+      const items = body.items || (body.category ? [{ type: body.category, price: subtotal }] : []);
+
+      const result = await validateCouponForCheckout({
+        db,
+        code,
+        lineUserId,
+        items,
+        subtotal,
+      });
+
+      if (!result.valid) {
+        sendJson(res, 400, { error: result.error });
+        return;
+      }
+
+      sendJson(res, 200, {
+        success: true,
+        valid: true,
+        coupon: {
+          code: result.coupon.code,
+          title: result.coupon.title,
+          discount_amount: result.discount_amount,
+          discount_satang: result.discount_satang,
+          redeem_category: result.coupon.redeem_category,
+          expires_at: result.coupon.expires_at,
+        },
+        discount_amount: result.discount_amount,
+        discount_satang: result.discount_satang,
+      });
+      return;
+    }
+
     // POST /api/orders — ลูกค้าสั่งซื้อ (ไม่ต้อง auth)
     if (pathname === '/api/orders' && method === 'POST') {
       const body = await readBody(req);
@@ -252,20 +465,52 @@ module.exports = async (req, res) => {
         return;
       }
 
+      // Optional coupon redemption
+      const couponCode = (body.coupon_code || '').trim();
+      const lineUser = parseLineUserFromRequest(req);
+      const lineUserId = (body.line_user_id || (lineUser ? lineUser.line_user_id : '')).trim();
+
+      let couponDiscount = 0;
+      let validatedCoupon = null;
+      const originalPrice = Number(body.original_price || body.total_price || 0);
+      const basePrice = Number(body.total_price || 0);
+
+      if (couponCode) {
+        const valResult = await validateCouponForCheckout({
+          db,
+          code: couponCode,
+          lineUserId,
+          items: body.patterns || [],
+          subtotal: basePrice,
+        });
+        if (!valResult.valid) {
+          sendJson(res, 400, { error: valResult.error });
+          return;
+        }
+        validatedCoupon = valResult.coupon;
+        couponDiscount = valResult.discount_amount;
+      }
+
+      const finalTotalPrice = Math.max(0, basePrice - couponDiscount);
+      const orderId = generateOrderId();
+
       const order = {
-        id: generateOrderId(),
+        id: orderId,
         created_at: new Date().toISOString(),
         customer_name: cust.customer_name,
         customer_phone: cust.customer_phone,
         customer_address: cust.customer_address,
         customer_info: cust.customer_info,
+        line_user_id: lineUserId || null,
         patterns: body.patterns,
         pattern_qtys: body.pattern_qtys || null,
         qty: body.qty || 1,
         total_bags: body.total_bags || (body.patterns.length * (body.qty || 1)),
-        original_price: body.original_price || body.total_price || 0,
-        total_price: body.total_price || 0,
-        savings: body.savings || 0,
+        original_price: originalPrice,
+        total_price: finalTotalPrice,
+        savings: (body.savings || 0) + couponDiscount,
+        coupon_code: validatedCoupon ? validatedCoupon.code : null,
+        coupon_discount: couponDiscount,
         shipping_cost: body.shipping_cost != null ? body.shipping_cost : 50,
         is_remote: body.is_remote || false,
         status: 0,
@@ -274,6 +519,10 @@ module.exports = async (req, res) => {
         tracking_number: '',
         tracking_carrier: '',
       };
+
+      if (validatedCoupon) {
+        await markCouponAsUsed(db, validatedCoupon.code, orderId);
+      }
 
       const docRef = await addDoc(collection(db, 'orders'), order);
       order._docId = docRef.id;
@@ -383,17 +632,54 @@ module.exports = async (req, res) => {
       const shippingCost = Number(orderData.shipping_cost != null ? orderData.shipping_cost : 50);
       const grandTotal = totalPrice + shippingCost;
 
-      // ตรวจสอบสลิปผ่าน EasySlip API ก่อนบันทึก Database
-      const verifyResult = await verifySlipWithEasySlip({
-        slipData: slipData,
-        expectedAmount: grandTotal,
-        orderId: orderId,
-        db: db,
-      });
+      // ตรวจสอบสลิปผ่าน EasySlip API ก่อนบันทึก Database (พร้อมกัน Request ซ้ำซ้อน)
+      const lockKey = getSlipLockKey(slipData, grandTotal);
+      if (lockKey && inFlightSlipVerifications.has(lockKey)) {
+        sendJson(res, 429, { error: 'สลิปนี้กำลังอยู่ระหว่างการตรวจสอบ กรุณารอสักครู่นะคะ' });
+        return;
+      }
+      if (lockKey) inFlightSlipVerifications.add(lockKey);
+
+      let verifyResult;
+      try {
+        verifyResult = await verifySlipWithEasySlip({
+          slipData: slipData,
+          expectedAmount: grandTotal,
+          orderId: orderId,
+          db: db,
+        });
+      } finally {
+        if (lockKey) inFlightSlipVerifications.delete(lockKey);
+      }
 
       if (!verifyResult.success) {
         sendJson(res, 400, { error: verifyResult.error || 'การตรวจสอบสลิปล้มเหลว กรุณาตรวจสอบรูปสลิปอีกครั้ง' });
         return;
+      }
+
+      // LINE User check & Coupon campaign issuance
+      const lineUser = parseLineUserFromRequest(req);
+      const lineUserId = (body.line_user_id || orderData.line_user_id || (lineUser ? lineUser.line_user_id : '')).trim();
+      const lineDisplayName = body.line_display_name || orderData.line_display_name || (lineUser ? lineUser.line_display_name : 'ลูกค้า LINE');
+
+      const campaign = await getCouponCampaign(db);
+      let issuedCoupon = null;
+      if (campaign.active && totalPrice >= campaign.threshold_amount && lineUserId) {
+        try {
+          issuedCoupon = await issueCouponForStickerOrder({
+            db,
+            orderId,
+            lineUserId,
+            lineDisplayName,
+          });
+          if (issuedCoupon && lineUserId) {
+            sendCouponFlexMessage(lineUserId, issuedCoupon).catch(err => {
+              console.warn('[LINE OA] Coupon push flex message error:', err.message);
+            });
+          }
+        } catch (cErr) {
+          console.warn('[COUPON] Error issuing coupon for sticker order:', cErr.message);
+        }
       }
 
       const cust = extractCustomerFields(orderData);
@@ -406,6 +692,7 @@ module.exports = async (req, res) => {
         customer_phone: cust.customer_phone,
         customer_address: cust.customer_address,
         customer_info: cust.customer_info,
+        line_user_id: lineUserId || null,
         patterns: orderData.patterns,
         pattern_qtys: orderData.pattern_qtys || null,
         qty: orderData.qty || 1,
@@ -413,6 +700,9 @@ module.exports = async (req, res) => {
         total_price: totalPrice,
         shipping_cost: shippingCost,
         status: 1,
+        coupon_issued: !!issuedCoupon,
+        coupon_code: issuedCoupon ? issuedCoupon.code : null,
+        coupon_eligible: !issuedCoupon && campaign.active && totalPrice >= campaign.threshold_amount,
         note: orderData.note || '',
         note_status: orderData.note ? 'on' : 'off',
         slip_data: slipData,
@@ -429,7 +719,7 @@ module.exports = async (req, res) => {
 
       const docRef = await addDoc(collection(db, 'orders'), order);
       order._docId = docRef.id;
-      sendJson(res, 201, { success: true, order });
+      sendJson(res, 201, { success: true, order, coupon: issuedCoupon });
       return;
     }
 
@@ -447,20 +737,63 @@ module.exports = async (req, res) => {
       }
 
       const orderId = orderData.id || generateOrderId();
-      const totalPrice = Number(orderData.total_price || 0);
-      let shippingCost = orderData.shipping_cost != null ? Number(orderData.shipping_cost) : 50;
-      if (orderData.total_bags >= 3 && !orderData.is_remote) {
-        shippingCost = 0;
+      const clientReportedDiscount = Number(orderData.coupon_discount || body.coupon_discount || 0);
+      let basePrice = Number(orderData.original_price || 0);
+      if (!basePrice) {
+        if (clientReportedDiscount > 0) {
+          basePrice = Number(orderData.total_price || 0) + clientReportedDiscount;
+        } else {
+          basePrice = Number(orderData.total_price || 0);
+        }
       }
-      const grandTotal = totalPrice + shippingCost;
+      const originalPrice = Number(orderData.original_price || basePrice);
 
-      // ตรวจสอบสลิปผ่าน EasySlip API ก่อนบันทึก Database
-      const verifyResult = await verifySlipWithEasySlip({
-        slipData: slipData,
-        expectedAmount: grandTotal,
-        orderId: orderId,
-        db: db,
-      });
+      // Optional coupon redemption
+      const couponCode = (body.coupon_code || orderData.coupon_code || '').trim();
+      const lineUser = parseLineUserFromRequest(req);
+      const lineUserId = (body.line_user_id || orderData.line_user_id || (lineUser ? lineUser.line_user_id : '')).trim();
+
+      let couponDiscount = 0;
+      let validatedCoupon = null;
+      if (couponCode) {
+        const valResult = await validateCouponForCheckout({
+          db,
+          code: couponCode,
+          lineUserId,
+          items: orderData.patterns || [],
+          subtotal: basePrice,
+        });
+        if (!valResult.valid) {
+          sendJson(res, 400, { error: valResult.error });
+          return;
+        }
+        validatedCoupon = valResult.coupon;
+        couponDiscount = valResult.discount_amount;
+      }
+
+      const discountedPrice = Math.max(0, basePrice - couponDiscount);
+      let shippingCost = orderData.shipping_cost != null ? Number(orderData.shipping_cost) : (orderData.is_remote ? 40 : 0);
+      const grandTotal = discountedPrice + shippingCost;
+
+      // ตรวจสอบสลิปผ่าน EasySlip API ก่อนบันทึก Database (พร้อมกัน Request ซ้ำซ้อน)
+      const lockKey = getSlipLockKey(slipData, grandTotal);
+      if (lockKey && inFlightSlipVerifications.has(lockKey)) {
+        sendJson(res, 429, { error: 'สลิปนี้กำลังอยู่ระหว่างการตรวจสอบ กรุณารอสักครู่นะคะ' });
+        return;
+      }
+      if (lockKey) inFlightSlipVerifications.add(lockKey);
+
+      let verifyResult;
+      try {
+        verifyResult = await verifySlipWithEasySlip({
+          slipData: slipData,
+          expectedAmount: grandTotal,
+          orderId: orderId,
+          db: db,
+        });
+      } finally {
+        if (lockKey) inFlightSlipVerifications.delete(lockKey);
+      }
 
       if (!verifyResult.success) {
         sendJson(res, 400, {
@@ -479,13 +812,16 @@ module.exports = async (req, res) => {
         customer_phone: cust.customer_phone,
         customer_address: cust.customer_address,
         customer_info: cust.customer_info,
+        line_user_id: lineUserId || null,
         patterns: orderData.patterns,
         pattern_qtys: orderData.pattern_qtys || null,
         qty: orderData.qty || 1,
         total_bags: orderData.total_bags || orderData.patterns.length,
-        original_price: orderData.original_price || totalPrice,
-        total_price: totalPrice,
-        savings: orderData.savings || 0,
+        original_price: originalPrice,
+        total_price: discountedPrice,
+        savings: (orderData.savings || 0) + couponDiscount,
+        coupon_code: validatedCoupon ? validatedCoupon.code : null,
+        coupon_discount: couponDiscount,
         shipping_cost: shippingCost,
         is_remote: orderData.is_remote || false,
         status: 1,
@@ -506,6 +842,16 @@ module.exports = async (req, res) => {
         tracking_number: '',
         tracking_carrier: '',
       };
+
+      if (validatedCoupon) {
+        await markCouponAsUsed(db, validatedCoupon.code, orderId);
+      }
+
+      if (lineUserId) {
+        sendOrderReceiptFlexMessage(lineUserId, order).catch(err => {
+          console.warn('[LINE OA] Order receipt push message error:', err.message);
+        });
+      }
 
       const docRef = await addDoc(collection(db, 'orders'), order);
       order._docId = docRef.id;
