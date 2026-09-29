@@ -1295,11 +1295,35 @@ const requestHandler = async (req, res) => {
 if (process.env.VERCEL) {
   module.exports = requestHandler;
 } else {
+  const os = require('os');
+
+  // หา IP ของเครื่องในเครือข่าย Wi-Fi/LAN เพื่อให้เปิดเว็บจาก iPhone ได้
+  function getLanAddresses() {
+    const out = [];
+    const ifaces = os.networkInterfaces();
+    Object.keys(ifaces).forEach(name => {
+      (ifaces[name] || []).forEach(iface => {
+        if (iface.family === 'IPv4' && !iface.internal && !iface.address.startsWith('169.254.')) out.push(iface.address);
+      });
+    });
+    return out;
+  }
+
   const server = http.createServer(requestHandler);
   server.listen(PORT, () => {
     const url = `http://localhost:${PORT}`;
     console.log(`Server running at ${url}`);
     console.log(`Admin panel: ${url}/admin/`);
-    exec(`open ${url}`);
+
+    const lanIps = getLanAddresses();
+    if (lanIps.length) {
+      console.log('\n📱 เปิดจาก iPhone/มือถือ (ต่อ Wi-Fi เดียวกับเครื่องนี้):');
+      lanIps.forEach(ip => {
+        console.log(`   http://${ip}:${PORT}`);
+      });
+      console.log('   * ถ้าเปิดไม่ได้: ตรวจว่า iPhone อยู่ Wi-Fi เดียวกัน และกด Allow ถ้า macOS ถามเรื่อง Firewall');
+    }
+
+    if (!process.env.HLG_NO_OPEN) exec(`open ${url}`);
   });
 }
