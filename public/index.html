@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
 <title>helloxglitter — Order กระเป๋าผ้า (Designer Standalone Edition)</title>
 <meta name="description" content="&#8203;"/>
 <meta property="og:title" content="helloxglitter — Order กระเป๋าผ้า"/>
@@ -16490,6 +16490,274 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 const modal=document.getElementById('couponSheet');if(!modal)return;modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-label','คูปองของฉัน');
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&modal.classList.contains('show'))window.closeCoupons?.()});
 })();
+</script>
+
+<style id="hlg-account-style">
+/* ===== iPhone safe-area & mobile fit (applies on all screen sizes) ===== */
+.navbar{padding-top:env(safe-area-inset-top,0px)!important;height:calc(52px + env(safe-area-inset-top,0px))!important}
+.flash-sale-bar{top:calc(52px + env(safe-area-inset-top,0px))!important}
+.mobile-menu{padding-top:calc(18px + env(safe-area-inset-top,0px))!important;padding-bottom:calc(20px + env(safe-area-inset-bottom,0px))!important}
+.mobile-menu-overlay,.login-overlay,.modal-overlay,.welcome-popup,.maxi-popup,.img-lightbox,#couponSheet,.hlg-line-modal-overlay{padding-top:env(safe-area-inset-top,0px)!important;padding-bottom:env(safe-area-inset-bottom,0px)!important}
+.hlg-toast{bottom:calc(24px + env(safe-area-inset-bottom,0px))!important}
+.music-btn{bottom:calc(20px + env(safe-area-inset-bottom,0px))!important}
+.music-player{bottom:calc(80px + env(safe-area-inset-bottom,0px))!important}
+html,body{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{overscroll-behavior-y:contain}
+
+/* ===== Mobile usability fixes ===== */
+@media (max-width:768px){
+  .form-row input,.form-row textarea,.tr-input,.admin-search,.login-input,#v7ProductSearch,#v8CouponCodeInput,#claimOrderIdInp{font-size:16px!important}
+  button,a,.stab,.ptab,.gqbtn,.mmenu-item,.admin-btn,.nav-link{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+  .stab,.ptab{min-height:38px}
+  .gallery{grid-template-columns:repeat(2,1fr)!important;gap:9px}
+  .gcard{border-width:2px}
+  .gcard:active{transform:scale(.97)}
+  .gzoom{opacity:.7}
+  .gqbtn{width:44px;height:38px}
+  .gqnum{min-width:40px;height:38px;line-height:38px}
+  .sec,.notice-wrap{padding-left:14px;padding-right:14px}
+  .hero{padding:26px 16px 20px}
+  .hero h1{font-size:27px}
+  .submit-btn,.tr-btn,.login-submit{padding:14px}
+  .promo-carousel-shell{padding:0 14px}
+  .promo-slide{aspect-ratio:1.85/1}
+  .modal-body{max-height:56vh}
+  .welcome-popup{padding:16px}
+  .welcome-popup-card{padding:32px 22px 26px;border-radius:24px}
+  .welcome-popup-icon{font-size:44px}
+  .welcome-popup-title{font-size:22px}
+  .music-btn{width:44px;height:44px;font-size:19px;right:14px}
+}
+@media (max-width:360px){
+  .hero h1{font-size:23px}
+  .gallery{gap:8px}
+  .pgrid{grid-template-columns:repeat(3,1fr);gap:6px}
+}
+
+/* ===== Login / Logout button in drawer ===== */
+.mmenu-item.nav-login-btn{justify-content:center;border:1.5px solid #f0aecb;background:linear-gradient(135deg,#ffe4ef,#ffd7e8);color:#b13a68;font-weight:900;padding:12px 14px}
+.mmenu-item.nav-login-btn i{font-size:17px}
+.mmenu-item.nav-login-btn:active{transform:scale(.98)}
+
+/* ===== Account card (profile in hamburger menu) ===== */
+.drawer-account.has-photo .drawer-avatar{border:2px solid #f6d8e5}
+.drawer-account.is-guest .drawer-avatar{background:linear-gradient(135deg,#e9d5e0,#c9a8ba)}
+.drawer-verified-pill{font-size:9.5px;font-weight:900;padding:2px 7px;border-radius:99px;background:#eefbf2;color:#159447;margin-left:6px;white-space:nowrap;vertical-align:middle}
+
+/* ===== Profile modal ===== */
+.hlg-profile-overlay{position:fixed;inset:0;background:rgba(39,23,34,.55);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);z-index:10040;display:flex;align-items:center;justify-content:center;padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px));opacity:0;visibility:hidden;transition:.22s ease}
+.hlg-profile-overlay.show{opacity:1;visibility:visible}
+.hlg-profile-card{width:min(100%,360px);max-height:calc(100dvh - 32px);overflow:auto;background:#fff;border:1.5px solid #f5d0de;border-radius:24px;padding:26px 22px 22px;text-align:center;box-shadow:0 24px 70px rgba(90,30,55,.25);transform:translateY(12px) scale(.97);transition:.22s ease;-webkit-overflow-scrolling:touch}
+.hlg-profile-overlay.show .hlg-profile-card{transform:translateY(0) scale(1)}
+.hlg-profile-avatar{width:84px;height:84px;border-radius:50%;margin:0 auto 12px;background:linear-gradient(135deg,#f7bad2,#d45a8a);display:flex;align-items:center;justify-content:center;color:#fff;font-size:40px;overflow:hidden;box-shadow:0 6px 20px rgba(212,90,138,.3)}
+.hlg-profile-avatar img{width:100%;height:100%;object-fit:cover}
+.hlg-profile-name{font-size:18px;font-weight:900;color:#b83e72;word-break:break-word}
+.hlg-profile-tag{font-size:11px;color:#159447;font-weight:800;margin-top:3px}
+.hlg-profile-id{font-size:11px;color:#a98a97;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin-top:6px;word-break:break-all}
+.hlg-profile-actions{display:grid;gap:9px;margin-top:18px}
+.hlg-profile-actions button{border-radius:13px;padding:12px;font:inherit;font-size:13.5px;font-weight:800;cursor:pointer;width:100%}
+.hlg-profile-close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;border:1px solid #f1d5df;background:#fff7fa;color:#b65b80;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.hlg-profile-card{position:relative}
+.hlg-profile-btn-primary{border:0;background:linear-gradient(135deg,#06C755,#05b34c);color:#fff;box-shadow:0 7px 18px rgba(6,199,85,.25)}
+.hlg-profile-btn-coupon{border:1.5px solid #f0aecb;background:#fff5f8;color:#b13a68}
+.hlg-profile-btn-plain{border:0;background:transparent;color:#9b828f;font-size:12px;padding:7px}
+.hlg-profile-btn-logout{border:1.5px solid #f3c2cd;background:#fff4f6;color:#c43b58}
+</style>
+
+<script id="hlg-account-js">
+/* ================= HLG ACCOUNT BLOCK (final owner of the drawer account UI) ================= */
+'use strict';
+var HLG_ADMIN_KEY_X = 'hlg_admin_session_v2';
+var HLG_LINE_USER_KEY_X = 'hlg_line_user_v1';
+
+function hlgGetLineUserX(){
+  try{
+    var u=JSON.parse(localStorage.getItem(HLG_LINE_USER_KEY_X)||'null');
+    if(u&&u.line_user_id)return u;
+  }catch(e){}
+  return null;
+}
+function hlgEscapeX(s){
+  return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function hlgInitialX(u){
+  var n=(u&&(u.line_display_name||u.displayName))||'U';
+  return String(n).trim().charAt(0).toUpperCase()||'U';
+}
+function hlgPhotoX(u){
+  return (u&&(u.line_picture_url||u.pictureUrl))||'';
+}
+function hlgFallbackPhoto(){
+  try{
+    var c=document.createElement('canvas');c.width=c.height=96;
+    var x=c.getContext('2d');
+    var g=x.createLinearGradient(0,0,96,96);
+    g.addColorStop(0,'#f7bad2');g.addColorStop(1,'#d45a8a');
+    x.fillStyle=g;x.fillRect(0,0,96,96);
+    x.fillStyle='rgba(255,255,255,.92)';x.font='700 15px Tahoma,Arial,sans-serif';
+    x.textAlign='center';x.textBaseline='middle';x.fillText('LINE',48,50);
+    return c.toDataURL('image/png');
+  }catch(e){return ''}
+}
+
+/* ---------- Account card at the top of the hamburger drawer ---------- */
+function hlgRenderAccountCard(){
+  var acc=document.getElementById('drawerAccount');
+  if(!acc)return;
+  var u=hlgGetLineUserX();
+  var admin=false;
+  try{admin=sessionStorage.getItem(HLG_ADMIN_KEY_X)==='1'}catch(e){}
+  var photo=hlgPhotoX(u);
+  if(!photo){
+    var fb=hlgFallbackPhoto();
+    if(fb)photo=fb;
+  }
+  var inner;
+  if(u){
+    inner='<div class="drawer-account has-photo" role="button" tabindex="0" aria-label="เปิดโปรไฟล์ของฉัน" onclick="openHlgProfile()" onkeydown="if(event.key===\'Enter\'){openHlgProfile()}">'
+      +'<div class="drawer-avatar">'+(photo?'<img src="'+hlgEscapeX(photo)+'" alt="" referrerpolicy="no-referrer">':'<i class="ti ti-user"></i>')+'</div>'
+      +'<div class="drawer-user-text">'
+      +'<div class="drawer-user-name">'+hlgEscapeX(u.line_display_name||u.displayName||'ลูกค้า LINE')+'<span class="drawer-verified-pill">✓ LINE</span></div>'
+      +'<div class="drawer-user-sub">'+(admin?'โหมดแอดมินเปิดอยู่':'แตะเพื่อดูโปรไฟล์และคูปอง')+'</div>'
+      +'</div><i class="ti ti-chevron-right" style="color:#d0a8b8;font-size:16px"></i>'
+      +'</div>';
+  }else{
+    inner='<div class="drawer-account is-guest" role="button" tabindex="0" aria-label="เข้าสู่ระบบด้วย LINE" onclick="hlgLoginFromMenu()" onkeydown="if(event.key===\'Enter\'){hlgLoginFromMenu()}">'
+      +'<div class="drawer-avatar"><i class="ti ti-user"></i></div>'
+      +'<div class="drawer-user-text">'
+      +'<div class="drawer-user-name">ยังไม่ได้เข้าสู่ระบบ</div>'
+      +'<div class="drawer-user-sub">แตะเพื่อเข้าสู่ระบบด้วย LINE</div>'
+      +'</div><i class="ti ti-chevron-right" style="color:#d0a8b8;font-size:16px"></i>'
+      +'</div>';
+  }
+  var mi=document.getElementById('drawerMenuItems');
+  if(mi&&!mi.querySelector('.nav-login-btn')){
+    var btn=document.createElement('button');
+    btn.className='mmenu-item nav-login-btn'+(u?' is-logged-in':'');
+    btn.setAttribute('id','navLoginLogoutBtn');
+    btn.innerHTML=u
+      ?'<i class="ti ti-logout"></i>&nbsp;LOGOUT'
+      :'<i class="ti ti-login"></i>&nbsp;LOGIN';
+    btn.onclick=function(){ if(hlgGetLineUserX()){doHlgLogout()}else{hlgLoginFromMenu()} };
+    if(mi.firstChild)mi.insertBefore(btn,mi.firstChild);
+    else mi.appendChild(btn);
+  }else if(mi){
+    var b=mi.querySelector('#navLoginLogoutBtn');
+    if(b){
+      b.className='mmenu-item nav-login-btn'+(u?' is-logged-in':'');
+      b.innerHTML=u?'<i class="ti ti-logout"></i>&nbsp;LOGOUT':'<i class="ti ti-login"></i>&nbsp;LOGIN';
+      b.onclick=function(){ if(hlgGetLineUserX()){doHlgLogout()}else{hlgLoginFromMenu()} };
+    }
+  }
+  acc.innerHTML=inner;
+}
+
+/* ---------- Login / Logout actions ---------- */
+function hlgLoginFromMenu(){
+  try{if(typeof closeMenu==='function')closeMenu()}catch(e){}
+  if(typeof window.openLineAccount==='function'){window.openLineAccount();return}
+  if(window.liff){
+    try{window.liff.login({redirectUri:window.location.href});return}catch(e){}
+  }
+  window.location.href='https://liff.line.me/'+(window._hxgLiffId||'2011786627-NobuH2ua');
+}
+window.hlgLoginFromMenu=hlgLoginFromMenu;
+
+async function doHlgLogout(){
+  try{if(typeof window.logoutLine==='function'){await window.logoutLine()}}catch(e){}
+  try{localStorage.removeItem(HLG_LINE_USER_KEY_X)}catch(e){}
+  try{document.body.classList.remove('hlg-logged-in')}catch(e){}
+  hlgRenderAccountCard();
+  if(typeof window.showToast==='function')window.showToast('ออกจากระบบแล้ว แวะมาใหม่นะคะ ♡');
+}
+window.doHlgLogout=doHlgLogout;
+
+/* ---------- Profile modal ---------- */
+function openHlgProfile(){
+  var old=document.getElementById('hlgProfileOverlay');
+  if(old)old.remove();
+  var u=hlgGetLineUserX();
+  var ov=document.createElement('div');
+  ov.id='hlgProfileOverlay';
+  ov.className='hlg-profile-overlay';
+  ov.onclick=function(e){if(e.target===ov)closeHlgProfile()};
+  var photo=hlgPhotoX(u);
+  if(!photo){var fb=hlgFallbackPhoto();if(fb)photo=fb}
+  var inner;
+  if(u){
+    inner='<div class="hlg-profile-card" role="dialog" aria-modal="true" aria-label="โปรไฟล์ของฉัน">'
+      +'<button class="hlg-profile-close" onclick="closeHlgProfile()" aria-label="ปิด"><i class="ti ti-x"></i></button>'
+      +'<div class="hlg-profile-avatar">'+(photo?'<img src="'+hlgEscapeX(photo)+'" alt="" referrerpolicy="no-referrer">':'<i class="ti ti-user"></i>')+'</div>'
+      +'<div class="hlg-profile-name">'+hlgEscapeX(u.line_display_name||u.displayName||'ลูกค้า LINE')+'</div>'
+      +'<div class="hlg-profile-tag">✓ เชื่อมต่อบัญชี LINE แล้ว</div>'
+      +'<div class="hlg-profile-id">ID: '+hlgEscapeX(u.line_user_id)+'</div>'
+      +'<div class="hlg-profile-actions">'
+      +'<button type="button" class="hlg-profile-btn-coupon" onclick="closeHlgProfile();openCoupons()"><i class="ti ti-ticket"></i> คูปองของฉัน</button>'
+      +'<button type="button" class="hlg-profile-btn-logout" onclick="closeHlgProfile();doHlgLogout()"><i class="ti ti-logout"></i> ออกจากระบบ (LOGOUT)</button>'
+      +'<button type="button" class="hlg-profile-btn-plain" onclick="closeHlgProfile()">ปิด</button>'
+      +'</div>'
+      +'</div>';
+  }else{
+    inner='<div class="hlg-profile-card" role="dialog" aria-modal="true" aria-label="เข้าสู่ระบบ">'
+      +'<button class="hlg-profile-close" onclick="closeHlgProfile()" aria-label="ปิด"><i class="ti ti-x"></i></button>'
+      +'<div class="hlg-profile-avatar"><i class="ti ti-user"></i></div>'
+      +'<div class="hlg-profile-name">ยังไม่ได้เข้าสู่ระบบ</div>'
+      +'<div class="hlg-profile-tag" style="color:#8d7280">เข้าสู่ระบบเพื่อรับคูปองและดูออเดอร์</div>'
+      +'<div class="hlg-profile-actions">'
+      +'<button type="button" class="hlg-profile-btn-primary" onclick="closeHlgProfile();hlgLoginFromMenu()">เข้าสู่ระบบด้วย LINE</button>'
+      +'<button type="button" class="hlg-profile-btn-plain" onclick="closeHlgProfile()">ปิด</button>'
+      +'</div>'
+      +'</div>';
+  }
+  ov.innerHTML=inner;
+  document.body.appendChild(ov);
+  requestAnimationFrame(function(){ov.classList.add('show')});
+}
+window.openHlgProfile=openHlgProfile;
+function closeHlgProfile(){
+  var ov=document.getElementById('hlgProfileOverlay');
+  if(!ov)return;
+  ov.classList.remove('show');
+  setTimeout(function(){ov.remove()},230);
+}
+window.closeHlgProfile=closeHlgProfile;
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeHlgProfile()});
+
+/* ---------- Hook the menu + refresh on LINE session changes ---------- */
+var _hlgOldToggleMenu=window.toggleMenu;
+window.toggleMenu=function(){
+  hlgRenderAccountCard();
+  if(typeof _hlgOldToggleMenu==='function')return _hlgOldToggleMenu.apply(this,arguments);
+};
+var _hlgOldRenderDrawer=window.renderDrawerMenu;
+window.renderDrawerMenu=function(){
+  var r;
+  if(typeof _hlgOldRenderDrawer==='function')r=_hlgOldRenderDrawer.apply(this,arguments);
+  else hlgRenderAccountCard();
+  hlgRenderAccountCard();
+  return r;
+};
+
+(function hlgWatchLineUser(){
+  var last=null;
+  try{last=localStorage.getItem(HLG_LINE_USER_KEY_X)}catch(e){}
+  window.addEventListener('storage',function(e){
+    if(e.key===HLG_LINE_USER_KEY_X)hlgRenderAccountCard();
+  });
+  setInterval(function(){
+    var cur=null;
+    try{cur=localStorage.getItem(HLG_LINE_USER_KEY_X)}catch(e){}
+    if(cur!==last){last=cur;hlgRenderAccountCard()}
+  },1500);
+})();
+
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded',hlgRenderAccountCard,{once:true});
+}else{
+  hlgRenderAccountCard();
+}
 </script>
 </body>
 </html>
