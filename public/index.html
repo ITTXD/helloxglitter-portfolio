@@ -16502,7 +16502,8 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&modal.classList.con
 .music-btn{bottom:calc(20px + env(safe-area-inset-bottom,0px))!important}
 .music-player{bottom:calc(80px + env(safe-area-inset-bottom,0px))!important}
 html,body{-webkit-text-size-adjust:100%;text-size-adjust:100%}
-body{overscroll-behavior-y:contain}
+html{background:#fff5f9}
+body{overscroll-behavior-y:contain;min-height:100vh;min-height:100dvh;padding-bottom:calc(40px + env(safe-area-inset-bottom,0px))!important}
 
 /* ===== Mobile usability fixes ===== */
 @media (max-width:768px){
@@ -16728,14 +16729,12 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')closeHlgProf
 /* ---------- Hook the menu + refresh on LINE session changes ---------- */
 var _hlgOldToggleMenu=window.toggleMenu;
 window.toggleMenu=function(){
-  hlgRenderAccountCard();
   if(typeof _hlgOldToggleMenu==='function')return _hlgOldToggleMenu.apply(this,arguments);
 };
 var _hlgOldRenderDrawer=window.renderDrawerMenu;
 window.renderDrawerMenu=function(){
   var r;
   if(typeof _hlgOldRenderDrawer==='function')r=_hlgOldRenderDrawer.apply(this,arguments);
-  else hlgRenderAccountCard();
   hlgRenderAccountCard();
   return r;
 };
