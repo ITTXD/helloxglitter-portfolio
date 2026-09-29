@@ -134,6 +134,8 @@ module.exports = async (req, res) => {
 
     if (!db) { send500(res, 'Firestore not ready'); return; }
 
+    return sendJson(res, 200, { debug_url: req.url, debug_pathname: pathname });
+    
     // POST /api/login
     if (pathname === '/api/login' && method === 'POST') {
       const body = await readBody(req);
