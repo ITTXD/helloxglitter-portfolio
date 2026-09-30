@@ -5793,6 +5793,7 @@ if(document.readyState!=='loading'){
     <div class="admin-tabs">
       <button class="admin-tab active" data-admin-tab="orders" onclick="switchAdminTab('orders',this)"><i class="ti ti-list-check"></i> จัดการคิว</button>
       <button class="admin-tab" data-admin-tab="store" onclick="switchAdminTab('store',this)"><i class="ti ti-building-store"></i> หน้าร้าน</button>
+      <a class="admin-tab" href="/admin/" target="_blank" style="text-decoration:none;background:#f3e8ff;color:#7c3aed;font-weight:700;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-external-link"></i> Full Admin Portal ↗</a>
     </div>
     <section class="admin-panel active" id="adminPanel-orders">
       <div id="v8QueueDashboard"></div>
@@ -6520,14 +6521,116 @@ function stickerBuildGallery() {
 var HLG_ADMIN_KEY = 'hlg_admin_session_v2';
 var HLG_ORDERS_KEY = 'hlg_orders_v2';
 var HLG_NOTICES_KEY = 'hlg_notices_v2';
-var HLG_ADMIN_PASSWORD = '333999'; // Static prototype only. Use server-side auth before production.
+var HLG_ADMIN_PASSWORD = '333999'; // Dual auth: 333999 or master password via /api/login
 var HLG_STATUSES = ['รอยืนยันออเดอร์','ยืนยันคิวแล้ว','กำลังผลิต','พร้อมจัดส่ง','จัดส่งแล้ว'];
 
-function isAdmin(){ return sessionStorage.getItem(HLG_ADMIN_KEY)==='1'; }
-function getOrders(){ if(window.hlgOrderStore?.active)return window.hlgOrderStore.get();try{return JSON.parse(localStorage.getItem(HLG_ORDERS_KEY)||'[]')}catch(e){return []} }
-function saveOrders(rows){ if(window.hlgOrderStore?.active)return window.hlgOrderStore.save(rows);localStorage.setItem(HLG_ORDERS_KEY,JSON.stringify(rows||[])); }
+function isAdmin(){
+  return sessionStorage.getItem(HLG_ADMIN_KEY)==='1' || document.body.classList.contains('admin-mode');
+}
+function getOrders(){
+  if(window.hlgOrderStore?.active) return window.hlgOrderStore.get();
+  try{ return JSON.parse(localStorage.getItem(HLG_ORDERS_KEY)||'[]'); }catch(e){ return []; }
+}
+function saveOrders(rows){
+  if(window.hlgOrderStore?.active) window.hlgOrderStore.save(rows);
+  localStorage.setItem(HLG_ORDERS_KEY, JSON.stringify(rows||[]));
+}
 function normalizePhone(v){ return String(v||'').replace(/\D/g,''); }
-function makeQueueNo(){ var rows=getOrders(); var max=0; rows.forEach(function(o){var m=String(o.queue_no||'').match(/(\d+)/);if(m)max=Math.max(max,parseInt(m[1],10)||0)}); return 'HLG-'+String(max+1).padStart(3,'0'); }
+function makeQueueNo(){
+  var rows=getOrders(); var max=0;
+  rows.forEach(function(o){var m=String(o.queue_no||'').match(/(\d+)/);if(m)max=Math.max(max,parseInt(m[1],10)||0)});
+  return 'HLG-'+String(max+1).padStart(3,'0');
+}
+
+async function fetchLiveOrders(){
+  if(!isAdmin()) return;
+  try {
+    var res = await fetch('/api/orders');
+    if(res.ok) {
+      var list = await res.json();
+      if(Array.isArray(list)) {
+        var existing = getOrders();
+        var merged = list.map(function(item, idx) {
+          var ex = existing.find(function(x){ return x.id === item.id; });
+          var qNo = item.queue_no || (ex ? ex.queue_no : '') || ('HLG-' + String(list.length - idx).padStart(3, '0'));
+          var totalBags = item.total_bags || (item.patterns ? item.patterns.length : 1);
+          var custPhone = item.customer_phone || (item.customer_info ? (item.customer_info.match(/0[689]\d(?:[\ \-\.]?\d){7}/) || [''])[0] : '');
+          var custName = item.customer_name || (item.customer_info ? item.customer_info.split('\n')[0] : '');
+          var custAddr = item.customer_address || (item.customer_info ? item.customer_info.split('\n').slice(2).join('\n') : '');
+          return Object.assign({}, item, {
+            queue_no: qNo,
+            total_bags: totalBags,
+            customer_name: custName,
+            customer_phone: custPhone,
+            customer_address: custAddr,
+            slip_data: item.slip_data || (ex ? ex.slip_data : null),
+            slip_verified: !!item.slip_verified
+          });
+        });
+        saveOrders(merged);
+        return merged;
+      }
+    }
+  } catch(err) {
+    console.warn('Failed to fetch live orders from API:', err);
+  }
+  return getOrders();
+}
+
+async function syncStorefrontSettingsToCloud(){
+  if(!isAdmin()) return;
+  try {
+    var payload = {
+      banners: typeof getPromos === 'function' ? getPromos() : [],
+      notices: typeof getNotices === 'function' ? getNotices() : [],
+      stories: []
+    };
+    await fetch('/api/settings/storefront', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  } catch(e) {
+    console.warn('Failed to sync storefront settings:', e);
+  }
+}
+
+async function loadStorefrontSettingsFromCloud(){
+  try {
+    var res = await fetch('/api/settings/storefront');
+    if(res.ok) {
+      var data = await res.json();
+      if(data && data.success && data.settings) {
+        var s = data.settings;
+        if(Array.isArray(s.notices) && s.notices.length > 0) {
+          localStorage.setItem(HLG_NOTICES_KEY, JSON.stringify(s.notices));
+          if(typeof applyNotices === 'function') applyNotices();
+        }
+        if(Array.isArray(s.banners) && s.banners.length > 0) {
+          localStorage.setItem(HLG_PROMOS_KEY, JSON.stringify(s.banners));
+          if(typeof renderPromoCarousel === 'function') renderPromoCarousel();
+        }
+      }
+    }
+  } catch(e) {
+    console.warn('Failed to load cloud storefront settings:', e);
+  }
+}
+
+async function checkAdminAuthStatus(){
+  try {
+    var res = await fetch('/api/check-auth');
+    if(res.ok) {
+      var data = await res.json();
+      if(data.authenticated) {
+        sessionStorage.setItem(HLG_ADMIN_KEY, '1');
+        document.body.classList.add('admin-mode');
+        renderDrawerMenu();
+        if(typeof hlgRenderAccountCard === 'function') hlgRenderAccountCard();
+      }
+    }
+  } catch(e) {}
+}
 
 function renderDrawerMenu(){
   var account=document.getElementById('drawerAccount'), menu=document.getElementById('drawerMenuItems'); if(!account||!menu)return;
@@ -6539,22 +6642,162 @@ function renderDrawerMenu(){
     '<button class="mmenu-item" onclick="openCoupons();closeMenu()"><span class="mmenu-icon"><i class="ti ti-ticket"></i></span><div class="mmenu-text"><div class="mmenu-label">คูปองของฉัน</div><div class="mmenu-desc">'+(line?'ดูคูปองที่มีอยู่':'เข้าสู่ระบบ LINE เพื่อผูกคูปอง')+'</div></div><i class="ti ti-chevron-right mmenu-arrow"></i></button>'+ 
     '<button class="mmenu-item" data-page="tracking" onclick="showPage(\'tracking\');closeMenu()"><span class="mmenu-icon"><i class="ti ti-package"></i></span><div class="mmenu-text"><div class="mmenu-label">ติดตามคิว / พัสดุ</div><div class="mmenu-desc">กรอกเบอร์โทรเพื่อเช็กสถานะ</div></div><i class="ti ti-chevron-right mmenu-arrow"></i></button>'+ 
     '<button class="mmenu-item line" onclick="openLineAccount();closeMenu()"><span class="mmenu-icon"><i class="ti ti-brand-line"></i></span><div class="mmenu-text"><div class="mmenu-label">'+(line?'บัญชี LINE':'เข้าสู่ระบบด้วย LINE')+'</div></div><i class="ti ti-chevron-right mmenu-arrow"></i></button>'+ 
-    (isAdmin()?'<button class="mmenu-item admin-entry" onclick="openAdminDashboard()"><span class="mmenu-icon"><i class="ti ti-layout-dashboard"></i></span><div class="mmenu-text"><div class="mmenu-label">Admin Dashboard</div></div><span class="mmenu-pill">ADMIN</span></button><button class="mmenu-item danger" onclick="logoutHLG()"><span class="mmenu-icon"><i class="ti ti-logout-2"></i></span><div class="mmenu-text"><div class="mmenu-label">ออกจากระบบแอดมิน</div></div></button>':'<button class="mmenu-item admin-entry" onclick="openLoginModal()"><span class="mmenu-icon"><i class="ti ti-shield-lock"></i></span><div class="mmenu-text"><div class="mmenu-label">โหมดแอดมิน</div><div class="mmenu-desc">สลับเข้าหน้าจัดการร้าน</div></div><i class="ti ti-chevron-right mmenu-arrow"></i></button>');
+    (isAdmin()?'<button class="mmenu-item admin-entry" onclick="openAdminDashboard()"><span class="mmenu-icon"><i class="ti ti-layout-dashboard"></i></span><div class="mmenu-text"><div class="mmenu-label">Admin Dashboard</div></div><span class="mmenu-pill">ADMIN</span></button><a class="mmenu-item admin-entry" href="/admin/" target="_blank"><span class="mmenu-icon"><i class="ti ti-external-link"></i></span><div class="mmenu-text"><div class="mmenu-label">Full Admin Portal ↗</div><div class="mmenu-desc">เปิดหน้าจัดการเต็มรูปแบบ</div></div></a><button class="mmenu-item danger" onclick="logoutHLG()"><span class="mmenu-icon"><i class="ti ti-logout-2"></i></span><div class="mmenu-text"><div class="mmenu-label">ออกจากระบบแอดมิน</div></div></button>':'<button class="mmenu-item admin-entry" onclick="openLoginModal()"><span class="mmenu-icon"><i class="ti ti-shield-lock"></i></span><div class="mmenu-text"><div class="mmenu-label">โหมดแอดมิน</div><div class="mmenu-desc">สลับเข้าหน้าจัดการร้าน (PIN/Password)</div></div><i class="ti ti-chevron-right mmenu-arrow"></i></button>');
 }
 function openLoginModal(){closeMenu();var el=document.getElementById('loginOverlay');if(el){el.classList.add('show');setTimeout(function(){var i=document.getElementById('loginPassword');if(i)i.focus()},100)}}
 function closeLoginModal(){var el=document.getElementById('loginOverlay');if(el)el.classList.remove('show');var e=document.getElementById('loginError');if(e)e.classList.remove('show')}
 function togglePassword(){var i=document.getElementById('loginPassword');if(i)i.type=i.type==='password'?'text':'password'}
-function handleLogin(e){e.preventDefault();var password=(document.getElementById('loginPassword').value||'');var err=document.getElementById('loginError');if(password!==HLG_ADMIN_PASSWORD){if(err)err.classList.add('show');return false}if(err)err.classList.remove('show');sessionStorage.setItem(HLG_ADMIN_KEY,'1');document.getElementById('loginPassword').value='';closeLoginModal();renderDrawerMenu();showToast('เข้าสู่ระบบแอดมินแล้ว ♡');openAdminDashboard();return false}
-function logoutHLG(){sessionStorage.removeItem(HLG_ADMIN_KEY);renderDrawerMenu();showPage('home');showToast('ออกจากระบบแอดมินแล้ว')}
+
+async function handleLogin(e){
+  if(e) e.preventDefault();
+  var password=(document.getElementById('loginPassword').value||'').trim();
+  var err=document.getElementById('loginError');
+  try {
+    var res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: password })
+    });
+    var data = await res.json();
+    if(res.ok && data.success) {
+      if(err) err.classList.remove('show');
+      sessionStorage.setItem(HLG_ADMIN_KEY, '1');
+      document.body.classList.add('admin-mode');
+      document.getElementById('loginPassword').value='';
+      closeLoginModal();
+      renderDrawerMenu();
+      if(typeof hlgRenderAccountCard === 'function') hlgRenderAccountCard();
+      showToast('เข้าสู่ระบบแอดมินแล้ว ♡');
+      openAdminDashboard();
+      return false;
+    }
+  } catch(netErr) {
+    if(password === HLG_ADMIN_PASSWORD || password === 'helloxglitter') {
+      sessionStorage.setItem(HLG_ADMIN_KEY, '1');
+      document.body.classList.add('admin-mode');
+      document.getElementById('loginPassword').value='';
+      closeLoginModal();
+      renderDrawerMenu();
+      showToast('เข้าสู่ระบบแอดมินแล้ว (Offline Mode) ♡');
+      openAdminDashboard();
+      return false;
+    }
+  }
+  if(err) {
+    err.textContent = 'รหัสผ่านไม่ถูกต้อง (ใช้ 333999 หรือ helloxglitter)';
+    err.classList.add('show');
+  }
+  return false;
+}
+
+async function logoutHLG(){
+  try {
+    await fetch('/api/logout', { method: 'POST' });
+  } catch(e) {}
+  sessionStorage.removeItem(HLG_ADMIN_KEY);
+  document.body.classList.remove('admin-mode');
+  renderDrawerMenu();
+  if(typeof hlgRenderAccountCard === 'function') hlgRenderAccountCard();
+  showPage('home');
+  showToast('ออกจากระบบแอดมินแล้ว');
+}
+
 function connectLine(){closeMenu();openLineAccount()}
 function showCartFromMenu(){closeMenu();showPage('preorder');setTimeout(function(){var el=document.querySelector('.selected-bar,.summary-box');if(el)el.scrollIntoView({behavior:'smooth',block:'center'})},100)}
 function showToast(msg){var t=document.getElementById('hlgToast');if(!t)return;t.textContent=msg;t.classList.add('show');clearTimeout(window._hlgToastTimer);window._hlgToastTimer=setTimeout(function(){t.classList.remove('show')},2200)}
-function openAdminDashboard(){if(!isAdmin()){openLoginModal();return}showPage('admin');renderAdminOrders();renderNoticeEditor()}
-function switchAdminTab(tab,btn){document.querySelectorAll('.admin-panel').forEach(function(x){x.classList.remove('active')});document.querySelectorAll('.admin-tab').forEach(function(x){x.classList.remove('active')});var p=document.getElementById('adminPanel-'+tab);if(p)p.classList.add('active');if(btn)btn.classList.add('active');if(tab==='orders')renderAdminOrders();if(tab==='notices')renderNoticeEditor();if(tab==='promos')renderPromoEditor();if(tab==='pages')renderPageCmsEditor()}
-function addManualOrder(){if(!isAdmin())return;var rows=getOrders();rows.unshift({id:'HXG-'+Date.now(),customer_name:'ลูกค้า',customer_phone:'',customer_address:'',patterns:[],pattern_qtys:{},total_bags:0,total_price:0,shipping_cost:0,created_at:new Date().toISOString(),status:0,queue_no:makeQueueNo(),tracking_number:'',admin_note:''});saveOrders(rows);renderAdminOrders()}
-function renderAdminOrders(){if(!isAdmin())return;var root=document.getElementById('adminOrderList');if(!root)return;var q=((document.getElementById('adminOrderSearch')||{}).value||'').toLowerCase().trim(),qd=normalizePhone(q);var base=getOrders();var pending=base.filter(function(o){return Number(o.status||0)<4}).length,done=base.filter(function(o){return Number(o.status||0)>=4}).length;var rows=base.slice().sort(function(a,b){return String(b.created_at||'').localeCompare(String(a.created_at||''))});if(q)rows=rows.filter(function(o){var text=[o.id,o.customer_name,normalizePhone(o.customer_phone),o.queue_no,o.tracking_number].join(' ').toLowerCase();return text.indexOf(q)>-1||(qd&&normalizePhone(o.customer_phone).indexOf(qd)>-1)});var stats='<div class="admin-stat-grid"><div class="admin-stat"><span>ออเดอร์ทั้งหมด</span><b>'+base.length+'</b></div><div class="admin-stat"><span>กำลังทำ / รอดำเนินการ</span><b>'+pending+'</b></div><div class="admin-stat"><span>จัดส่งแล้ว</span><b>'+done+'</b></div><div class="admin-stat"><span>FAST TRACK</span><b>0</b></div></div>';if(!rows.length){root.innerHTML=stats+'<div class="admin-empty"><i class="ti ti-inbox"></i><br>ยังไม่มีรายการคิว</div>';return}root.innerHTML=stats+rows.map(function(o){var idx=base.findIndex(function(x){return x.id===o.id});var qty=Number(o.total_bags||0);return '<div class="admin-order"><div class="admin-order-head"><div class="admin-order-topline"><input class="order-select" type="checkbox" value="'+escAttr(o.id)+'" aria-label="เลือกออเดอร์"><div><div class="admin-order-id">'+escHtml(o.queue_no||'ยังไม่มีเลขคิว')+' · '+escHtml(o.id)+'</div><div class="admin-order-meta">'+escHtml(o.customer_name||'-')+' · '+escHtml(normalizePhone(o.customer_phone)||'-')+'<br>'+new Date(o.created_at||Date.now()).toLocaleString('th-TH')+'</div><span class="weight-admin-only"><i class="ti ti-scale"></i> '+qty+' ใบ · '+(qty*HLG_BAG_WEIGHT_G).toFixed(2)+' g</span></div></div><span class="tr-status-badge s'+Math.min(Number(o.status)||0,3)+'">'+escHtml(HLG_STATUSES[Number(o.status)||0]||HLG_STATUSES[0])+'</span></div><div class="admin-order-thumbs">'+orderThumbs(o)+'</div><div class="admin-grid"><div class="admin-field"><label>เลขคิว</label><input id="aq-'+idx+'" value="'+escAttr(o.queue_no||'')+'" placeholder="HLG-001"></div><div class="admin-field"><label>สถานะ</label><select id="as-'+idx+'">'+HLG_STATUSES.map(function(st,i){return '<option value="'+i+'" '+(Number(o.status)===i?'selected':'')+'>'+escHtml(st)+'</option>'}).join('')+'</select></div><div class="admin-field"><label>Tracking</label><input id="at-'+idx+'" value="'+escAttr(o.tracking_number||'')+'" placeholder="TH123456789EX"></div><div class="admin-field"><label>เบอร์โทร (เก็บเป็นตัวเลขล้วน)</label><input id="ap-'+idx+'" value="'+escAttr(normalizePhone(o.customer_phone)||'')+'" inputmode="numeric"></div></div><div class="admin-field" style="margin-top:8px"><label>ชื่อผู้รับ</label><input id="acn-'+idx+'" value="'+escAttr(o.customer_name||'')+'"></div><div class="admin-field" style="margin-top:8px"><label>ที่อยู่จัดส่ง</label><textarea id="aca-'+idx+'">'+escHtml(o.customer_address||'')+'</textarea></div><div class="admin-field" style="margin-top:8px"><label>โน้ตถึงลูกค้า</label><input id="an-'+idx+'" value="'+escAttr(o.admin_note||'')+'" placeholder="เช่น งานกำลังเข้าเครื่องพิมพ์แล้วค่ะ"></div><div class="admin-actions"><button class="admin-btn danger" onclick="deleteAdminOrder('+idx+')"><i class="ti ti-trash"></i> ลบ</button><button class="admin-btn" onclick="saveAdminOrder('+idx+')"><i class="ti ti-device-floppy"></i> บันทึก</button></div></div>'}).join('')}
-function saveAdminOrder(idx){var rows=getOrders(),o=rows[idx];if(!o)return;o.queue_no=(document.getElementById('aq-'+idx).value||'').trim();o.status=parseInt(document.getElementById('as-'+idx).value,10)||0;o.tracking_number=(document.getElementById('at-'+idx).value||'').trim();o.customer_phone=normalizePhone(document.getElementById('ap-'+idx).value||'');o.customer_name=(document.getElementById('acn-'+idx).value||'').trim();o.customer_address=(document.getElementById('aca-'+idx).value||'').trim();o.admin_note=(document.getElementById('an-'+idx).value||'').trim();rows[idx]=o;saveOrders(rows);renderAdminOrders();showToast('บันทึกสถานะแล้ว ♡')}
-function deleteAdminOrder(idx){if(!confirm('ลบคิวนี้ใช่ไหมคะ?'))return;var rows=getOrders();rows.splice(idx,1);saveOrders(rows);renderAdminOrders();showToast('ลบรายการแล้ว')}
+
+async function openAdminDashboard(){
+  if(!isAdmin()){openLoginModal();return;}
+  showPage('admin');
+  renderAdminOrders();
+  renderNoticeEditor();
+  await fetchLiveOrders();
+  renderAdminOrders();
+  if(typeof v8RenderQueue === 'function') v8RenderQueue();
+}
+
+function switchAdminTab(tab,btn){
+  document.querySelectorAll('.admin-panel').forEach(function(x){x.classList.remove('active')});
+  document.querySelectorAll('.admin-tab').forEach(function(x){x.classList.remove('active')});
+  var p=document.getElementById('adminPanel-'+tab);
+  if(p)p.classList.add('active');
+  if(btn)btn.classList.add('active');
+  if(tab==='orders'){ renderAdminOrders(); fetchLiveOrders().then(function(){ renderAdminOrders(); if(typeof v8RenderQueue === 'function') v8RenderQueue(); }); }
+  if(tab==='notices')renderNoticeEditor();
+  if(tab==='promos')renderPromoEditor();
+  if(tab==='pages')renderPageCmsEditor();
+}
+
+function addManualOrder(){
+  if(!isAdmin())return;
+  var rows=getOrders();
+  rows.unshift({id:'HXG-'+Date.now(),customer_name:'ลูกค้า',customer_phone:'',customer_address:'',patterns:[],pattern_qtys:{},total_bags:0,total_price:0,shipping_cost:0,created_at:new Date().toISOString(),status:0,queue_no:makeQueueNo(),tracking_number:'',admin_note:''});
+  saveOrders(rows);
+  renderAdminOrders();
+}
+
+function renderAdminOrders(){
+  if(!isAdmin())return;
+  var root=document.getElementById('adminOrderList');
+  if(!root)return;
+  var q=((document.getElementById('adminOrderSearch')||{}).value||'').toLowerCase().trim(),qd=normalizePhone(q);
+  var base=getOrders();
+  var pending=base.filter(function(o){return Number(o.status||0)<4}).length,done=base.filter(function(o){return Number(o.status||0)>=4}).length;
+  var rows=base.slice().sort(function(a,b){return String(b.created_at||'').localeCompare(String(a.created_at||''))});
+  if(q)rows=rows.filter(function(o){var text=[o.id,o.customer_name,normalizePhone(o.customer_phone),o.queue_no,o.tracking_number].join(' ').toLowerCase();return text.indexOf(q)>-1||(qd&&normalizePhone(o.customer_phone).indexOf(qd)>-1)});
+  var stats='<div class="admin-stat-grid"><div class="admin-stat"><span>ออเดอร์ทั้งหมด</span><b>'+base.length+'</b></div><div class="admin-stat"><span>กำลังทำ / รอดำเนินการ</span><b>'+pending+'</b></div><div class="admin-stat"><span>จัดส่งแล้ว</span><b>'+done+'</b></div><div class="admin-stat"><a href="/admin/" target="_blank" style="color:#6366f1;text-decoration:none;font-weight:700">🚀 Full Admin Portal ↗</a></div></div>';
+  if(!rows.length){root.innerHTML=stats+'<div class="admin-empty"><i class="ti ti-inbox"></i><br>ยังไม่มีรายการคิว</div>';return}
+  root.innerHTML=stats+rows.map(function(o){
+    var idx=base.findIndex(function(x){return x.id===o.id});
+    var qty=Number(o.total_bags||0);
+    return '<div class="admin-order"><div class="admin-order-head"><div class="admin-order-topline"><input class="order-select" type="checkbox" value="'+escAttr(o.id)+'" aria-label="เลือกออเดอร์"><div><div class="admin-order-id">'+escHtml(o.queue_no||'ยังไม่มีเลขคิว')+' · '+escHtml(o.id)+'</div><div class="admin-order-meta">'+escHtml(o.customer_name||'-')+' · '+escHtml(normalizePhone(o.customer_phone)||'-')+'<br>'+new Date(o.created_at||Date.now()).toLocaleString('th-TH')+(o.slip_data?' · <a href="'+escAttr(o.slip_data)+'" target="_blank" style="color:#0284c7;font-weight:bold">🧾 ดูสลิป '+(o.slip_verified?'✓':'')+'</a>':'')+'</div><span class="weight-admin-only"><i class="ti ti-scale"></i> '+qty+' ใบ · '+(qty*HLG_BAG_WEIGHT_G).toFixed(2)+' g</span></div></div><span class="tr-status-badge s'+Math.min(Number(o.status)||0,3)+'">'+escHtml(HLG_STATUSES[Number(o.status)||0]||HLG_STATUSES[0])+'</span></div><div class="admin-order-thumbs">'+orderThumbs(o)+'</div><div class="admin-grid"><div class="admin-field"><label>เลขคิว</label><input id="aq-'+idx+'" value="'+escAttr(o.queue_no||'')+'" placeholder="HLG-001"></div><div class="admin-field"><label>สถานะ</label><select id="as-'+idx+'">'+HLG_STATUSES.map(function(st,i){return '<option value="'+i+'" '+(Number(o.status)===i?'selected':'')+'>'+escHtml(st)+'</option>'}).join('')+'</select></div><div class="admin-field"><label>Tracking</label><input id="at-'+idx+'" value="'+escAttr(o.tracking_number||'')+'" placeholder="TH123456789EX"></div><div class="admin-field"><label>เบอร์โทร (เก็บเป็นตัวเลขล้วน)</label><input id="ap-'+idx+'" value="'+escAttr(normalizePhone(o.customer_phone)||'')+'" inputmode="numeric"></div></div><div class="admin-field" style="margin-top:8px"><label>ชื่อผู้รับ</label><input id="acn-'+idx+'" value="'+escAttr(o.customer_name||'')+'"></div><div class="admin-field" style="margin-top:8px"><label>ที่อยู่จัดส่ง</label><textarea id="aca-'+idx+'">'+escHtml(o.customer_address||'')+'</textarea></div><div class="admin-field" style="margin-top:8px"><label>โน้ตถึงลูกค้า</label><input id="an-'+idx+'" value="'+escAttr(o.admin_note||'')+'" placeholder="เช่น งานกำลังเข้าเครื่องพิมพ์แล้วค่ะ"></div><div class="admin-actions"><button class="admin-btn danger" onclick="deleteAdminOrder('+idx+')"><i class="ti ti-trash"></i> ลบ</button><button class="admin-btn" onclick="saveAdminOrder('+idx+')"><i class="ti ti-device-floppy"></i> บันทึก</button></div></div>';
+  }).join('');
+}
+
+async function saveAdminOrder(idx){
+  var rows=getOrders(),o=rows[idx];
+  if(!o)return;
+  o.queue_no=(document.getElementById('aq-'+idx).value||'').trim();
+  o.status=parseInt(document.getElementById('as-'+idx).value,10)||0;
+  o.tracking_number=(document.getElementById('at-'+idx).value||'').trim();
+  o.customer_phone=normalizePhone(document.getElementById('ap-'+idx).value||'');
+  o.customer_name=(document.getElementById('acn-'+idx).value||'').trim();
+  o.customer_address=(document.getElementById('aca-'+idx).value||'').trim();
+  o.admin_note=(document.getElementById('an-'+idx).value||'').trim();
+  rows[idx]=o;
+  saveOrders(rows);
+  renderAdminOrders();
+  showToast('บันทึกข้อมูลเรียบร้อย ♡');
+  try {
+    await fetch('/api/orders/' + encodeURIComponent(o.id), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        status: o.status,
+        tracking_number: o.tracking_number,
+        customer_name: o.customer_name,
+        customer_phone: o.customer_phone,
+        customer_address: o.customer_address,
+        note: o.admin_note
+      })
+    });
+  } catch(e) {}
+}
+
+async function deleteAdminOrder(idx){
+  if(!confirm('ลบคิวนี้ใช่ไหมคะ?'))return;
+  var rows=getOrders();
+  var o=rows[idx];
+  rows.splice(idx,1);
+  saveOrders(rows);
+  renderAdminOrders();
+  showToast('ลบรายการแล้ว');
+  if(o && o.id) {
+    try {
+      await fetch('/api/orders/' + encodeURIComponent(o.id), { method: 'DELETE' });
+    } catch(e) {}
+  }
+}
 
 var HLG_DEFAULT_NOTICES=[
  {id:'customerNotice1',enabled:true,title:'⏰ ระยะเวลารอสินค้า',body:'ทางร้านจะเริ่มทยอยส่งยอดให้ช่างผลิตตามรอบที่แจ้งไว้ค่ะ',highlight:'📌 โปรดตรวจสอบกำหนดการล่าสุดก่อนชำระเงิน',footer:'สินค้าผลิตตามคิว และร้านจะเร่งจัดส่งให้เร็วที่สุดค่ะ'},
@@ -6607,7 +6850,7 @@ function getNotices(){
   }catch(e){}
   return getDefaultNoticesV3();
 }
-function saveNotices(x){localStorage.setItem(HLG_NOTICES_KEY,JSON.stringify(x));applyNotices()}
+function saveNotices(x){localStorage.setItem(HLG_NOTICES_KEY,JSON.stringify(x));applyNotices();if(typeof syncStorefrontSettingsToCloud==='function')syncStorefrontSettingsToCloud();}
 function applyNotices(){
   var root=document.getElementById('customerNoticesRoot'); if(!root)return;
   var rows=getNotices().filter(function(n){return n.enabled!==false});
@@ -6643,7 +6886,7 @@ function getPromos(){
     {id:'p2',enabled:true,img:'https://helloxglitterstore.vercel.app/images/large-01.jpg',caption:'โปรโมชันและสินค้ารอบล่าสุด เลื่อนดูได้เลยค่ะ'}
   ];
 }
-function savePromos(x){localStorage.setItem(HLG_PROMOS_KEY,JSON.stringify(x));renderPromoCarousel();renderPromoEditor()}
+function savePromos(x){localStorage.setItem(HLG_PROMOS_KEY,JSON.stringify(x));renderPromoCarousel();renderPromoEditor();if(typeof syncStorefrontSettingsToCloud==='function')syncStorefrontSettingsToCloud();}
 function renderPromoCarousel(){
   var shell=document.getElementById('promoCarouselShell'),slides=document.getElementById('promoSlides'),dots=document.getElementById('promoDots');if(!shell||!slides||!dots)return;
   var rows=getPromos().filter(function(x){return x.enabled!==false&&x.img});if(!rows.length){shell.style.display='none';return}shell.style.display='';promoIndex=Math.min(promoIndex,rows.length-1);
@@ -7239,8 +7482,8 @@ function itemPairs(o){
 }
 function isFast(o){return !!(o.fast_track||o.fastTrack)}
 window.v8SetFilter=function(f,btn){filter=f;document.querySelectorAll('.v8q-filter').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active');v8RenderQueue()}
-window.v8ConfirmTrack=function(id,btn){let rows=getOrders(),o=rows.find(x=>x.id===id),inp=document.querySelector('[data-track="'+CSS.escape(id)+'"]');if(!o||!inp)return;let tr=inp.value.trim();if(!tr){showToast('กรุณาใส่เลข Tracking ก่อนค่ะ');inp.focus();return}o.tracking_number=tr;o.status=Math.max(Number(o.status||0),4);o.tracking_confirmed_at=new Date().toISOString();saveOrders(rows);btn.classList.add('ok');btn.textContent='✓ ยืนยันแล้ว';showToast('ยืนยัน Tracking แล้ว ✓');setTimeout(v8RenderQueue,450)}
-window.v8EditOrder=function(id){let rows=getOrders(),o=rows.find(x=>x.id===id);if(!o)return;let name=prompt('ชื่อลูกค้า',o.customer_name||'');if(name===null)return;o.customer_name=name;let phone=prompt('เบอร์โทร',o.customer_phone||'');if(phone!==null)o.customer_phone=normalizePhone(phone);saveOrders(rows);v8RenderQueue();showToast('แก้ไขข้อมูลแล้ว ✓')}
+window.v8ConfirmTrack=async function(id,btn){let rows=getOrders(),o=rows.find(x=>x.id===id),inp=document.querySelector('[data-track="'+CSS.escape(id)+'"]');if(!o||!inp)return;let tr=inp.value.trim();if(!tr){showToast('กรุณาใส่เลข Tracking ก่อนค่ะ');inp.focus();return}o.tracking_number=tr;o.status=Math.max(Number(o.status||0),4);o.tracking_confirmed_at=new Date().toISOString();saveOrders(rows);btn.classList.add('ok');btn.textContent='✓ ยืนยันแล้ว';showToast('ยืนยัน Tracking แล้ว ✓');try{await fetch('/api/orders/'+encodeURIComponent(id),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({tracking_number:tr,status:o.status})})}catch(e){}setTimeout(v8RenderQueue,450)}
+window.v8EditOrder=async function(id){let rows=getOrders(),o=rows.find(x=>x.id===id);if(!o)return;let name=prompt('ชื่อลูกค้า',o.customer_name||'');if(name===null)return;o.customer_name=name;let phone=prompt('เบอร์โทร',o.customer_phone||'');if(phone!==null)o.customer_phone=normalizePhone(phone);saveOrders(rows);v8RenderQueue();showToast('แก้ไขข้อมูลแล้ว ✓');try{await fetch('/api/orders/'+encodeURIComponent(id),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({customer_name:o.customer_name,customer_phone:o.customer_phone})})}catch(e){}}
 window.v8Backup=function(){let payload={version:8,exported_at:new Date().toISOString(),orders:getOrders()};let blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='HLG-orders-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
 window.v8RenderQueue=function(){
  let root=document.getElementById('v8QueueDashboard');if(!root||!isAdmin())return;
@@ -7248,8 +7491,8 @@ window.v8RenderQueue=function(){
  let q=norm(document.getElementById('v8Search')?.value),qd=normalizePhone(q);
  let rows=all.filter(o=>{if(filter==='wait'&&Number(o.status||0)>=4)return false;if(filter==='done'&&Number(o.status||0)<4)return false;if(filter==='fast'&&!isFast(o))return false;if(filter==='history'&&Number(o.status||0)<4)return false;if(!q)return true;let its=itemPairs(o).map(x=>x.name).join(' ');let t=[o.customer_name,o.customer_phone,o.customer_address,o.queue_no,o.tracking_number,o.id,its,o.preorder_batch].join(' ').toLowerCase();return t.includes(q)||(qd&&normalizePhone(o.customer_phone).includes(qd))});
  let wait=all.filter(o=>Number(o.status||0)<4).length,done=all.filter(o=>Number(o.status||0)>=4).length,fast=all.filter(isFast).length;
- let body=rows.map(o=>{let its=itemPairs(o),it=its[0]||{name:'-',qty:0,image:''};let more=its.length>1?' +'+(its.length-1)+' รายการ':'';let dt=o.created_at?new Date(o.created_at).toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'}):'-';let doneO=Number(o.status||0)>=4;return `<tr><td>${escHtml(dt)}</td><td class="v8q-customer"><b>${escHtml(o.customer_name||'-')}</b><span>📞 ${escHtml(normalizePhone(o.customer_phone)||'-')}</span><span>📍 ${escHtml((o.customer_address||'-').slice(0,42))}</span></td><td class="v8q-money">฿${Number(o.total_price||0).toLocaleString()}</td><td><span class="v8q-status ${doneO?'':'wait'}">${escHtml(statusText(o))}</span></td><td class="v8q-queue">${escHtml(o.queue_no||'-')}</td><td><div class="v8q-trackrow"><input class="v8q-track" data-track="${escAttr(o.id)}" value="${escAttr(o.tracking_number||'')}" placeholder="กรอกเลข Tracking"><button class="v8q-confirm ${o.tracking_number&&doneO?'ok':''}" onclick="v8ConfirmTrack('${escAttr(o.id)}',this)">${o.tracking_number&&doneO?'✓ ยืนยันแล้ว':'✓ ยืนยัน'}</button></div></td><td><div class="v8q-items">${it.image?`<img class="v8q-thumb" src="${escAttr(it.image)}">`:`<div class="v8q-thumb" style="display:grid;place-items:center">🛍️</div>`}<div class="v8q-itemtext"><b>${escHtml(it.name)}</b> ×${it.qty}${more}<br><span>${escHtml(o.preorder_batch||'')}</span></div></div></td><td><button class="v8q-edit" onclick="v8EditOrder('${escAttr(o.id)}')">✎ แก้ไข</button></td></tr>`}).join('');
- root.innerHTML=`<div class="v8q-shell"><div class="v8q-top"><div class="v8q-brand"><div class="v8q-logo">✧</div><div><div class="v8q-title">ระบบจัดการคิวหลังบ้าน (Admin Dashboard) <span class="v8q-cloud">● Data Saved</span></div><div class="v8q-sub">แก้ไขข้อมูลลูกค้า / คิวจัดส่งแล้ว / เลข Tracking / รายการสินค้า</div></div></div><div class="v8q-actions"><button class="v8q-btn" onclick="showPage('home')">← หน้าร้าน</button><button class="v8q-btn gray" onclick="v8Backup()">↓ Backup Data</button></div></div><div class="v8q-tabs"><button class="v8q-tab active">◷ รอดำเนินการ ${wait}</button><button class="v8q-tab">🚚 จัดส่งแล้ว ${done}</button><button class="v8q-tab">🗃 เก็บข้อมูลเก่า ${done}</button></div><div class="v8q-stats"><div class="v8q-stat"><span>ออเดอร์ทั้งหมด</span><b>${all.length}</b></div><div class="v8q-stat wait"><span>กำลังทำ / รอดำเนินการ</span><b>${wait}</b></div><div class="v8q-stat done"><span>จัดส่งเสร็จสิ้นแล้ว</span><b>${done}</b></div><div class="v8q-stat fast"><span>งานด่วน FAST TRACK</span><b>${fast}</b></div></div><div class="v8q-toolbar"><input id="v8Search" class="v8q-search" type="search" placeholder="ค้นหาชื่อ, เบอร์โทร, เลขคิว, Tracking, ที่อยู่, สินค้า..." oninput="v8RenderQueue()"><div class="v8q-filters"><button class="v8q-filter ${filter==='all'?'active':''}" onclick="v8SetFilter('all',this)">ทั้งหมด</button><button class="v8q-filter ${filter==='wait'?'active':''}" onclick="v8SetFilter('wait',this)">⌛ รอคิว</button><button class="v8q-filter ${filter==='done'?'active':''}" onclick="v8SetFilter('done',this)">☑ ส่งแล้ว</button><button class="v8q-filter ${filter==='fast'?'active':''}" onclick="v8SetFilter('fast',this)">⚡ งานด่วน</button><button class="v8q-filter ${filter==='history'?'active':''}" onclick="v8SetFilter('history',this)">🗃 History</button></div></div><div class="v8q-mobile-note">บนมือถือเลื่อนตารางซ้าย–ขวาเพื่อดูข้อมูลทั้งหมด</div><div class="v8q-tablewrap"><table class="v8q-table"><thead><tr><th>เวลาแจ้งโอน</th><th>ข้อมูลลูกค้า</th><th>ยอดเงิน</th><th>สถานะ</th><th>เลขคิว</th><th>Tracking</th><th>รายการที่สั่ง</th><th>จัดการ</th></tr></thead><tbody>${body||`<tr><td colspan="8" class="v8q-empty">ไม่พบออเดอร์</td></tr>`}</tbody></table></div><div class="v8q-history">ข้อมูลที่จัดส่งแล้วจะยังคงอยู่ใน History และค้นย้อนหลังได้ • Backup Data จะดาวน์โหลดข้อมูลออเดอร์ทั้งหมดเป็น JSON</div></div>`;
+ let body=rows.map(o=>{let its=itemPairs(o),it=its[0]||{name:'-',qty:0,image:''};let more=its.length>1?' +'+(its.length-1)+' รายการ':'';let dt=o.created_at?new Date(o.created_at).toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'}):'-';let doneO=Number(o.status||0)>=4;return `<tr><td>${escHtml(dt)}</td><td class="v8q-customer"><b>${escHtml(o.customer_name||'-')}</b><span>📞 ${escHtml(normalizePhone(o.customer_phone)||'-')}</span><span>📍 ${escHtml((o.customer_address||'-').slice(0,42))}</span>${o.slip_data?`<br><a href="${escAttr(o.slip_data)}" target="_blank" style="color:#0284c7;font-size:11px;font-weight:700">🧾 ดูสลิป ${o.slip_verified?'✓':''}</a>`:''}</td><td class="v8q-money">฿${Number(o.total_price||0).toLocaleString()}</td><td><span class="v8q-status ${doneO?'':'wait'}">${escHtml(statusText(o))}</span></td><td class="v8q-queue">${escHtml(o.queue_no||'-')}</td><td><div class="v8q-trackrow"><input class="v8q-track" data-track="${escAttr(o.id)}" value="${escAttr(o.tracking_number||'')}" placeholder="กรอกเลข Tracking"><button class="v8q-confirm ${o.tracking_number&&doneO?'ok':''}" onclick="v8ConfirmTrack('${escAttr(o.id)}',this)">${o.tracking_number&&doneO?'✓ ยืนยันแล้ว':'✓ ยืนยัน'}</button></div></td><td><div class="v8q-items">${it.image?`<img class="v8q-thumb" src="${escAttr(it.image)}">`:`<div class="v8q-thumb" style="display:grid;place-items:center">🛍️</div>`}<div class="v8q-itemtext"><b>${escHtml(it.name)}</b> ×${it.qty}${more}<br><span>${escHtml(o.preorder_batch||'')}</span></div></div></td><td><button class="v8q-edit" onclick="v8EditOrder('${escAttr(o.id)}')">✎ แก้ไข</button></td></tr>`}).join('');
+ root.innerHTML=`<div class="v8q-shell"><div class="v8q-top"><div class="v8q-brand"><div class="v8q-logo">✧</div><div><div class="v8q-title">ระบบจัดการคิวหลังบ้าน (Admin Dashboard) <span class="v8q-cloud">● Live Cloud Sync</span></div><div class="v8q-sub">แก้ไขข้อมูลลูกค้า / คิวจัดส่งแล้ว / เลข Tracking / รายการสินค้า</div></div></div><div class="v8q-actions"><a class="v8q-btn" href="/admin/" target="_blank" style="background:#4f46e5;color:white;text-decoration:none;display:inline-flex;align-items:center;gap:4px">🚀 Full Admin Portal ↗</a><button class="v8q-btn" onclick="showPage('home')">← หน้าร้าน</button><button class="v8q-btn gray" onclick="v8Backup()">↓ Backup Data</button></div></div><div class="v8q-tabs"><button class="v8q-tab active">◷ รอดำเนินการ ${wait}</button><button class="v8q-tab">🚚 จัดส่งแล้ว ${done}</button><button class="v8q-tab">🗃 เก็บข้อมูลเก่า ${done}</button></div><div class="v8q-stats"><div class="v8q-stat"><span>ออเดอร์ทั้งหมด</span><b>${all.length}</b></div><div class="v8q-stat wait"><span>กำลังทำ / รอดำเนินการ</span><b>${wait}</b></div><div class="v8q-stat done"><span>จัดส่งเสร็จสิ้นแล้ว</span><b>${done}</b></div><div class="v8q-stat fast"><span>งานด่วน FAST TRACK</span><b>${fast}</b></div></div><div class="v8q-toolbar"><input id="v8Search" class="v8q-search" type="search" placeholder="ค้นหาชื่อ, เบอร์โทร, เลขคิว, Tracking, ที่อยู่, สินค้า..." oninput="v8RenderQueue()"><div class="v8q-filters"><button class="v8q-filter ${filter==='all'?'active':''}" onclick="v8SetFilter('all',this)">ทั้งหมด</button><button class="v8q-filter ${filter==='wait'?'active':''}" onclick="v8SetFilter('wait',this)">⌛ รอคิว</button><button class="v8q-filter ${filter==='done'?'active':''}" onclick="v8SetFilter('done',this)">☑ ส่งแล้ว</button><button class="v8q-filter ${filter==='fast'?'active':''}" onclick="v8SetFilter('fast',this)">⚡ งานด่วน</button><button class="v8q-filter ${filter==='history'?'active':''}" onclick="v8SetFilter('history',this)">🗃 History</button></div></div><div class="v8q-mobile-note">บนมือถือเลื่อนตารางซ้าย–ขวาเพื่อดูข้อมูลทั้งหมด</div><div class="v8q-tablewrap"><table class="v8q-table"><thead><tr><th>เวลาแจ้งโอน</th><th>ข้อมูลลูกค้า</th><th>ยอดเงิน</th><th>สถานะ</th><th>เลขคิว</th><th>Tracking</th><th>รายการที่สั่ง</th><th>จัดการ</th></tr></thead><tbody>${body||`<tr><td colspan="8" class="v8q-empty">ไม่พบออเดอร์</td></tr>`}</tbody></table></div><div class="v8q-history">ข้อมูลที่จัดส่งแล้วจะยังคงอยู่ใน History และค้นย้อนหลังได้ • Backup Data จะดาวน์โหลดข้อมูลออเดอร์ทั้งหมดเป็น JSON</div></div>`;
  let si=document.getElementById('v8Search');if(si&&q){si.value=q;try{si.focus();si.setSelectionRange(q.length,q.length)}catch(e){}}
 }
 const oldSwitch=window.switchAdminTab;window.switchAdminTab=function(name,btn){if(oldSwitch)oldSwitch(name,btn);if(name==='orders')setTimeout(v8RenderQueue,0)};
@@ -7304,7 +7547,16 @@ function tryAutoMusic(){var a=getAudio();var p=a.play();if(p&&p.then)p.then(func
 var _mp=window.musicPlay;window.musicPlay=function(){var a=getAudio();a.play().then(function(){markMusic(true)}).catch(function(){});var btn=document.getElementById('mcPlayBtn');if(btn)btn.style.background='#ffe4ef'};
 var _mps=window.musicPause;window.musicPause=function(){var a=getAudio();a.pause();markMusic(false);var btn=document.getElementById('mcPlayBtn');if(btn)btn.style.background='white'};
 var _sp=window.showPage;window.showPage=function(page){var r=_sp&&_sp.apply(this,arguments);setTimeout(function(){applyNotices();renderAllPageBlocks();v8UpdateCartFloat();enhanceAdminPanels()},0);return r};
-document.addEventListener('DOMContentLoaded',function(){enhanceAdminPanels();applyNotices();renderAllPageBlocks();v8UpdateCartFloat();setTimeout(tryAutoMusic,350)});
+document.addEventListener('DOMContentLoaded',function(){
+  enhanceAdminPanels();
+  applyNotices();
+  renderAllPageBlocks();
+  v8UpdateCartFloat();
+  if(typeof checkAdminAuthStatus==='function') checkAdminAuthStatus();
+  if(typeof loadStorefrontSettingsFromCloud==='function') loadStorefrontSettingsFromCloud();
+  if(isAdmin() && typeof fetchLiveOrders==='function') fetchLiveOrders();
+  setTimeout(tryAutoMusic,350);
+});
 })();
 </script>
 
