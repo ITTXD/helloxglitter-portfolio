@@ -37,17 +37,21 @@ Products/promos stay **local-only** for now (decided with user). Cloud sync is a
   - Storefront keeps the whole customer path: wallet, LINE login, apply/validate/claim and the cart coupon box.
   - ⚠️ Ticket wording fixed: the storefront never *generated* or *copied* coupons from its admin panel — generation is server-side and copying is a customer-wallet button. The portal edits **rules only**.
 
+- **Ticket 04 (Isolate Storefront CMS Mode)** — PARTIAL.
+  - `body.admin-mode` now has **one canonical, leak-proof writer**: `window.hlgAdminModeSync()` (real admin session + preview exclusion). The old `v8-link-back-patch` DOM-text heuristic that could leave `admin-mode` stuck on for customers is gone; `v8-final-controls.syncAdminClass()` delegates to the same helper.
+  - **Still open:** (1) true lazy-loading of the CMS scripts was not implemented — they are strictly separated and fully admin-gated but still load for every customer; (2) non-CMS admin panels (shipping, collections, stock, box controls, receipt, store tools, payment-thanks) still show in `admin-mode`; (3) no browser verification — the three overlapping story-manager scripts were left untouched.
+
 ## 🚀 What's Next
-Continue with **Ticket 04 (Isolate Storefront CMS Mode)**. See `.scratch/unify-admin/issues/04-isolate-cms-mode.md`.
-Keep only the Visual CMS tools on the storefront (text editing, section visibility, Highlight Stories, Banners) and make that mode lazy/strictly separated so customer load times aren't affected.
+**Ticket 05 (Deep Clean index.html)** — the only ticket left. See `.scratch/unify-admin/issues/05-deep-clean-index.md`. It also owns the orphaned editor bodies and dead CSS listed below, plus the deferred items from ticket 04.
 
 ### Cleanup owed to Ticket 05 (not blocking)
 The storefront still contains unreachable editor bodies and their dead CSS:
 - `renderTiers`, `saveTier`, `renderFonts`, pricing `renderAdmin`/`options`/`preview`/`savePromo`/`renderBase` (ticket 02)
 - `__removedCouponAdmin` (ticket 03, inert via `return;`) plus `#adminPanel-coupons` / `.hlg-coupon-admin` CSS
+- Ticket 04 leftovers: lazy-load the CMS scripts, and remove/relocate the remaining non-CMS admin panels (shipping, collections, stock, box controls, receipt, store tools, payment-thanks).
 Their panels, triggers and callers are gone, so none of them run — Ticket 05 deletes them.
 
 ## 🧪 Verification
-- `npm test` (all suites green) including the new `test/admin-product-promo-migration.test.js` and `test/admin-coupon-migration.test.js`.
+- `npm test` (all suites green) including `test/admin-product-promo-migration.test.js`, `test/admin-coupon-migration.test.js` and `test/admin-cms-mode.test.js`.
 - All 81 inline scripts in `public/index.html` parse; `node --check public/admin/admin.js` passes.
 - Not verified in a real browser (no Chrome available in this environment) — do a manual pass on `/admin/` Products & Promos and the storefront gallery/cart before deploy.

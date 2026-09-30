@@ -7618,12 +7618,16 @@ document.addEventListener('DOMContentLoaded',function(){
    [...document.querySelectorAll('nav a,nav button,.drawer a,.drawer button,.menu a,.menu button,[class*="hamb"] a,[class*="hamb"] button')]
     .forEach(el=>{const t=(el.textContent||'').trim(); if(/^กระเป๋าผ้า$/.test(t)) el.remove();});
  }
- function syncAdminClass(){
-   // V8 uses different admin markers across panels; observe text/visibility and expose controls when obvious.
-   const txt=(document.body.innerText||'');
-   const adminVisible=[...document.querySelectorAll('button,a')].some(x=>/ออกจากระบบ|Logout Admin|Admin Mode/i.test(x.textContent||'') && x.offsetParent!==null);
-   if(adminVisible) document.body.classList.add('admin-mode');
- }
+ // Single source of truth for the `admin-mode` class. It gates the Visual CMS tools
+ // (text editor, section visibility, highlight stories, banners) and must reflect the
+ // real admin session only — a DOM heuristic can leave it stuck on for customers.
+ window.hlgAdminModeSync=function(){
+   let on=false;
+   try{on=sessionStorage.getItem('hlg_admin_session_v2')==='1'}catch(e){}
+   if(on&&(document.body.classList.contains('v8-third-person-view')||document.body.classList.contains('v8-customer-preview-mode')))on=false;
+   return document.body.classList.toggle('admin-mode',on);
+ };
+ function syncAdminClass(){window.hlgAdminModeSync()}
  function boot(){ensureBack();ensureLinks();removeBagMenu();syncAdminClass();updateBack()}
  document.addEventListener('DOMContentLoaded',boot); if(document.readyState!=='loading')boot();
  window.addEventListener('hashchange',()=>{setTimeout(()=>{removeBagMenu();updateBack();syncAdminClass()},30)});
@@ -7638,7 +7642,7 @@ document.addEventListener('DOMContentLoaded',function(){
  const esc=t=>String(t??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
  const escA=t=>esc(t).replace(/'/g,'&#39;');
 
- function syncAdminClass(){document.body.classList.toggle('admin-mode',admin())}
+ function syncAdminClass(){if(window.hlgAdminModeSync) return window.hlgAdminModeSync();document.body.classList.toggle('admin-mode',admin())}
 
  /* ---------- standardized back button on every secondary page ---------- */
  function addBackButtons(){
