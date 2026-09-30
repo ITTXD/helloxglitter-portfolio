@@ -624,9 +624,11 @@ function switchView(view) {
     t.classList.toggle('active', t.dataset.view === view);
   });
   document.getElementById('viewOrders').classList.toggle('hidden', view !== 'orders');
+  var vp = document.getElementById('viewProducts'); if (vp) vp.classList.toggle('hidden', view !== 'products');
   document.getElementById('viewSummary').classList.toggle('hidden', view !== 'summary');
   document.getElementById('viewPrint').classList.toggle('hidden', view !== 'print');
   document.getElementById('viewTracking').classList.toggle('hidden', view !== 'tracking');
+  if (view === 'products') { hydrateProducts().then(renderProductsView); }
   if (view === 'summary') renderProductSummary();
   if (view === 'print') renderPrintTable();
   if (view === 'tracking') renderTrackingView();
@@ -1022,3 +1024,253 @@ function copyCustomerInfo(name, phone, address) {
     showToast("คัดลอกข้อมูลลูกค้าแล้ว");
   });
 }
+
+/* =========================================================
+   PRODUCTS & PROMOS (MIGRATED FROM STOREFRONT)
+   ========================================================= */
+
+const PRODUCT_KEY = "hlg_custom_products_v1";
+const PRODUCT_DB = "hlg_custom_font_v1", PRODUCT_STORE = "media";
+let customProducts = [];
+let customProductImageUrls = [];
+
+function readProducts() {
+  try {
+    const x = JSON.parse(localStorage.getItem(PRODUCT_KEY) || "[]");
+    return Array.isArray(x) ? x.filter(y => y && y.id && ["bag","sticker"].includes(y.type)) : [];
+  } catch(e) { return []; }
+}
+
+function openProductDB() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) { reject(Error("เบราว์เซอร์นี้ไม่รองรับพื้นที่เก็บรูป")); return; }
+    const q = indexedDB.open(PRODUCT_DB, 1);
+    q.onupgradeneeded = () => { if (!q.result.objectStoreNames.contains(PRODUCT_STORE)) q.result.createObjectStore(PRODUCT_STORE); };
+    q.onsuccess = () => resolve(q.result);
+    q.onerror = () => reject(q.error || Error("เปิดพื้นที่รูปไม่สำเร็จ"));
+  });
+}
+
+async function productMedia(key, blob) {
+  const db = await openProductDB();
+  try {
+    return await new Promise((resolve, reject) => {
+      const t = db.transaction(PRODUCT_STORE, blob === undefined ? "readonly" : "readwrite");
+      const store = t.objectStore(PRODUCT_STORE);
+      const q = blob === undefined ? store.get(key) : blob === null ? store.delete(key) : store.put(blob, key);
+      q.onsuccess = () => resolve(q.result);
+      q.onerror = () => reject(q.error || Error("บันทึกรูปไม่สำเร็จ"));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+async function hydrateProducts() {
+  for (const u of customProductImageUrls) URL.revokeObjectURL(u);
+  customProductImageUrls = [];
+  customProducts = readProducts();
+  await Promise.all(customProducts.map(async x => {
+    x._img = x.imageUrl || "";
+    if (x.imageKey) {
+      try {
+        const blob = await productMedia(x.imageKey);
+        if (blob) {
+          x._img = URL.createObjectURL(blob);
+          customProductImageUrls.push(x._img);
+        }
+      } catch(e) { console.warn("Product image unavailable", e); }
+    }
+  }));
+}
+
+function renderProductsView() {
+  const p = document.getElementById("productManagerContainer");
+  if (!p) return;
+  p.innerHTML = `
+    <div style="background:#fff;border:1px solid #f2d5e1;border-radius:16px;padding:18px;margin:12px 0;box-shadow:0 6px 18px #b84b7b12;">
+      <h3 style="margin:0 0 12px;color:#a83e6a">เพิ่มสินค้า Sticker / กระเป๋า</h3>
+      <form id="hlgProductForm">
+        <input type="hidden" id="hlgEditId">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;">
+          <label style="display:block;font-size:13px;color:#765461;font-weight:600">ประเภท<select id="hlgType" style="display:block;width:100%;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff"><option value="bag">กระเป๋า</option><option value="sticker">Sticker</option></select></label>
+          <label style="display:block;font-size:13px;color:#765461;font-weight:600">ชื่อสินค้า<input id="hlgName" required maxlength="90" placeholder="เช่น กระเป๋าลายดาว" style="display:block;width:100%;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff"></label>
+          <label id="hlgSizeWrap" style="display:block;font-size:13px;color:#765461;font-weight:600">ขนาดกระเป๋า<select id="hlgSize" style="display:block;width:100%;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff"><option value="normal">Normal · 15×16"</option><option value="large">Large · 15.5×4×16"</option><option value="easy">Easy Bag · 10.5×5×14"</option><option value="maxi">Maxi · 18×20"</option></select></label>
+          <label style="display:block;font-size:13px;color:#765461;font-weight:600">ราคา (บาท)<input id="hlgPrice" type="number" min="1" max="999999" step="1" required placeholder="เช่น 69" style="display:block;width:100%;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff"></label>
+          <label style="display:block;font-size:13px;color:#765461;font-weight:600">อัปโหลดรูปสินค้า<input id="hlgImageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" style="display:block;width:100%;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff"></label>
+          <label style="display:block;font-size:13px;color:#765461;font-weight:600">หรือใส่ลิงก์รูป HTTPS<input id="hlgImageUrl" type="url" placeholder="https://..." style="display:block;width:100%;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff"></label>
+        </div>
+        <p style="font-size:12px;color:#866d79;margin-top:8px">รูปที่อัปโหลดจะถูกเก็บไว้ในเบราว์เซอร์เครื่องนี้ ส่วนลิงก์รูปจะแสดงให้ลูกค้าเห็นด้วย</p>
+        <div style="margin-top:12px">
+          <button type="submit" id="hlgProductSave" style="border:0;border-radius:10px;padding:9px 14px;background:#bc4b7b;color:#fff;font:inherit;font-size:13px;cursor:pointer;">บันทึกสินค้า</button>
+          <button type="button" class="hlg-cancel" id="hlgProductCancel" style="border:0;border-radius:10px;padding:9px 14px;background:#fceaf1;color:#a83e6a;font:inherit;font-size:13px;cursor:pointer;margin-left:8px;">ยกเลิกแก้ไข</button>
+        </div>
+      </form>
+    </div>
+    <div style="background:#fff;border:1px solid #f2d5e1;border-radius:16px;padding:18px;margin:12px 0;box-shadow:0 6px 18px #b84b7b12;">
+      <h3 style="margin:0 0 12px;color:#a83e6a">สินค้าที่เพิ่มเอง</h3>
+      <div id="hlgProductRows"></div>
+    </div>
+  `;
+  document.getElementById("hlgType").onchange = function() {
+    const isBag = this.value === "bag";
+    document.getElementById("hlgSizeWrap").style.display = isBag ? "" : "none";
+  };
+  document.getElementById("hlgProductForm").onsubmit = saveProduct;
+  document.getElementById("hlgProductCancel").onclick = renderProductsView;
+  renderProductList();
+}
+
+function renderProductList() {
+  const p = document.getElementById("hlgProductRows");
+  if (!p) return;
+  p.innerHTML = "";
+  if (!customProducts.length) {
+    p.textContent = "ยังไม่มีสินค้าที่เพิ่มเอง";
+    return;
+  }
+  customProducts.forEach(x => {
+    const el = document.createElement("div");
+    el.style.cssText = "display:flex;gap:12px;align-items:center;border-top:1px solid #f4dfeb;padding:11px 0;";
+    
+    const img = document.createElement("img");
+    img.src = x._img || x.imageUrl || "";
+    img.alt = "";
+    img.style.cssText = "width:52px;height:52px;object-fit:cover;border-radius:9px;background:#f8edf2";
+    
+    const label = document.createElement("span");
+    label.style.cssText = "flex:1;font-size:13px;";
+    
+    const b = document.createElement("b");
+    b.textContent = x.name;
+    
+    const small = document.createElement("small");
+    small.textContent = (x.type === "bag" ? "กระเป๋า · " + x.size : "Sticker") + " · " + Number(x.price).toLocaleString() + " ฿";
+    small.style.cssText = "display:block;color:#927888";
+    
+    label.append(b, small);
+    
+    const editBtn = document.createElement("button");
+    editBtn.textContent = "แก้ไข";
+    editBtn.style.cssText = "border:0;border-radius:10px;padding:9px 14px;background:#fceaf1;color:#a83e6a;font:inherit;font-size:13px;cursor:pointer;";
+    editBtn.onclick = () => editProductRow(x.id);
+    
+    const delBtn = document.createElement("button");
+    delBtn.textContent = "ลบ";
+    delBtn.style.cssText = "border:0;border-radius:10px;padding:9px 14px;background:#fceaf1;color:#a83e6a;font:inherit;font-size:13px;cursor:pointer;margin-left:8px;";
+    delBtn.onclick = () => deleteProductRow(x.id);
+    
+    el.append(img, label, editBtn, delBtn);
+    p.append(el);
+  });
+}
+
+function editProductRow(id) {
+  const x = customProducts.find(r => r.id === id);
+  if (!x) return;
+  document.getElementById("hlgEditId").value = x.id;
+  document.getElementById("hlgType").value = x.type;
+  document.getElementById("hlgName").value = x.name;
+  document.getElementById("hlgSize").value = x.sizeKey || "normal";
+  document.getElementById("hlgPrice").value = x.price;
+  document.getElementById("hlgImageUrl").value = x.imageUrl || "";
+  document.getElementById("hlgImageFile").value = "";
+  
+  const isBag = x.type === "bag";
+  document.getElementById("hlgSizeWrap").style.display = isBag ? "" : "none";
+  document.getElementById("hlgProductForm").scrollIntoView({behavior: "smooth", block: "start"});
+}
+
+async function saveProduct(e) {
+  e.preventDefault();
+  const id = document.getElementById("hlgEditId").value;
+  const old = customProducts.find(x => x.id === id);
+  const type = document.getElementById("hlgType").value;
+  const name = document.getElementById("hlgName").value.trim();
+  const price = Number(document.getElementById("hlgPrice").value);
+  const sizeKey = document.getElementById("hlgSize").value;
+  const file = document.getElementById("hlgImageFile").files[0];
+  const imageUrl = document.getElementById("hlgImageUrl").value.trim();
+  
+  if (!name || !Number.isInteger(price) || price < 1) { showToast("กรอกชื่อและราคาที่ถูกต้อง"); return; }
+  if (/[\\'"<>]/.test(name)) { showToast("ชื่อสินค้าใช้เครื่องหมายคำพูดและวงเล็บแหลมไม่ได้"); return; }
+  
+  if (file && (!/^image\/(png|jpeg|webp|gif)$/.test(file.type) || file.size > 8*1024*1024)) {
+    showToast("ใช้รูป PNG, JPEG, WebP หรือ GIF ไม่เกิน 8 MB");
+    return;
+  }
+  if (imageUrl && (!/^https:\/\//i.test(imageUrl) || /[\"'<>]/.test(imageUrl))) {
+    showToast("ใส่ลิงก์รูป HTTPS ที่ถูกต้อง");
+    return;
+  }
+  if (!file && !imageUrl && !old?.imageKey) {
+    showToast("เลือกรูปหรือใส่ลิงก์รูปค่ะ");
+    return;
+  }
+  
+  const sizeMap = { normal: "Normal · 15×16\"", large: "Large · 15.5×4×16\"", easy: "Easy Bag · 10.5×5×14\"", maxi: "Maxi · 18×20\"" };
+  const next = {
+    id: id || "product-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7),
+    type,
+    name,
+    price,
+    sizeKey: type === "bag" ? sizeKey : "",
+    size: type === "bag" ? sizeMap[sizeKey] : "",
+    imageUrl: file ? "" : imageUrl,
+    imageKey: file ? (old?.imageKey || "photo-" + Date.now()) : imageUrl ? "" : (old?.imageKey || "")
+  };
+  
+  const button = document.getElementById("hlgProductSave");
+  button.disabled = true;
+  button.textContent = "กำลังบันทึก...";
+  
+  try {
+    if (file) await productMedia(next.imageKey, file);
+    const updated = customProducts.filter(x => x.id !== id).map(({_img, ...x}) => x).concat(next);
+    localStorage.setItem(PRODUCT_KEY, JSON.stringify(updated));
+    if (old?.imageKey && old.imageKey !== next.imageKey) {
+      await productMedia(old.imageKey, null).catch(()=>{});
+    }
+    await hydrateProducts();
+    
+    // Write back to backend setting endpoint
+    await fetch("/api/settings/storefront", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ products: updated })
+    });
+    
+    renderProductsView();
+    showToast("บันทึกสินค้าแล้ว ♡");
+  } catch (err) {
+    console.error(err);
+    showToast("บันทึกสินค้าไม่สำเร็จ");
+  } finally {
+    button.disabled = false;
+    button.textContent = "บันทึกสินค้า";
+  }
+}
+
+async function deleteProductRow(id) {
+  const x = customProducts.find(r => r.id === id);
+  if (!x || !confirm("ลบสินค้า " + x.name + " ใช่ไหมคะ?")) return;
+  try {
+    const updated = customProducts.filter(r => r.id !== id).map(({_img, ...r}) => r);
+    localStorage.setItem(PRODUCT_KEY, JSON.stringify(updated));
+    if (x.imageKey) await productMedia(x.imageKey, null).catch(()=>{});
+    await hydrateProducts();
+    
+    // Write back to backend setting endpoint
+    await fetch("/api/settings/storefront", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ products: updated })
+    });
+    
+    renderProductsView();
+    showToast("ลบสินค้าแล้ว");
+  } catch (err) {
+    showToast("ลบสินค้าไม่สำเร็จ");
+  }
+}
+
