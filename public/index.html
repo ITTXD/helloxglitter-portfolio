@@ -3704,9 +3704,17 @@ function isAdmin(){
 }
 function load(){
   try{
-    const a=JSON.parse(localStorage.getItem(META)||'[]');
-    return Array.isArray(a)?a:[];
-  }catch(e){return[]}
+    const val = localStorage.getItem(META);
+    if (val) {
+      const a=JSON.parse(val);
+      if(Array.isArray(a)) return a;
+    }
+  }catch(e){}
+  return [
+    { target: 'preorder', name: 'กระเป๋าผ้า HLG', sub: 'เลือกลายที่ชอบได้เลย ♡', src: null },
+    { target: 'wallpaper', name: 'Wallpaper Collection', sub: 'Digital item', src: null },
+    { target: 'sticker', name: 'Sticker Collection', sub: 'ดูคอลเลกชันล่าสุด', src: null }
+  ];
 }
 function save(a){localStorage.setItem(META,JSON.stringify(a||[]))}
 function esc(v){
@@ -3876,9 +3884,10 @@ async function renderInline(){
       url.onchange=persist;
 
     }else{
+      const defaultIcon = x.target === 'preorder' ? '👜' : x.target === 'wallpaper' ? '🎀' : x.target === 'sticker' ? '⭐' : '♡';
       card.innerHTML=`
         <div class="v8-inline-preview-image">
-          ${u?`<img src="${u}" alt="${esc(x.name)}">`:`<div class="v8-inline-preview-empty"><strong>♡</strong></div>`}
+          ${u?`<img src="${u}" alt="${esc(x.name)}">`:`<div class="v8-inline-preview-empty" style="font-size:30px;background:linear-gradient(145deg,#fff0f6,#f1eaff)"><strong>${defaultIcon}</strong></div>`}
         </div>
         <div class="v8-inline-customer-info">
           <b>${esc(x.name)}</b>
