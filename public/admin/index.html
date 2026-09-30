@@ -7,6 +7,43 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css"/>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="/admin/admin.css"/>
+<style>
+  /* Styles for the migrated product / promo / font editors. */
+  .promo-editor-section { margin: 22px 0; }
+  .promo-editor-section > h3 { font-size: 16px; color: #a83e69; margin: 0 0 8px; display: flex; align-items: center; gap: 6px; }
+  .hlg-config { background: #fff; border: 1px solid #efd0dd; border-radius: 16px; padding: 18px; margin: 12px 0; box-shadow: 0 5px 20px #a54e7a13; color: #654655; }
+  .hlg-config h3 { margin: 0 0 12px; color: #a83e70; }
+  .hlg-config p { font-size: 12px; line-height: 1.6; color: #806977; }
+  .hlg-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .hlg-config label { display: block; margin: 8px 0; font-size: 13px; }
+  .hlg-config input:not([type=checkbox]), .hlg-config select, .hlg-config textarea { width: 100%; box-sizing: border-box; border: 1px solid #e3c1cf; border-radius: 9px; padding: 9px; margin-top: 5px; font: inherit; background: #fff; }
+  .hlg-config button { border: 0; border-radius: 9px; background: #ba4a79; color: #fff; padding: 9px 15px; font: inherit; cursor: pointer; }
+  .hlg-tier-card { border: 1px solid #f1d8e3; border-radius: 12px; padding: 11px; margin: 9px 0; background: #fffafd; }
+  .hlg-tier-card h4 { margin: 0 0 8px; color: #a74970; }
+  .hlg-font-preview { padding: 18px; margin: 12px 0; border: 1px dashed #d78cae; border-radius: 12px; background: #fff6fa; font-size: 17px; }
+  #hlgTierNote { padding: 12px; background: #fff4f8; border-radius: 10px; margin-top: 12px; font-size: 12px; }
+  .hlt-product-line { display: grid; grid-template-columns: 22px minmax(160px, 1fr) repeat(3, minmax(85px, 105px)); gap: 7px; align-items: center; padding: 8px 2px; border-bottom: 1px solid #f2dce7; font-size: 12px; }
+  .hlt-product-line input[type=number] { min-width: 0; margin: 0; }
+  .hlt-product-line span { overflow-wrap: anywhere; }
+  #pricingManagerContainer .hp-intro, #pricingManagerContainer .hp-section { background: #fff; border: 1px solid #efd1de; border-radius: 17px; padding: 16px; margin-bottom: 13px; color: #765568; }
+  #pricingManagerContainer h3 { font-size: 15px; color: #a83e69; margin: 0 0 8px; }
+  #pricingManagerContainer p { font-size: 11px; line-height: 1.7; }
+  #pricingManagerContainer .hp-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  #pricingManagerContainer label { display: block; font-size: 11px; font-weight: 800; color: #845e70; }
+  #pricingManagerContainer input, #pricingManagerContainer select { box-sizing: border-box; width: 100%; margin-top: 5px; padding: 9px; border: 1px solid #e9cad8; border-radius: 10px; background: #fff; font: inherit; color: #674656; }
+  #pricingManagerContainer button { border: 1px solid #ddaec1; background: #fff4f8; color: #aa426b; border-radius: 10px; padding: 9px 12px; font: inherit; font-weight: 800; cursor: pointer; }
+  #pricingManagerContainer .hp-save { background: #d86390; color: #fff; border: 0; margin-top: 12px; }
+  #pricingManagerContainer .hp-row { display: grid; grid-template-columns: minmax(180px, 1fr) 115px auto; gap: 9px; align-items: center; padding: 8px 0; border-top: 1px solid #f6e8ee; }
+  #pricingManagerContainer .hp-row small { display: block; color: #997c89; }
+  #pricingManagerContainer .hp-row input { margin: 0; }
+  #pricingManagerContainer .hp-promo { border: 1px solid #f0d1df; border-radius: 12px; padding: 12px; margin: 9px 0; background: #fffafd; }
+  #pricingManagerContainer .hp-promo small { display: block; color: #967783; margin: 4px 0; }
+  #pricingManagerContainer .hp-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  #pricingManagerContainer .hp-preview { font-weight: 800; color: #b64371; margin-top: 8px; }
+  #pricingManagerContainer .hp-selected { margin: 6px 0; font-size: 12px; }
+  #pricingManagerContainer .hp-sku { display: flex; gap: 6px; align-items: center; font-weight: 500; font-size: 12px; }
+  @media (max-width: 650px) { .hlg-grid { grid-template-columns: 1fr; } .hlt-product-line { grid-template-columns: 22px 1fr 1fr 1fr; } .hlt-product-line span { grid-column: 2 / -1; } #pricingManagerContainer .hp-grid { grid-template-columns: 1fr; } #pricingManagerContainer .hp-row { grid-template-columns: 1fr 90px; } }
+</style>
 </head>
 <body>
 
@@ -132,8 +169,23 @@
   <div id="viewProducts" class="admin-view hidden">
     <div style="padding:20px;max-width:1000px;margin:0 auto">
       <h2><i class="ti ti-box"></i> จัดการสินค้าและโปรโมชั่น</h2>
-      <p style="color:#807078;margin-top:8px">กำลังรอย้ายระบบจัดการสินค้า (กระเป๋า, สติ๊กเกอร์) และการตั้งราคาขั้นบันไดมาจากหน้าร้าน...</p>
-      <div id="productManagerContainer"></div>
+      <p style="color:#807078;margin-top:8px">เพิ่มกระเป๋า / Sticker, ตั้งโปรตามจำนวน, ลดราคาชิ้นเดียว และฟอนต์ของร้าน ที่นี่ ข้อมูลจะแสดงบนหน้าร้านในเบราว์เซอร์เครื่องนี้</p>
+      <section class="promo-editor-section">
+        <h3><i class="ti ti-package"></i> สินค้า (กระเป๋า / Sticker)</h3>
+        <div id="productManagerContainer"></div>
+      </section>
+      <section class="promo-editor-section">
+        <h3><i class="ti ti-gift"></i> โปรตามจำนวน / ของแถม</h3>
+        <div id="tierManagerContainer"></div>
+      </section>
+      <section class="promo-editor-section">
+        <h3><i class="ti ti-discount-2"></i> ลดราคาชิ้นเดียว</h3>
+        <div id="pricingManagerContainer"></div>
+      </section>
+      <section class="promo-editor-section">
+        <h3><i class="ti ti-typography"></i> ฟอนต์ทั้งเว็บไซต์</h3>
+        <div id="fontManagerContainer"></div>
+      </section>
     </div>
   </div>
 

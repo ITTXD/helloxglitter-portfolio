@@ -1,41 +1,44 @@
 # 🔄 Admin Unification Handover
 
-**Goal:** The user requested to merge the storefront inline admin (`public/index.html`) with the true standalone admin portal (`/admin/`). We broke this down into 5 tickets in `.scratch/unify-admin/issues/`.
+**Goal:** Merge the storefront inline admin (`public/index.html`) with the standalone admin portal (`/admin/`). Broken down into 5 tickets in `.scratch/unify-admin/issues/`.
 
 ## ✅ What's Done
-- Fixed the flickering issues with the highlight story editor and the login modal infinite loops.
-- Generated the 5 tickets (`01` to `05`) for the unification process.
-- **Ticket 01 (Unify Order Management)** is **DONE**:
-  - Upgraded `/admin/index.html` and `public/admin/admin.js` to support `FAST TRACK`, 5-step status, and copied the "Copy Customer Info" functionality.
-  - Removed `v8QueueDashboard` and the "จัดการคิว" (Orders) tab from `public/index.html`.
-  - Replaced the tab with a `Full Admin Portal ↗` link in the storefront admin menu.
+- Fixed flickering in the highlight story editor and login-modal infinite loops.
+- **Ticket 01 (Unify Order Management)** — DONE.
+- **Ticket 02 (Extract Product & Promo Management)** — DONE.
+  - `/admin/` now owns four editors under the **Products & Promos** tab:
+    - Products (bags / stickers) — `#productManagerContainer`
+    - Tier promo / free shipping — `#tierManagerContainer` (`window.hlgRenderTiers`)
+    - Single-item pricing — `#pricingManagerContainer` (`window.hlgRenderPricing`)
+    - Site font — `#fontManagerContainer` (`window.hlgRenderFonts`)
+  - Editors live in `public/admin/admin.js` (one IIFE at the end); styles added to `public/admin/index.html`.
+  - Storefront keeps only the customer-facing engines: product `read/hydrate/sync/media/decorateSticker`, and the `hlgTierQuote` / `hlgPriceFor` / `getPromoNote` / `renderPromoWrap` hooks.
+  - Panels and all `switchAdminTab` triggers for the migrated editors are removed from the storefront.
 
-## 🚧 What's Currently In Progress (Ticket 02)
-- Added `Products & Promos` tab and `viewProducts` placeholder in `public/admin/index.html`.
-- Migrated the admin UI portion of `hlg-product-manager-js` (creating bags/stickers and uploading images to IndexedDB) into `public/admin/admin.js` (lines 750+).
-- Hooked up `switchView('products')` to `hydrateProducts().then(renderProductsView)`.
+### 🐞 Bugs found & fixed during Ticket 02
+1. Product images used the **wrong IndexedDB** in `admin.js` (`hlg_custom_font_v1`/`media`) → now `hlg_product_media_v1`/`images`, matching the storefront.
+2. Product save/delete **wiped storefront banners/notices/stories**: it PUT `{products}` to `/api/settings/storefront`, which whitelists only `{banners,notices,stories}`. Calls removed. ⚠️ **Check the live Firestore `settings/storefront` doc — banners/notices may already be lost.**
+3. `public/admin/admin.js` had a **syntax error** (literal newline in `join("…")`) and did not parse — fixed.
+4. Shipping + coupon admin tabs anchored on the removed pricing/tier panels; re-anchored to `#adminPanel-store`.
+
+### 🔑 Storage contract (both sides same origin — keep in sync)
+| Data | Key |
+|---|---|
+| Products | `hlg_custom_products_v1` (IndexedDB `hlg_product_media_v1` / `images`) |
+| Tier promo | `hlg_quantity_promo_v1` |
+| Single-item pricing | `hlg_pricing_v1` |
+| Font | `hlg_font_settings_v1` (IndexedDB `hlg_custom_font_v1` / `font`) |
+
+Products/promos stay **local-only** for now (decided with user). Cloud sync is a separate future ticket.
 
 ## 🚀 What's Next
-The user wants to continue with **Ticket 02 (Extract Product & Promo Management)**.
+Continue with **Ticket 03 (Extract Coupon Management)**. See `.scratch/unify-admin/issues/03-extract-coupon-management.md`.
+`v8-coupon-admin` injects the coupon panel around line ~16190 and already anchors on `#adminPanel-store`; migrate its generator/manager UI to a "Coupons" tab in `/admin/`, keeping customer claim/validate logic on the storefront.
 
-### Instructions for Next Agent:
-1. **Finish Migrating Product Manager:** 
-   - `hlg-product-manager-js` inside `public/index.html` still has the `render()` function that injects the admin form. You must strip out the admin-rendering logic (`render()`, `editRow()`, `deleteRow()`, `save()`, `visibility()`) from `public/index.html`'s script tag, because it is now handled by `/admin/admin.js`.
-   - Ensure the storefront script ONLY retains `hydrate()`, `sync()`, `read()`, and `media()` so customers can still see the added products on the storefront.
-2. **Migrate Tier Pricing Manager:**
-   - Migrate `adminPanel-pricing` UI logic (from `hlg-tier-font-js`) into `public/admin/admin.js` similarly.
-   - Remove the old `adminPanel-pricing` form from `public/index.html`.
-3. Verify `/api/settings/storefront` is correctly saving configurations.
-4. Run tests, commit, mark Ticket 02 as DONE, and proceed to Ticket 03!
+### Cleanup owed to Ticket 05 (not blocking)
+The storefront still contains unreachable editor bodies (`renderTiers`, `saveTier`, `renderFonts`, pricing `renderAdmin`/`options`/`preview`/`savePromo`/`renderBase`) and their dead CSS. Their panels and all callers are gone, so they never run — Ticket 05 deletes them.
 
----
-
-## 🎟️ Ticket 03 (Extract Coupon Management)
-**Goal:** Move the storefront's coupon generator and manager (`adminPanel-coupons`) into the `/admin/` portal.
-**Details:**
-Currently, `v8-coupon-admin` injects a heavy admin panel into `public/index.html` (around line 16088).
-1. Create a "Coupons" tab in `/admin/index.html` (e.g., `<button class="topbar-tab" data-view="coupons" onclick="switchView('coupons')">...`).
-2. Create `<div id="viewCoupons" class="admin-view hidden">` inside `/admin/index.html`.
-3. Migrate the coupon generation and management logic from `v8-coupon-admin` to `public/admin/admin.js`.
-4. The storefront still needs the API call to claim/validate coupons (`/api/coupons/validate`), so do NOT delete customer-facing logic! Only move the UI for generating and viewing coupons.
-5. Delete the admin HTML/JS for coupons from `public/index.html`.
+## 🧪 Verification
+- `npm test` (all suites green) including the new `test/admin-product-promo-migration.test.js`.
+- All 81 inline scripts in `public/index.html` parse; `node --check public/admin/admin.js` passes.
+- Not verified in a real browser (no Chrome available in this environment) — do a manual pass on `/admin/` Products & Promos and the storefront gallery/cart before deploy.

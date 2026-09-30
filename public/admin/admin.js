@@ -628,7 +628,14 @@ function switchView(view) {
   document.getElementById('viewSummary').classList.toggle('hidden', view !== 'summary');
   document.getElementById('viewPrint').classList.toggle('hidden', view !== 'print');
   document.getElementById('viewTracking').classList.toggle('hidden', view !== 'tracking');
-  if (view === 'products') { hydrateProducts().then(renderProductsView); }
+  if (view === 'products') {
+    hydrateProducts().then(function() {
+      renderProductsView();
+      if (typeof window.hlgRenderTiers === 'function') window.hlgRenderTiers();
+      if (typeof window.hlgRenderPricing === 'function') window.hlgRenderPricing();
+      if (typeof window.hlgRenderFonts === 'function') window.hlgRenderFonts();
+    });
+  }
   if (view === 'summary') renderProductSummary();
   if (view === 'print') renderPrintTable();
   if (view === 'tracking') renderTrackingView();
@@ -1018,8 +1025,7 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 function copyCustomerInfo(name, phone, address) {
-  var text = [name, phone, address].filter(Boolean).join("
-");
+  var text = [name, phone, address].filter(Boolean).join("\n");
   navigator.clipboard.writeText(text).then(function() {
     showToast("คัดลอกข้อมูลลูกค้าแล้ว");
   });
@@ -1030,7 +1036,9 @@ function copyCustomerInfo(name, phone, address) {
    ========================================================= */
 
 const PRODUCT_KEY = "hlg_custom_products_v1";
-const PRODUCT_DB = "hlg_custom_font_v1", PRODUCT_STORE = "media";
+// Must match the storefront product manager (public/index.html) so images written
+// from /admin/ are visible to customers and vice versa.
+const PRODUCT_DB = "hlg_product_media_v1", PRODUCT_STORE = "images";
 let customProducts = [];
 let customProductImageUrls = [];
 
@@ -1232,16 +1240,8 @@ async function saveProduct(e) {
       await productMedia(old.imageKey, null).catch(()=>{});
     }
     await hydrateProducts();
-    
-    // Write back to backend setting endpoint
-    await fetch("/api/settings/storefront", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ products: updated })
-    });
-    
     renderProductsView();
-    showToast("บันทึกสินค้าแล้ว ♡");
+    showToast("success", "บันทึกสินค้าแล้ว ♡");
   } catch (err) {
     console.error(err);
     showToast("บันทึกสินค้าไม่สำเร็จ");
@@ -1259,18 +1259,582 @@ async function deleteProductRow(id) {
     localStorage.setItem(PRODUCT_KEY, JSON.stringify(updated));
     if (x.imageKey) await productMedia(x.imageKey, null).catch(()=>{});
     await hydrateProducts();
-    
-    // Write back to backend setting endpoint
-    await fetch("/api/settings/storefront", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ products: updated })
-    });
-    
     renderProductsView();
-    showToast("ลบสินค้าแล้ว");
+    showToast("success", "ลบสินค้าแล้ว");
   } catch (err) {
-    showToast("ลบสินค้าไม่สำเร็จ");
+    showToast("error", "ลบสินค้าไม่สำเร็จ");
   }
 }
+
+/* =========================================================
+   PRODUCT & PROMO EDITORS (MIGRATED FROM STOREFRONT)
+   The storefront keeps only the customer-facing engines
+   (price/tier quote + font application). All editing UI lives
+   here. Both sides share the same origin, so localStorage and
+   IndexedDB keys below MUST stay in sync with public/index.html:
+     products  : hlg_custom_products_v1 / hlg_product_media_v1
+     promo     : hlg_quantity_promo_v1
+     pricing   : hlg_pricing_v1
+     font      : hlg_font_settings_v1 / hlg_custom_font_v1
+   ========================================================= */
+(function() {
+  'use strict';
+
+  var $ = function(s) { return document.querySelector(s); };
+  var esc = function(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  };
+  function adminToast(msg) { try { showToast('success', msg); } catch (e) {} }
+
+  // ---------------- shared product catalog ----------------
+  function readCustomProducts() {
+    try {
+      var x = JSON.parse(localStorage.getItem('hlg_custom_products_v1') || '[]');
+      return Array.isArray(x) ? x.filter(function(y) { return y && y.id && ['bag', 'sticker'].indexOf(y.type) >= 0; }) : [];
+    } catch (e) { return []; }
+  }
+  function sku(x) {
+    if (x.type === 'custom') return 'custom|' + String(x.categoryId || '') + '|' + String(x.productId || '');
+    return String(x.type || '') + '|' + String(x.name || '') + '|' + String(x.variant || '');
+  }
+  function catalog() {
+    var a = [];
+    try {
+      if (typeof ALL_PATTERNS !== 'undefined') ALL_PATTERNS.forEach(function(x) { if (x._hlgCustomId) return; a.push({ type: 'bag', name: x.name, variant: x.size || '', sizeKey: x.sizeKey, price: Number(x.priceOrig) || 0, image: x.img || '' }); });
+    } catch (e) {}
+    try {
+      if (typeof STICKER_PATTERNS !== 'undefined') STICKER_PATTERNS.forEach(function(x) { if (x._hlgCustomId) return; a.push({ type: 'sticker', name: x.name, variant: '', price: Number(x.price) || 0, image: x.img || '' }); });
+    } catch (e) {}
+    readCustomProducts().forEach(function(x) {
+      if (x.type === 'bag') a.push({ type: 'bag', name: x.name, variant: x.size || '', sizeKey: x.sizeKey, price: Number(x.price) || 0, image: x.imageUrl || '' });
+      else a.push({ type: 'sticker', name: x.name, variant: '', price: Number(x.price) || 0, image: x.imageUrl || '' });
+    });
+    a.push({ type: 'wallpaper', name: 'Wallpaper Special Set', variant: 'Digital Download', price: 99 });
+    try { a.push.apply(a, window.hlgCollectionProducts ? window.hlgCollectionProducts() : []); } catch (e) {}
+    return a;
+  }
+  function groupKey(x) { return x.type === 'custom' ? String(x.categoryId || 'custom') : String(x.type || 'other'); }
+  function groupLabel(key, rows) {
+    if (key === 'bag') return '👜 กระเป๋า';
+    if (key === 'sticker') return '✨ Sticker';
+    if (key === 'wallpaper') return '🎨 Wallpaper';
+    return '♡ ' + ((rows[0] && rows[0].variant) || 'สินค้าอื่น ๆ');
+  }
+
+  /* ================= TIER PROMO EDITOR ================= */
+  var TIER_KEY = 'hlg_quantity_promo_v1';
+  function tierDefaults() {
+    return { enabled: false, name: 'โปรตามจำนวนชิ้น', types: ['bag'], start: '', end: '', tiers: { 1: { price: null, gifts: '' }, 2: { price: null, gifts: '' }, 3: { price: null, gifts: '' } }, freeFrom: 0, coverRemote: false };
+  }
+  function readTier() {
+    try {
+      var v = JSON.parse(localStorage.getItem(TIER_KEY) || 'null');
+      if (!(v && typeof v === 'object' && !Array.isArray(v))) return tierDefaults();
+      var out = Object.assign({}, tierDefaults(), v);
+      out.enabled = !!v.enabled && ((!!v.productRules && Object.keys(v.productRules).length > 0) || (Array.isArray(v.selectedGroups) && v.selectedGroups.length > 0));
+      out.needsProductPrices = !!v.enabled && !v.productRules && !v.selectedGroups;
+      out.tiers = Object.assign({}, tierDefaults().tiers, v.tiers || {});
+      return out;
+    } catch (e) { return tierDefaults(); }
+  }
+  function selectedIn(v, x) {
+    var key = sku(x);
+    if ((v.excludedSkus || []).indexOf(key) >= 0) return false;
+    return (v.selectedGroups || []).indexOf(groupKey(x)) >= 0 ||
+      !!(v.productRules && Object.prototype.hasOwnProperty.call(v.productRules, key));
+  }
+
+  var tierDraft = null;
+
+  function renderTiers() {
+    var p = $('#tierManagerContainer');
+    if (!p) return;
+    var v = readTier(), products = catalog(), groups = new Map();
+    for (var i = 0; i < products.length; i++) {
+      var gk = groupKey(products[i]);
+      if (!groups.has(gk)) groups.set(gk, []);
+      groups.get(gk).push(products[i]);
+    }
+    tierDraft = {
+      groups: new Set(v.selectedGroups || []),
+      excluded: new Set(v.excludedSkus || []),
+      rules: Object.assign({}, v.productRules || {}),
+      percent: JSON.parse(JSON.stringify(v.groupPercent || {})),
+      modes: JSON.parse(JSON.stringify(v.groupModes || {})),
+      products: products,
+      grouped: groups
+    };
+    p.innerHTML = `<div class="hlg-config"><h3>โปรตามจำนวน / ของแถม</h3><p><b>แท็บนี้:</b> ตั้งราคาเมื่อซื้อครบ 1/2/3 ชิ้น ของแถม และส่งฟรี หากต้องการให้ลูกค้าเห็นโปร เลือกหมวดที่ร่วมโปรแล้วกด “บันทึกและเปิดโปร” ส่วนป้ายลดราคาชิ้นเดียวอยู่ในแท็บ “ลดราคาชิ้นเดียว”</p>${v.needsProductPrices ? '<p style="color:#a42f62">โปรแบบเก่าพักไว้ก่อน เลือกสินค้าและบันทึกใหม่ค่ะ</p>' : ''}<p>กด “เลือกทั้งหมวด” ได้ทันที หรือเปิดหมวดแล้วค้นหาชื่อเพื่อเลือกเฉพาะบางสินค้า หากเลือกทั้งหมวดแล้ว ก็ยกเว้นบางชิ้นได้โดยเอาติ๊กออก</p><p>ข้อมูลโปรในไฟล์นี้เก็บอยู่บนเบราว์เซอร์เครื่องนี้ หากต้องการให้ลูกค้าทุกเครื่องเห็นโปรเดียวกัน ต้องเชื่อมฐานข้อมูลออนไลน์ก่อนค่ะ</p><label><input id="hltEnabled" type="checkbox" ${v.enabled ? 'checked' : ''}> เปิดใช้โปรนี้</label><div class="hlg-grid"><label>ชื่อโปร<input id="hltName" maxlength="70" value="${esc(v.name)}"></label><label>เริ่ม (เวลาไทย)<input id="hltStart" type="datetime-local" value="${esc(v.start)}"></label><label>สิ้นสุด (เวลาไทย)<input id="hltEnd" type="datetime-local" value="${esc(v.end)}"></label></div><h3>สินค้าในโปร</h3><p>เลือกทั้งหมวดแล้วตั้งส่วนลดเป็น % หรือบาทต่อชิ้น โดยคิดจากราคาของสินค้าแต่ละชิ้น หรือเปิดรายการสินค้าเพื่อตั้งราคาเป็นบาท/ชิ้นเฉพาะตัว</p><div id="hltGroups"></div><h3>ของแถมและส่งฟรี</h3>${[1, 2, 3].map(function(n) { return `<label>ซื้อครบ ${n}${n === 3 ? ' ชิ้นขึ้นไป' : ' ชิ้น'} ได้ของแถมอะไร<input id="hltGift${n}" maxlength="180" value="${esc((v.tiers[n] || {}).gifts || '')}" placeholder="เว้นว่างหากไม่มี"></label>`; }).join('')}<div class="hlg-grid"><label>ส่งฟรีเมื่อซื้อครบ<select id="hltFree"><option value="0" ${!v.freeFrom ? 'selected' : ''}>ไม่ส่งฟรี</option>${[1, 2, 3].map(function(n) { return `<option value="${n}" ${Number(v.freeFrom) === n ? 'selected' : ''}>${n} ชิ้นขึ้นไป</option>`; }).join('')}</select></label><label><input id="hltRemote" type="checkbox" ${v.coverRemote ? 'checked' : ''}> ส่งฟรีรวมพื้นที่ห่างไกลด้วย</label></div><p>ช่องราคาสินค้าที่ระบุเป็นบาทจะใช้แทนส่วนลด % ของหมวดนั้น ราคาจริงจะไม่สูงกว่าราคาปัจจุบันในตะกร้า</p><button id="hltSave">บันทึกและเปิดโปร</button><button id="hltDisable" type="button">ปิดโปร</button><div id="hlgTierNote"></div></div>`;
+    var root = $('#hltGroups');
+    var bagGifts = document.createElement('div');
+    bagGifts.className = 'hlg-tier-card';
+    bagGifts.innerHTML = '<h4>🎁 ของแถมแยกตามขนาดกระเป๋า</h4><p>ใส่ข้อความที่ต้องการให้ขึ้นเป็นบล็อกใต้ราคาแต่ละขนาด หากเว้นว่างจะใช้ข้อความของแถมรวมด้านล่าง และจะขึ้นในใบสรุปออเดอร์ด้วย</p>' + Object.entries({ normal: 'Normal', large: 'Large', easy: 'Easy Bag', maxi: 'Maxi' }).map(function(pair) {
+      var key = pair[0], name = pair[1];
+      return '<h4>' + name + '</h4><div class="hlg-grid">' + [1, 2, 3].map(function(n) {
+        return '<label>' + n + (n === 3 ? '+' : '') + ' ใบ<input id="hltSizeGift-' + key + '-' + n + '" maxlength="180" value="' + esc((v.sizeGifts && v.sizeGifts[key] && v.sizeGifts[key][n]) || '') + '" placeholder="เช่น Griptok + พวงกุญแจ"></label>';
+      }).join('') + '</div>';
+    }).join('');
+    root.after(bagGifts);
+    groups.forEach(function(rows, key) {
+      var box = document.createElement('div');
+      box.className = 'hlg-tier-card';
+      box.dataset.group = key;
+      var label = document.createElement('label');
+      var check = document.createElement('input');
+      check.type = 'checkbox';
+      check.className = 'hlt-all';
+      check.checked = tierDraft.groups.has(key);
+      check.onchange = function() {
+        if (check.checked) { tierDraft.groups.add(key); rows.forEach(function(x) { tierDraft.excluded.delete(sku(x)); }); }
+        else tierDraft.groups.delete(key);
+        updateGroup(key);
+      };
+      label.append(check, document.createTextNode(' เลือกทั้งหมวด ' + groupLabel(key, rows) + ' (' + rows.length + ' รายการ)'));
+      var count = document.createElement('small');
+      count.className = 'hlt-count';
+      count.style.marginLeft = '8px';
+      var percent = document.createElement('div');
+      percent.className = 'hlg-grid';
+      [1, 2, 3].forEach(function(n) {
+        var field = document.createElement('label');
+        field.textContent = 'ครบ ' + n + (n === 3 ? ' ชิ้นขึ้นไป' : ' ชิ้น') + ' · ลด';
+        var mode = document.createElement('select');
+        mode.innerHTML = '<option value="percent">เปอร์เซ็นต์ (%)</option><option value="amount">บาทต่อชิ้น (฿)</option>';
+        mode.value = (tierDraft.modes[key] && tierDraft.modes[key][n]) || 'percent';
+        var input = document.createElement('input');
+        input.type = 'number'; input.min = '0'; input.step = '1'; input.placeholder = 'ไม่ลด';
+        input.value = (tierDraft.percent[key] && tierDraft.percent[key][n] != null) ? tierDraft.percent[key][n] : '';
+        var updateMode = function() {
+          tierDraft.modes[key] = tierDraft.modes[key] || {};
+          tierDraft.modes[key][n] = mode.value;
+          input.max = mode.value === 'percent' ? '100' : '';
+          input.title = mode.value === 'percent' ? 'ส่วนลดเปอร์เซ็นต์จากราคาของแต่ละชิ้น' : 'ส่วนลดบาทต่อชิ้นจากราคาของแต่ละชิ้น';
+        };
+        mode.onchange = updateMode; updateMode();
+        input.oninput = function() {
+          tierDraft.percent[key] = tierDraft.percent[key] || {};
+          tierDraft.percent[key][n] = input.value.trim() === '' ? null : Number(input.value);
+        };
+        field.append(mode, input);
+        percent.append(field);
+      });
+      var toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.textContent = 'ดู / เลือกสินค้าบางตัว';
+      toggle.style.margin = '8px 0';
+      var listing = document.createElement('div');
+      listing.hidden = true;
+      var query = '', limit = 80;
+      var search = document.createElement('input');
+      search.type = 'search';
+      search.placeholder = 'ค้นหาชื่อสินค้าในหมวดนี้';
+      search.oninput = function() { query = search.value.toLowerCase().trim(); limit = 80; renderList(); };
+      var body = document.createElement('div');
+      var more = document.createElement('button');
+      more.type = 'button';
+      more.textContent = 'แสดงเพิ่มอีก 80 รายการ';
+      more.onclick = function() { limit += 80; renderList(); };
+      listing.append(search, body, more);
+      toggle.onclick = function() { listing.hidden = !listing.hidden; if (!listing.hidden) renderList(); };
+      function renderList() {
+        body.replaceChildren();
+        var matches = rows.filter(function(x) { return (x.name + ' ' + x.variant).toLowerCase().indexOf(query) >= 0; });
+        var visible = matches.slice(0, limit);
+        visible.forEach(function(x) {
+          var id = sku(x);
+          var line = document.createElement('div');
+          line.className = 'hlt-product-line';
+          line.dataset.sku = id;
+          var checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.checked = selectedIn({ selectedGroups: Array.from(tierDraft.groups), excludedSkus: Array.from(tierDraft.excluded), productRules: tierDraft.rules }, x);
+          var name = document.createElement('span');
+          name.textContent = x.name + ' ' + (x.variant || '') + ' · ' + Number(x.price).toLocaleString() + ' ฿';
+          checkbox.onchange = function() {
+            if (tierDraft.groups.has(key)) {
+              if (checkbox.checked) tierDraft.excluded.delete(id); else tierDraft.excluded.add(id);
+            } else if (checkbox.checked) tierDraft.rules[id] = tierDraft.rules[id] || {};
+            else delete tierDraft.rules[id];
+            updateGroup(key);
+          };
+          line.append(checkbox, name);
+          [1, 2, 3].forEach(function(n) {
+            var input = document.createElement('input');
+            input.type = 'number'; input.min = '0'; input.max = String(Number(x.price)); input.step = '1';
+            input.placeholder = n + (n === 3 ? '+' : '') + ' ชิ้น';
+            input.title = 'ราคาต่อชิ้นเมื่อซื้อครบ ' + n + ' ชิ้น';
+            input.value = (tierDraft.rules[id] && tierDraft.rules[id][n] != null) ? tierDraft.rules[id][n] : '';
+            input.onchange = function() {
+              tierDraft.rules[id] = tierDraft.rules[id] || {};
+              tierDraft.rules[id][n] = input.value.trim() === '' ? null : Number(input.value);
+              tierDraft.excluded.delete(id);
+              checkbox.checked = true;
+              updateGroup(key);
+            };
+            line.append(input);
+          });
+          body.append(line);
+        });
+        more.hidden = matches.length <= limit;
+        var info = document.createElement('div');
+        info.style.fontSize = '12px';
+        info.textContent = 'แสดง ' + visible.length + ' จาก ' + matches.length + ' รายการ';
+        body.prepend(info);
+      }
+      function updateGroup(key2) {
+        var box2 = Array.from(root.children).find(function(x) { return x.dataset.group === key2; });
+        var rows2 = groups.get(key2) || [];
+        if (!box2) return;
+        var n = rows2.filter(function(x) { return selectedIn({ selectedGroups: Array.from(tierDraft.groups), excludedSkus: Array.from(tierDraft.excluded), productRules: tierDraft.rules }, x); }).length;
+        var chk = box2.querySelector('.hlt-all');
+        chk.checked = tierDraft.groups.has(key2);
+        chk.indeterminate = n > 0 && n < rows2.length;
+        box2.querySelector('.hlt-count').textContent = 'เลือก ' + n + '/' + rows2.length;
+        if (!box2.lastChild.hidden) box2.querySelectorAll('.hlt-product-line').forEach(function(line) {
+          var input = line.querySelector('input[type=checkbox]');
+          if (input) {
+            var x = rows2.find(function(y) { return sku(y) === line.dataset.sku; });
+            if (x) input.checked = selectedIn({ selectedGroups: Array.from(tierDraft.groups), excludedSkus: Array.from(tierDraft.excluded), productRules: tierDraft.rules }, x);
+          }
+        });
+      }
+      box.append(label, count, percent, toggle, listing);
+      root.append(box);
+    });
+    Array.from(groups.keys()).forEach(function(key) {
+      var box2 = Array.from(root.children).find(function(x) { return x.dataset.group === key; });
+      var rows2 = groups.get(key) || [];
+      if (!box2) return;
+      var n = rows2.filter(function(x) { return selectedIn({ selectedGroups: Array.from(tierDraft.groups), excludedSkus: Array.from(tierDraft.excluded), productRules: tierDraft.rules }, x); }).length;
+      var chk = box2.querySelector('.hlt-all');
+      chk.checked = tierDraft.groups.has(key);
+      chk.indeterminate = n > 0 && n < rows2.length;
+      box2.querySelector('.hlt-count').textContent = 'เลือก ' + n + '/' + rows2.length;
+    });
+    $('#hltSave').onclick = function() { $('#hltEnabled').checked = true; saveTier(); };
+    $('#hltDisable').onclick = function() { $('#hltEnabled').checked = false; saveTier(); };
+    tierPreview();
+  }
+
+  function tierPreview() {
+    var note = $('#hlgTierNote');
+    if (note) note.textContent = 'หมวดที่เลือกทั้งหมดเก็บเป็นกติกาเดียว จึงใช้ได้แม้มีสินค้าเป็นพันรายการ โดยไม่ต้องติ๊กและบันทึกทีละชิ้น';
+  }
+
+  function saveTier() {
+    if (!tierDraft) return;
+    var start = $('#hltStart').value, end = $('#hltEnd').value;
+    if (start && end && start > end) { alert('วันสิ้นสุดต้องไม่ก่อนวันเริ่ม'); return; }
+    var productRules = {};
+    Object.keys(tierDraft.rules).forEach(function(id) {
+      var x = tierDraft.products.find(function(pp) { return sku(pp) === id; });
+      if (!x) return;
+      var r = tierDraft.rules[id];
+      var prices = {};
+      for (var n = 1; n <= 3; n++) {
+        var value = r[n];
+        if (value !== null && value !== '' && value !== undefined && (!Number.isSafeInteger(Number(value)) || Number(value) < 0 || Number(value) > Number(x.price))) { alert('ตรวจราคา ' + x.name + ' ขั้น ' + n + ' อีกครั้งค่ะ'); return; }
+        prices[n] = (value === null || value === '' || value === undefined) ? null : Number(value);
+      }
+      productRules[id] = prices;
+    });
+    var groupPercent = {};
+    Object.keys(tierDraft.percent).forEach(function(group) {
+      groupPercent[group] = {};
+      var r = tierDraft.percent[group];
+      for (var n = 1; n <= 3; n++) {
+        var value = r[n];
+        if (value !== null && value !== '' && value !== undefined && (!Number.isSafeInteger(Number(value)) || Number(value) < 0 || ((tierDraft.modes[group] || {})[n] !== 'amount' && Number(value) > 100))) { alert('ส่วนลดต้องเป็นจำนวนเต็มไม่ติดลบ และเปอร์เซ็นต์ไม่เกิน 100'); return; }
+        groupPercent[group][n] = (value === null || value === '' || value === undefined) ? null : Number(value);
+      }
+    });
+    var selectedGroups = Array.from(tierDraft.groups), excludedSkus = Array.from(tierDraft.excluded);
+    if ($('#hltEnabled').checked && !selectedGroups.length && !Object.keys(productRules).length) { alert('เลือกสินค้าหรือหมวดที่ร่วมโปรก่อนค่ะ'); return; }
+    var tiers = {};
+    for (var n = 1; n <= 3; n++) tiers[n] = { price: null, gifts: $('#hltGift' + n).value.trim() };
+    var sizeGifts = {};
+    ['normal', 'large', 'easy', 'maxi'].forEach(function(size) {
+      sizeGifts[size] = {};
+      for (var k = 1; k <= 3; k++) {
+        var el = $('#hltSizeGift-' + size + '-' + k);
+        sizeGifts[size][k] = (el && el.value.trim()) || '';
+      }
+    });
+    var out = {
+      enabled: $('#hltEnabled').checked,
+      name: $('#hltName').value.trim() || 'โปรตามจำนวนชิ้น',
+      types: [], start: start, end: end, tiers: tiers, sizeGifts: sizeGifts,
+      selectedGroups: selectedGroups, excludedSkus: excludedSkus,
+      productRules: productRules, groupPercent: groupPercent,
+      groupModes: tierDraft.modes, freeFrom: Number($('#hltFree').value), coverRemote: $('#hltRemote').checked
+    };
+    try {
+      localStorage.setItem(TIER_KEY, JSON.stringify(out));
+      if (typeof window.renderUnifiedCart === 'function' && $('#page-cart') && $('#page-cart').classList.contains('active')) window.renderUnifiedCart();
+      if (typeof window.renderPromoWrap === 'function') window.renderPromoWrap();
+      if (typeof window.buildGallery === 'function') window.buildGallery();
+      if (typeof window.stickerBuildGallery === 'function') window.stickerBuildGallery();
+      if (window.hlgRefreshCollections) window.hlgRefreshCollections();
+      if (window.hlgDecorateTierGalleries) window.hlgDecorateTierGalleries();
+      adminToast(out.enabled ? 'บันทึกและเปิดโปรแล้ว ✓' : 'ปิดโปรแล้ว ✓');
+      renderTiers();
+    } catch (e) {
+      console.error(e);
+      alert('บันทึกไม่สำเร็จ พื้นที่เบราว์เซอร์อาจเต็มค่ะ');
+    }
+  }
+
+  /* ================= SINGLE-ITEM PRICE EDITOR ================= */
+  var PRICING_KEY = 'hlg_pricing_v1';
+  function roundP(n) { return Math.max(0, Math.round(Number(n) || 0)); }
+  function priceCatalog() {
+    var p = [];
+    try { if (typeof ALL_PATTERNS !== 'undefined') ALL_PATTERNS.forEach(function(x) { if (x._hlgCustomId) return; p.push({ type: 'bag', name: x.name, variant: x.size || '', sizeKey: x.sizeKey, original: Number(x.priceOrig) || 0 }); }); } catch (e) {}
+    try { if (typeof STICKER_PATTERNS !== 'undefined') STICKER_PATTERNS.forEach(function(x) { if (x._hlgCustomId) return; p.push({ type: 'sticker', name: x.name, variant: '', original: Number(x.price) || 0 }); }); } catch (e) {}
+    readCustomProducts().forEach(function(x) {
+      if (x.type === 'bag') p.push({ type: 'bag', name: x.name, variant: x.size || '', sizeKey: x.sizeKey, original: Number(x.price) || 0 });
+      else p.push({ type: 'sticker', name: x.name, variant: '', original: Number(x.price) || 0 });
+    });
+    p.push({ type: 'wallpaper', name: 'Wallpaper Special Set', variant: 'Digital Download', original: 99 });
+    return p;
+  }
+  function loadPricing() {
+    try { var v = JSON.parse(localStorage.getItem(PRICING_KEY) || '{}'); return { base: v.base || {}, promos: Array.isArray(v.promos) ? v.promos : [] }; }
+    catch (e) { return { base: {}, promos: [] }; }
+  }
+  function savePricing(v) { localStorage.setItem(PRICING_KEY, JSON.stringify(v)); }
+  function lookupP(x) { var k = sku(x); return priceCatalog().find(function(p) { return sku(p) === k; }); }
+  function baseP(x, v) {
+    v = v || loadPricing();
+    var p = lookupP(x), key = sku(x), override = v.base[key];
+    return (Number.isSafeInteger(override) && override >= 0) ? override : roundP(p ? p.original : (x._basePrice || x.price || 0));
+  }
+  function activeP(p, now) {
+    if (p.enabled === false) return false;
+    now = now || Date.now();
+    var start = p.start ? Date.parse(p.start + '+07:00') : NaN, end = p.end ? Date.parse(p.end + '+07:00') : NaN;
+    return (!p.start || (Number.isFinite(start) && now >= start)) && (!p.end || (Number.isFinite(end) && now <= end));
+  }
+  function scoreP(p, x) {
+    if (p.target === 'all') return 0.5;
+    if (p.target === 'selected' && Array.isArray(p.skus) && p.skus.indexOf(sku(x)) >= 0) return 2.5;
+    if (p.target === 'type:' + x.type) return 1;
+    var l = lookupP(x);
+    if (p.target === 'size:' + (l && l.sizeKey)) return 2;
+    if (p.target === 'sku:' + sku(x)) return 3;
+    return 0;
+  }
+  function optionsP() {
+    var a = [['all', 'สินค้าทุกชิ้น'], ['type:bag', 'กระเป๋าทุกลาย'], ['size:normal', 'กระเป๋า Normal ทุกลาย'], ['size:large', 'กระเป๋า Large ทุกลาย'], ['size:easy', 'กระเป๋า Easy Bag ทุกลาย'], ['size:maxi', 'กระเป๋า Maxi ทุกลาย'], ['type:sticker', 'สติกเกอร์ทั้งหมด'], ['type:wallpaper', 'Wallpaper']];
+    priceCatalog().forEach(function(x) { a.push(['sku:' + sku(x), x.name + (x.variant ? ' · ' + x.variant : '')]); });
+    return a;
+  }
+  function fmtP(t) { return t ? t.slice(0, 16) : ''; }
+  var editing = -1;
+
+  function pricePreview() {
+    var val = document.getElementById('hpValue'), out = document.getElementById('hpPreview');
+    if (!val || !out) return;
+    var amount = Number(val.value);
+    var mode = (document.getElementById('hpMode') || {}).value;
+    var target = (document.getElementById('hpTarget') || {}).value;
+    var skus = Array.prototype.slice.call(document.querySelectorAll('#hpSkuRows input:checked')).map(function(e) { return e.value; });
+    var example = priceCatalog().find(function(x) { return scoreP({ target: target, skus: skus }, x) > 0; });
+    if (!val.value || !example) { out.textContent = 'เลือกสินค้าและใส่ตัวเลขเพื่อดูตัวอย่าง'; return; }
+    var p = baseP(example);
+    var n = mode === 'fixed' ? amount : mode === 'percent' ? p * (1 - amount / 100) : p - amount;
+    out.textContent = 'ตัวอย่าง ' + example.name + ': ' + p + ' ฿ → ' + roundP(n) + ' ฿ / ชิ้น';
+  }
+
+  function validDateP(v) { return !v || /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(v) && Number.isFinite(Date.parse(v + '+07:00')); }
+
+  function savePromoP() {
+    var root = document.getElementById('pricingManagerContainer');
+    var target = root.querySelector('#hpTarget').value, mode = root.querySelector('#hpMode').value;
+    var raw = root.querySelector('#hpValue').value.trim(), value = Number(raw);
+    var start = root.querySelector('#hpStart').value, end = root.querySelector('#hpEnd').value;
+    if (!raw || !Number.isSafeInteger(value) || value < 0 || (mode === 'percent' && value > 100)) { adminToast('กรุณาใส่ราคา/ส่วนลดเป็นจำนวนเต็มที่ถูกต้อง'); return; }
+    if (!validDateP(start) || !validDateP(end) || (start && end && start > end)) { adminToast('ตรวจช่วงวันเริ่มและวันสิ้นสุดโปรอีกครั้งค่ะ'); return; }
+    var skus = target === 'selected' ? Array.prototype.slice.call(root.querySelectorAll('#hpSkuRows input:checked')).map(function(x) { return x.value; }) : [];
+    if (target === 'selected' && !skus.length) { adminToast('เลือกสินค้าอย่างน้อย 1 ชิ้นค่ะ'); return; }
+    var p = { skus: skus, id: editing >= 0 ? (loadPricing().promos[editing] || {}).id : 'promo_' + Date.now(), target: target, mode: mode, value: value, start: start, end: end, label: root.querySelector('#hpLabel').value.trim() || 'กำลังลดราคา ♡', enabled: true, updated: Date.now() };
+    var v = loadPricing();
+    if (editing >= 0 && v.promos[editing]) v.promos[editing] = p; else v.promos.push(p);
+    editing = -1;
+    savePricing(v);
+    renderPricing();
+    adminToast('บันทึกโปรโมชันแล้ว ✓');
+  }
+
+  function renderBaseP() {
+    var root = document.getElementById('hpBaseRows');
+    if (!root) return;
+    var q = ((document.getElementById('hpSearch') || {}).value || '').toLowerCase(), v = loadPricing();
+    root.innerHTML = priceCatalog().filter(function(x) { return (x.name + ' ' + x.variant).toLowerCase().indexOf(q) >= 0; }).map(function(x) {
+      var k = sku(x);
+      return `<div class="hp-row" data-key="${esc(k)}"><div><b>${esc(x.name)}</b><small>${esc(x.variant)} · ราคาเดิม ${x.original} ฿</small></div><input type="number" min="0" step="1" inputmode="numeric" aria-label="ราคาปกติ ${esc(x.name)}" value="${v.base[k] != null ? v.base[k] : x.original}"><button type="button">บันทึกราคา</button></div>`;
+    }).join('');
+    root.querySelectorAll('.hp-row button').forEach(function(b) {
+      b.onclick = function() {
+        var row = b.closest('.hp-row'), raw = row.querySelector('input').value.trim(), n = Number(raw);
+        if (!/^\d+$/.test(raw) || !Number.isSafeInteger(n)) { adminToast('กรุณาใส่ราคาตั้งแต่ 0 บาทขึ้นไป'); return; }
+        var v = loadPricing();
+        v.base[row.dataset.key] = n;
+        savePricing(v);
+        renderBaseP();
+        adminToast('บันทึกราคาปกติแล้ว ✓');
+      };
+    });
+  }
+
+  function renderPricing() {
+    var root = document.getElementById('pricingManagerContainer');
+    if (!root) return;
+    var v = loadPricing(), opts = optionsP();
+    root.innerHTML = `<div class="hp-intro"><h3>ลดราคาชิ้นเดียว ♡</h3><p><b>แท็บนี้:</b> ลดราคาแต่ละสินค้า เช่น จาก 399 เหลือ 299 บาท พร้อมป้ายลดราคา ส่วนแท็บ “โปรตามจำนวน / ของแถม” ใช้ตั้งราคาเมื่อซื้อครบ 1/2/3 ชิ้น ของแถม และส่งฟรี ทั้งสองแบบเปิดพร้อมกันได้ โดยโปรจำนวนจะคิดจากราคาที่ลูกค้าเห็นในตะกร้า</p><p>ตั้งราคาปกติด้านล่าง แล้วสร้างโปรโดยเลือกว่าใช้กับสินค้าชิ้นเดียว กระเป๋าไซส์หนึ่ง หรือสินค้าทั้งหมวด เลือก “ลดเหลือราคา” ได้ทันที เช่น Normal จาก 399 เหลือ 299 บาท ตั้งวันเริ่มและวันสิ้นสุดตามเวลาไทยได้ หากไม่ใส่วันจะเริ่มทันทีหรือใช้จนกว่าจะปิดโปร</p><p>ขณะนี้ข้อมูลโปรเก็บในเบราว์เซอร์เครื่องนี้เท่านั้น ต้องเชื่อมฐานข้อมูลออนไลน์ก่อน ลูกค้าคนละเครื่องจึงจะเห็นโปรเดียวกัน</p></div>
+ <div class="hp-section"><h3>＋ สร้างโปร</h3><div class="hp-grid">
+ <label>ใช้กับสินค้า<select id="hpTarget">${opts.map(function(o) { return `<option value="${esc(o[0])}">${esc(o[1])}</option>`; }).join('')}<option value="selected">เฉพาะสินค้าที่เลือก...</option></select></label>
+ <div class="hp-selected" id="hpSelected" hidden><b>เลือกสินค้าที่ร่วมโปร</b><div id="hpSkuRows"></div></div><label>วิธีลด<select id="hpMode"><option value="fixed">ลดเหลือราคา (บาท/ชิ้น)</option><option value="amount">ลดจำนวนเงิน (บาท/ชิ้น)</option><option value="percent">ลดเปอร์เซ็นต์ (%)</option></select></label>
+ <label>ตัวเลขราคา / ส่วนลด<input id="hpValue" type="number" min="0" step="1" inputmode="numeric" placeholder="เช่น 299"></label>
+ <label>ข้อความป้ายโปร<input id="hpLabel" type="text" maxlength="60" placeholder="เช่น กระเป๋ากำลังลด ♡"></label>
+ <label>เริ่ม (เวลาไทย; เว้นว่าง = เริ่มทันที)<input id="hpStart" type="datetime-local"></label>
+ <label>สิ้นสุด (เวลาไทย; เว้นว่าง = ปิดเอง)<input id="hpEnd" type="datetime-local"></label></div>
+ <div class="hp-preview" id="hpPreview"></div><button type="button" class="hp-save" id="hpSave">บันทึกโปรโมชัน</button></div>
+ <div class="hp-section"><h3>โปรที่สร้างไว้</h3><div id="hpPromoList">${v.promos.length ? v.promos.map(function(p, i) {
+      var label = opts.find(function(x) { return x[0] === p.target; });
+      var targetName = p.target === 'selected' ? 'สินค้าที่เลือก ' + (p.skus || []).length + ' ชิ้น' : (label ? label[1] : 'สินค้า');
+      return `<div class="hp-promo"><b>${esc(targetName || 'สินค้า')} · ${esc(p.label || 'โปรโมชัน')}</b><small>${p.mode === 'fixed' ? 'เหลือ ' + p.value + ' ฿' : p.mode === 'percent' ? 'ลด ' + p.value + '%' : 'ลด ' + p.value + ' ฿'} / ชิ้น · ${p.start ? esc(p.start.replace('T', ' ')) : 'เริ่มทันที'} – ${p.end ? esc(p.end.replace('T', ' ')) : 'ไม่กำหนดวันจบ'} · ${p.enabled === false ? 'ปิดอยู่' : activeP(p) ? 'กำลังแสดง' : 'รอเวลา / หมดเวลา'}</small><div class="hp-actions"><button type="button" data-action="toggle" data-i="${i}">${p.enabled === false ? 'เปิดโปร' : 'ปิดโปร'}</button><button type="button" data-action="edit" data-i="${i}">แก้ไข</button><button type="button" data-action="delete" data-i="${i}">ลบ</button></div></div>`;
+    }).join('') : 'ยังไม่มีโปรโมชันค่ะ'}</div></div>
+ <div class="hp-section"><h3>ราคาปกติของสินค้า</h3><p>ค้นหาแล้วใส่ราคาปกติใหม่ต่อชิ้น กดบันทึก ระบบจะใช้ราคานี้เมื่อไม่มีโปร</p><input id="hpSearch" type="search" placeholder="ค้นหาสินค้าหรือลาย..."><div id="hpBaseRows"></div></div>`;
+    root.querySelector('#hpSkuRows').innerHTML = priceCatalog().map(function(x) { return `<label class="hp-sku"><input type="checkbox" value="${esc(sku(x))}"><span>${esc(x.name)} ${esc(x.variant)}</span></label>`; }).join('');
+    root.querySelector('#hpTarget').addEventListener('change', function() { root.querySelector('#hpSelected').hidden = root.querySelector('#hpTarget').value !== 'selected'; });
+    ['hpTarget', 'hpMode', 'hpValue', 'hpStart', 'hpEnd'].forEach(function(id) { root.querySelector('#' + id).addEventListener('input', pricePreview); });
+    root.querySelector('#hpSave').onclick = savePromoP;
+    root.querySelector('#hpSearch').addEventListener('input', renderBaseP);
+    root.querySelectorAll('[data-action]').forEach(function(b) {
+      b.onclick = function() {
+        var i = Number(b.dataset.i), vv = loadPricing(), p = vv.promos[i];
+        if (!p) return;
+        if (b.dataset.action === 'delete') { if (!confirm('ลบโปรโมชันนี้ใช่ไหมคะ?')) return; vv.promos.splice(i, 1); }
+        if (b.dataset.action === 'toggle') p.enabled = p.enabled === false;
+        if (b.dataset.action === 'edit') {
+          editing = i;
+          root.querySelector('#hpTarget').value = p.target;
+          root.querySelector('#hpSelected').hidden = p.target !== 'selected';
+          root.querySelectorAll('#hpSkuRows input').forEach(function(e) { e.checked = (p.skus || []).indexOf(e.value) >= 0; });
+          root.querySelector('#hpMode').value = p.mode;
+          root.querySelector('#hpValue').value = p.value;
+          root.querySelector('#hpLabel').value = p.label || '';
+          root.querySelector('#hpStart').value = fmtP(p.start);
+          root.querySelector('#hpEnd').value = fmtP(p.end);
+          root.querySelector('#hpSave').textContent = 'บันทึกการแก้ไขโปร';
+          pricePreview();
+          root.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          return;
+        }
+        savePricing(vv);
+        renderPricing();
+      };
+    });
+    renderBaseP();
+    pricePreview();
+  }
+
+  /* ================= FONT EDITOR ================= */
+  var FONT_KEY = 'hlg_font_settings_v1', FONT_DB = 'hlg_custom_font_v1';
+  function fontSettings() {
+    try { var x = JSON.parse(localStorage.getItem(FONT_KEY) || '{}'); return (x && typeof x === 'object') ? x : {}; }
+    catch (e) { return {}; }
+  }
+  function fontDB() {
+    return new Promise(function(resolve, reject) {
+      var q = indexedDB.open(FONT_DB, 1);
+      q.onupgradeneeded = function() { if (!q.result.objectStoreNames.contains('font')) q.result.createObjectStore('font'); };
+      q.onsuccess = function() { resolve(q.result); };
+      q.onerror = function() { reject(q.error); };
+    });
+  }
+  async function fontBlob(blob) {
+    var db = await fontDB();
+    try {
+      return await new Promise(function(resolve, reject) {
+        var st = db.transaction('font', blob === undefined ? 'readonly' : 'readwrite').objectStore('font');
+        var q = blob === undefined ? st.get('current') : st.put(blob, 'current');
+        q.onsuccess = function() { resolve(q.result); };
+        q.onerror = function() { reject(q.error); };
+      });
+    } finally { db.close(); }
+  }
+  var fontUrl = '';
+  async function applyFont() {
+    var v = fontSettings();
+    var family = ['Opun', 'Tahoma', 'Arial', 'system'].indexOf(v.family) >= 0 ? v.family : 'Opun';
+    var face = '';
+    if (family === 'Opun') face = "'Opun',Tahoma,sans-serif";
+    else if (family === 'system') face = 'system-ui,sans-serif';
+    else face = family + ',sans-serif';
+    if (fontUrl) { URL.revokeObjectURL(fontUrl); fontUrl = ''; }
+    if (v.family === 'custom') {
+      try {
+        var blob = await fontBlob();
+        if (blob) {
+          fontUrl = URL.createObjectURL(blob);
+          var style = $('#hlgCustomFontFace');
+          if (!style) { style = document.createElement('style'); style.id = 'hlgCustomFontFace'; document.head.append(style); }
+          style.textContent = "@font-face{font-family:'HLG Custom';src:url('" + fontUrl + "')}";
+          face = "'HLG Custom',Tahoma,sans-serif";
+        }
+      } catch (e) { console.warn('Custom font unavailable', e); }
+    }
+    document.documentElement.style.setProperty('--hlg-shop-font', face);
+    document.documentElement.style.setProperty('--hlg-font', face);
+    document.documentElement.style.setProperty('--hlg-shop-body-weight', String([300, 400, 500].indexOf(Number(v.body)) >= 0 ? v.body : 400));
+    document.documentElement.style.setProperty('--hlg-shop-head-weight', String([400, 500, 600, 700].indexOf(Number(v.head)) >= 0 ? v.head : 500));
+  }
+
+  function renderFonts() {
+    var p = $('#fontManagerContainer');
+    if (!p) return;
+    var v = fontSettings();
+    p.innerHTML = `<div class="hlg-config"><h3>ฟอนต์ทั้งเว็บไซต์</h3><p>เปลี่ยนชนิดฟอนต์และน้ำหนักข้อความทั่วไปกับข้อความเน้นได้ ลองดูตัวอย่างก่อนบันทึก</p><div class="hlg-grid"><label>ฟอนต์<select id="hlfFamily"><option value="Opun">Opun</option><option value="Tahoma">Tahoma</option><option value="Arial">Arial</option><option value="system">ฟอนต์ระบบ</option><option value="custom">อัปโหลดฟอนต์เอง</option></select></label><label>อัปโหลด .ttf, .otf หรือ .woff2 (สูงสุด 5 MB)<input id="hlfFile" type="file" accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff2"></label><label>ข้อความทั่วไป<select id="hlfBody"><option value="300">บาง</option><option value="400">ปกติ</option><option value="500">กลาง</option></select></label><label>หัวข้อและปุ่ม<select id="hlfHead"><option value="400">ปกติ</option><option value="500">กลาง</option><option value="600">หนาเล็กน้อย</option><option value="700">หนา</option></select></label></div><div class="hlg-font-preview" id="hlfPreview">ตัวอย่างข้อความ: สินค้าน่ารักจาก helloxglitter ♡<br><strong>หัวข้อสำคัญ · โปรโมชันพิเศษ</strong></div><button id="hlfSave">บันทึกฟอนต์</button><p>ฟอนต์ที่อัปโหลดเก็บในเบราว์เซอร์เครื่องนี้ หากต้องการให้ลูกค้าทุกเครื่องเห็นเหมือนกันต้องนำไฟล์ฟอนต์ขึ้นพื้นที่โฮสต์เว็บ</p></div>`;
+    $('#hlfFamily').value = v.family || 'Opun';
+    $('#hlfBody').value = String(v.body || 400);
+    $('#hlfHead').value = String(v.head || 500);
+    function sample() {
+      var f = $('#hlfFamily').value;
+      $('#hlfPreview').style.fontFamily = f === 'custom' ? "'HLG Custom',sans-serif" : f === 'system' ? 'system-ui,sans-serif' : f + ',sans-serif';
+      $('#hlfPreview').style.fontWeight = $('#hlfBody').value;
+      $('#hlfPreview').querySelector('strong').style.fontWeight = $('#hlfHead').value;
+    }
+    ['hlfFamily', 'hlfBody', 'hlfHead'].forEach(function(id) { $('#' + id).onchange = sample; });
+    $('#hlfSave').onclick = async function() {
+      var file = $('#hlfFile').files[0];
+      if (file && (!/\.(ttf|otf|woff2?)$/i.test(file.name) || file.size > 5 * 1024 * 1024)) { alert('ใช้ไฟล์ฟอนต์ .ttf, .otf, .woff หรือ .woff2 ไม่เกิน 5 MB'); return; }
+      var setting = { family: $('#hlfFamily').value, body: Number($('#hlfBody').value), head: Number($('#hlfHead').value) };
+      try {
+        if (file) { await fontBlob(file); setting.family = 'custom'; }
+        else if (setting.family === 'custom' && !(await fontBlob())) { alert('กรุณาอัปโหลดไฟล์ฟอนต์ก่อนค่ะ'); return; }
+        localStorage.setItem(FONT_KEY, JSON.stringify(setting));
+        await applyFont();
+        adminToast('บันทึกฟอนต์แล้ว ✓');
+        renderFonts();
+      } catch (e) {
+        console.error(e);
+        alert('บันทึกฟอนต์ไม่สำเร็จ พื้นที่เบราว์เซอร์อาจเต็ม');
+      }
+    };
+    sample();
+  }
+
+  window.hlgRenderTiers = renderTiers;
+  window.hlgRenderPricing = renderPricing;
+  window.hlgRenderFonts = renderFonts;
+  window.hlgApplyAdminFont = applyFont;
+
+  // Apply the shop font inside the admin portal too (same variable names).
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function() { applyFont(); }, { once: true });
+  else applyFont();
+})();
 
