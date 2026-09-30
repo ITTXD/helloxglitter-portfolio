@@ -3603,9 +3603,40 @@ if(document.readyState!=='loading'){build();update()}
   font:inherit;
   font-size:17px;
   font-weight:900;
-  line-height:1;
-  box-shadow:0 4px 12px rgba(125,54,82,.12);
+  display:flex;
+  align-items:center;
+  justify-content:center;
   cursor:pointer;
+  box-shadow:0 3px 12px rgba(0,0,0,.14);
+  transition:.2s cubic-bezier(0,0,.2,1);
+}
+.v8-inline-delete:hover{
+  background:#fff;
+  transform:scale(1.1);
+  box-shadow:0 6px 18px rgba(0,0,0,.2);
+}
+.v8-inline-remove-img {
+  position:absolute;
+  bottom:8px;
+  left:50%;
+  transform:translateX(-50%);
+  background:rgba(255,255,255,.9);
+  color:#ff4d4f;
+  border:1px solid rgba(255,77,79,.3);
+  border-radius:16px;
+  padding:4px 12px;
+  font-size:13px;
+  font-weight:600;
+  cursor:pointer;
+  z-index:10;
+  box-shadow:0 2px 8px rgba(0,0,0,.15);
+  transition:all .2s;
+  pointer-events:auto;
+}
+.v8-inline-remove-img:hover {
+  background:#ff4d4f;
+  color:#fff;
+  border-color:#ff4d4f;
 }
 .v8-inline-edit-body{
   padding:9px;
@@ -3812,10 +3843,11 @@ async function renderInline(){
   rendering=true;
   
   const a=load().map(normalize);
+  clearUrls();
+
   const imagePromises = a.map(x => (x.hidden&&!isAdmin()) ? Promise.resolve(null) : imageUrl(x));
   const images = await Promise.all(imagePromises);
 
-  clearUrls();
   root.classList.add('v8-inline-preview-grid');
   root.innerHTML='';
 
@@ -3830,7 +3862,7 @@ async function renderInline(){
       card.innerHTML=`
         <button class="v8-inline-delete" type="button" title="${x.hidden?'แสดงพรีวิวอีกครั้ง':'ซ่อนพรีวิวจากลูกค้า'}" aria-label="${x.hidden?'แสดงพรีวิวอีกครั้ง':'ซ่อนพรีวิวจากลูกค้า'}">${x.hidden?'↺':'×'}</button>
         <div class="v8-inline-preview-image" data-image>
-          ${u?`<img src="${u}" alt="${esc(x.name)}">`:`<div class="v8-inline-preview-empty"><strong>＋</strong><span>แตะเพื่อเพิ่มรูป</span></div>`}
+          ${u?`<img src="${u}" alt="${esc(x.name)}"><button class="v8-inline-remove-img" type="button">ลบรูป</button>`:`<div class="v8-inline-preview-empty"><strong>＋</strong><span>แตะเพื่อเพิ่มรูป</span></div>`}
           <input data-file type="file" accept="image/*" hidden>
         </div>
         <div class="v8-inline-edit-body">
@@ -3846,9 +3878,21 @@ async function renderInline(){
 
       const file=card.querySelector('[data-file]');
       card.querySelector('[data-image]').onclick=e=>{
-        if(e.target===file)return;
+        if(e.target===file||e.target.closest('.v8-inline-remove-img'))return;
         file.click()
       };
+      const remImgBtn=card.querySelector('.v8-inline-remove-img');
+      if(remImgBtn){
+        remImgBtn.onclick=async(e)=>{
+          e.stopPropagation();
+          const rows=load().map(normalize),cur=rows[i];if(!cur)return;
+          if(cur.imageKey)await delBlob(cur.imageKey);
+          cur.imageKey='';cur.legacySrc='';
+          rows[i]=cur;save(rows);
+          await renderInline();
+          if(window.showToast)showToast('ลบรูปพรีวิวแล้ว ✓');
+        }
+      }
       file.onchange=async()=>{
         const f=file.files?.[0];if(!f)return;
         const rows=load().map(normalize),cur=rows[i];if(!cur)return;
