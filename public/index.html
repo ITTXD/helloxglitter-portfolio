@@ -16440,5 +16440,22 @@ if(document.readyState==='loading'){
  window.addEventListener('pageshow',maybeRun);
 })();
 </script>
+
+<script id="hlg-force-home-on-load">
+(function(){
+  function forceHome() {
+    if (typeof window.showPage === 'function') {
+      // Force the home page on initial load. Prevents getting stuck on admin view
+      // if the browser's bfcache or state restoration mistakenly restores the admin page.
+      window.showPage('home');
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', forceHome);
+  } else {
+    forceHome();
+  }
+})();
+</script>
 </body>
 </html>
