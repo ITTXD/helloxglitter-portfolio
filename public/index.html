@@ -4756,9 +4756,10 @@ function ensureLogin(){
   const close=()=>{m.classList.remove('show');input.value='';err.textContent=''};
   m.querySelector('.v8-admin-login-cancel').onclick=close;
   m.onclick=e=>{if(e.target===m)close()};
-  const submit=()=>{
+  const submit=async ()=>{
     if(input.value===ADMIN_PASSWORD){
-      setAdmin(True);
+      try{await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:input.value})})}catch(e){}
+      setAdmin(true);
       close();
       if(typeof window.showToast==='function')showToast('เข้าสู่ระบบ Admin แล้ว ✓');
       setTimeout(openAdmin,50)
@@ -4808,7 +4809,7 @@ window.openLoginModal=showLogin;
 window.v8OpenAdminLogin=showLogin;
 
 /* Some legacy files call handleLogin; keep it deterministic and single-owner. */
-window.handleLogin=function(e){
+window.handleLogin=async function(e){
   if(e&&e.preventDefault)e.preventDefault();
   const oldInput=
     document.querySelector('#adminPassword')||
@@ -4816,6 +4817,7 @@ window.handleLogin=function(e){
     document.querySelector('input[type="password"]');
   const v=(oldInput?.value||'').trim();
   if(v===ADMIN_PASSWORD){
+    try{await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:v})})}catch(e){}
     setAdmin(true);
     document.querySelectorAll('#adminLoginModal,.admin-login-modal').forEach(x=>x.classList.remove('show'));
     if(typeof window.showToast==='function')showToast('เข้าสู่ระบบ Admin แล้ว ✓');
@@ -4827,10 +4829,11 @@ window.handleLogin=function(e){
 };
 
 const oldLogout=window.logoutHLG;
-window.logoutHLG=function(){
+window.logoutHLG=async function(){
+  try{await fetch('/api/logout',{method:'POST'})}catch(e){}
   setAdmin(false);
   if(typeof oldLogout==='function'){
-    try{oldLogout.apply(this,arguments)}catch(e){}
+    try{await oldLogout.apply(this,arguments)}catch(e){}
   }
   if(typeof window.showPage==='function')window.showPage('home')
 };
@@ -4840,8 +4843,9 @@ function fixSubmitBooleanBug(){
   const submit=m.querySelector('.v8-admin-login-submit');
   const input=m.querySelector('#v8AdminPasswordClean');
   const err=m.querySelector('#v8AdminLoginErrorClean');
-  submit.onclick=()=>{
+  submit.onclick=async ()=>{
     if(input.value===ADMIN_PASSWORD){
+      try{await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:input.value})})}catch(e){}
       setAdmin(true);
       m.classList.remove('show');
       input.value='';
@@ -7461,9 +7465,7 @@ function itemsHTML(o){let lines=[];if(o.pattern_qtys&&Object.keys(o.pattern_qtys
 const oldRender=window.renderAdminOrders;
 window.renderAdminOrders=function(){oldRender();let root=document.getElementById('adminOrderList');if(!root)return;let orders=getOrders();root.querySelectorAll('.admin-order').forEach(card=>{let idtxt=card.querySelector('.admin-order-id')?.textContent||'';let o=orders.find(x=>idtxt.includes(x.id));if(!o)return;let thumbs=card.querySelector('.admin-order-thumbs');if(thumbs&&!card.querySelector('.v7-order-items'))thumbs.insertAdjacentHTML('afterend',itemsHTML(o));let idx=orders.findIndex(x=>x.id===o.id),track=document.getElementById('at-'+idx);if(track&&!card.querySelector('.v7-confirm-track')){let field=track.closest('.admin-field');let wrap=document.createElement('div');wrap.className='v7-inline-track';field.parentNode.insertBefore(wrap,field);wrap.appendChild(field);let b=document.createElement('button');b.className='admin-btn v7-confirm-track';b.innerHTML='✓ ยืนยัน Tracking';b.onclick=()=>v7ConfirmTracking(idx,b);wrap.appendChild(b)}})}
 window.v7ConfirmTracking=function(idx,btn){let rows=getOrders(),o=rows[idx],inp=document.getElementById('at-'+idx);if(!o||!inp)return;let tr=(inp.value||'').trim();if(!tr){showToast('กรุณาใส่เลข Tracking ก่อนนะคะ');inp.focus();return}o.tracking_number=tr;o.status=Math.max(Number(o.status||0),4);o.tracking_confirmed_at=new Date().toISOString();rows[idx]=o;saveOrders(rows);btn.classList.add('v7-confirmed');btn.innerHTML='✓ ยืนยันแล้ว';showToast('บันทึก Tracking และอัปเดตสถานะแล้ว ✓');setTimeout(()=>renderAdminOrders(),650)}
-// demo rows only when no real order exists
-function seed(){if(window.hlgOrderStore?.active&&!window.hlgOrderStore.ready)return;if(getOrders().length)return;saveOrders([{id:'ORDER-DEMO-01',queue_no:'HLG-001',customer_name:'Demo Customer',customer_phone:'0812345678',customer_address:'Bangkok',status:3,tracking_number:'',created_at:new Date().toISOString(),total_bags:3,pattern_qtys:{'Princess Tote — Pink':2,'Sticker Pack':1},preorder_batch:'Princess Bag — Pre-order รอบ Sep 2026',total_price:450,admin_note:''}])}
-const oldOpen=window.openAdminDashboard;window.openAdminDashboard=function(){seed();oldOpen();setTimeout(()=>renderAdminOrders(),20)};
+// Removed demo seed function to always use Firestore live data
 })();
 </script>
 
