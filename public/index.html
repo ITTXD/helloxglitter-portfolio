@@ -2503,9 +2503,17 @@ function adm(){
 }
 function load(){
   try{
-    const a=JSON.parse(localStorage.getItem(META)||'[]');
-    return Array.isArray(a)?a:[];
-  }catch(e){return []}
+    const val = localStorage.getItem(META);
+    if (val) {
+      const a=JSON.parse(val);
+      if(Array.isArray(a) && a.length > 0) return a;
+    }
+  }catch(e){}
+  return [
+    { target: 'preorder', name: 'กระเป๋าผ้า HLG', sub: 'เลือกลายที่ชอบได้เลย ♡', src: null },
+    { target: 'wallpaper', name: 'Wallpaper Collection', sub: 'Digital item', src: null },
+    { target: 'sticker', name: 'Sticker Collection', sub: 'ดูคอลเลกชันล่าสุด', src: null }
+  ];
 }
 function save(a){localStorage.setItem(META,JSON.stringify(a||[]))}
 function esc(v){return String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
