@@ -17,14 +17,11 @@ const {
   parseLineUserFromRequest,
 } = require('./coupon-service');
 const { sendCouponFlexMessage, sendOrderReceiptFlexMessage } = require('./line-service');
-
-// In-flight slip verification lock set to prevent concurrent duplicate calls to EasySlip
-const inFlightSlipVerifications = new Set();
-function getSlipLockKey(slipData, amount) {
-  if (!slipData) return '';
-  const snippet = slipData.length > 200 ? slipData.slice(-200) : slipData;
-  return `${amount || 0}_${snippet}`;
-}
+const {
+  acquireSlipLock,
+  releaseSlipLock,
+  markTransRefUsed,
+} = require('./slip-lock');
 
 // ==================== FIREBASE INIT ====================
 let db = null;
@@ -531,12 +528,11 @@ async function handleApi(req, res) {
     const totalPrice = body.total_price || 99;
 
     // ตรวจสอบสลิปผ่าน EasySlip API ก่อนบันทึก Database (พร้อมกัน Request ซ้ำซ้อน)
-    const lockKey = getSlipLockKey(body.slip_data, totalPrice);
-    if (lockKey && inFlightSlipVerifications.has(lockKey)) {
+    const lockRes = await acquireSlipLock({ db, slipData: body.slip_data, amount: totalPrice });
+    if (!lockRes.acquired) {
       sendJson(res, 429, { error: 'สลิปนี้กำลังอยู่ระหว่างการตรวจสอบ กรุณารอสักครู่นะคะ' });
       return true;
     }
-    if (lockKey) inFlightSlipVerifications.add(lockKey);
 
     let verifyResult;
     try {
@@ -547,7 +543,7 @@ async function handleApi(req, res) {
         db: db,
       });
     } finally {
-      if (lockKey) inFlightSlipVerifications.delete(lockKey);
+      await releaseSlipLock({ db, lockKey: lockRes.lockKey });
     }
 
     if (!verifyResult.success) {
@@ -588,6 +584,17 @@ async function handleApi(req, res) {
     };
     const docRef = await fsAddDoc('orders', order);
     order._docId = docRef.id;
+
+    if (verifyResult.transRef) {
+      await markTransRefUsed({
+        db,
+        transRef: verifyResult.transRef,
+        orderId,
+        orderType: 'wallpaper',
+        amount: totalPrice,
+      });
+    }
+
     sendJson(res, 201, { success: true, order });
     return true;
   }
@@ -747,12 +754,11 @@ async function handleApi(req, res) {
     const grandTotal = totalPrice + shippingCost;
 
     // ตรวจสอบสลิปผ่าน EasySlip API ก่อนบันทึก Database (พร้อมกัน Request ซ้ำซ้อน)
-    const lockKey = getSlipLockKey(slipData, grandTotal);
-    if (lockKey && inFlightSlipVerifications.has(lockKey)) {
+    const lockRes = await acquireSlipLock({ db, slipData, amount: grandTotal });
+    if (!lockRes.acquired) {
       sendJson(res, 429, { error: 'สลิปนี้กำลังอยู่ระหว่างการตรวจสอบ กรุณารอสักครู่นะคะ' });
       return true;
     }
-    if (lockKey) inFlightSlipVerifications.add(lockKey);
 
     let verifyResult;
     try {
@@ -763,7 +769,7 @@ async function handleApi(req, res) {
         db: db,
       });
     } finally {
-      if (lockKey) inFlightSlipVerifications.delete(lockKey);
+      await releaseSlipLock({ db, lockKey: lockRes.lockKey });
     }
 
     if (!verifyResult.success) {
@@ -833,6 +839,17 @@ async function handleApi(req, res) {
 
     const docRef = await fsAddDoc('orders', order);
     order._docId = docRef.id;
+
+    if (verifyResult.transRef) {
+      await markTransRefUsed({
+        db,
+        transRef: verifyResult.transRef,
+        orderId,
+        orderType: 'sticker',
+        amount: grandTotal,
+      });
+    }
+
     sendJson(res, 201, { success: true, order, coupon: issuedCoupon });
     return true;
   }
@@ -890,12 +907,11 @@ async function handleApi(req, res) {
     const grandTotal = discountedPrice + shippingCost;
 
     // ตรวจสอบสลิปผ่าน EasySlip API ก่อนบันทึก Database (พร้อมกัน Request ซ้ำซ้อน)
-    const lockKey = getSlipLockKey(slipData, grandTotal);
-    if (lockKey && inFlightSlipVerifications.has(lockKey)) {
+    const lockRes = await acquireSlipLock({ db, slipData, amount: grandTotal });
+    if (!lockRes.acquired) {
       sendJson(res, 429, { error: 'สลิปนี้กำลังอยู่ระหว่างการตรวจสอบ กรุณารอสักครู่นะคะ' });
       return true;
     }
-    if (lockKey) inFlightSlipVerifications.add(lockKey);
 
     let verifyResult;
     try {
@@ -906,7 +922,7 @@ async function handleApi(req, res) {
         db: db,
       });
     } finally {
-      if (lockKey) inFlightSlipVerifications.delete(lockKey);
+      await releaseSlipLock({ db, lockKey: lockRes.lockKey });
     }
 
     if (!verifyResult.success) {
@@ -969,6 +985,17 @@ async function handleApi(req, res) {
 
     const docRef = await fsAddDoc('orders', order);
     order._docId = docRef.id;
+
+    if (verifyResult.transRef) {
+      await markTransRefUsed({
+        db,
+        transRef: verifyResult.transRef,
+        orderId,
+        orderType: 'bag',
+        amount: grandTotal,
+      });
+    }
+
     sendJson(res, 201, { success: true, order });
     return true;
   }

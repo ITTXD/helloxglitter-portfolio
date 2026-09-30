@@ -12,39 +12,16 @@ function cleanBase64(base64Str) {
   return base64Str.trim();
 }
 
+const { isTransRefUsed } = require('./slip-lock');
+
 /**
  * Check if the transaction reference already exists in Firestore
  * @param {object} db - Firestore instance
  * @param {string} transRef - Bank transaction reference ID
  */
 async function checkDuplicateTransRef(db, transRef) {
-  if (!db || !transRef) return false;
-  try {
-    const { collection, getDocs, query, where, limit } = require('firebase/firestore');
-
-    // 1. Check in 'orders' collection
-    const q1 = query(
-      collection(db, 'orders'),
-      where('slip_trans_ref', '==', transRef),
-      limit(1)
-    );
-    const snap1 = await getDocs(q1);
-    if (!snap1.empty) return true;
-
-    // 2. Check in 'sticker_orders' collection
-    const q2 = query(
-      collection(db, 'sticker_orders'),
-      where('slip_trans_ref', '==', transRef),
-      limit(1)
-    );
-    const snap2 = await getDocs(q2);
-    if (!snap2.empty) return true;
-
-    return false;
-  } catch (err) {
-    console.error('[SLIP] Duplicate check error:', err.message);
-    return false;
-  }
+  if (!transRef) return false;
+  return isTransRefUsed({ db, transRef });
 }
 
 function extractAmountFromData(obj) {

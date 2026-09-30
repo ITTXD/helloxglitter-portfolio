@@ -100,6 +100,10 @@ Module.prototype.require = function(request) {
           Object.assign(inMemoryOrders[id], data);
         }
       },
+      setDoc: async (docRef, data) => {
+        const id = docRef._id;
+        inMemoryOrders[id] = { ...data };
+      },
       deleteDoc: async (docRef) => {
         delete inMemoryOrders[docRef._id];
       },
