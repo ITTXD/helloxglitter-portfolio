@@ -34,6 +34,7 @@
     </div>
     <div class="topbar-tabs">
       <button class="topbar-tab active" data-view="orders" onclick="switchView('orders')"><i class="ti ti-shopping-bag"></i> ออเดอร์</button>
+      <button class="topbar-tab" data-view="products" onclick="switchView('products')"><i class="ti ti-box"></i> สินค้าและโปรโมชั่น</button>
       <button class="topbar-tab" data-view="summary" onclick="switchView('summary')"><i class="ti ti-file-description"></i> สรุปยอด</button>
       <button class="topbar-tab" data-view="print" onclick="switchView('print')"><i class="ti ti-printer"></i> พิมพ์ใบแปะหน้าพัสดุ</button>
       <button class="topbar-tab" data-view="tracking" onclick="switchView('tracking')"><i class="ti ti-truck"></i> ใส่เลขพัสดุ</button>
@@ -126,6 +127,15 @@
     </div>
   </div>
   </div><!-- /viewOrders -->
+
+  <!-- VIEW: PRODUCTS & PROMOS -->
+  <div id="viewProducts" class="admin-view hidden">
+    <div style="padding:20px;max-width:1000px;margin:0 auto">
+      <h2><i class="ti ti-box"></i> จัดการสินค้าและโปรโมชั่น</h2>
+      <p style="color:#807078;margin-top:8px">กำลังรอย้ายระบบจัดการสินค้า (กระเป๋า, สติ๊กเกอร์) และการตั้งราคาขั้นบันไดมาจากหน้าร้าน...</p>
+      <div id="productManagerContainer"></div>
+    </div>
+  </div>
 
   <!-- VIEW: SUMMARY -->
   <div id="viewSummary" class="admin-view hidden">
