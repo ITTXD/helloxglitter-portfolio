@@ -2602,28 +2602,7 @@ function targetOpts(v){
 }
 
 async function renderCards(){
-  clearUrls();
-  const root=document.querySelector('.v5-products');
-  if(!root)return;
-  const a=load();
-  root.innerHTML='';
-  for(let i=0;i<a.length;i++){
-    const x=a[i],u=await imgUrl(x),b=document.createElement('button');
-    b.type='button';b.className='v5-product';
-    b.innerHTML=`${u?`<img src="${u}" alt="${esc(x.name)}">`:`<div class="v5-product-ph">♡</div>`}
-      <div class="v5-product-info"><b>${esc(x.name)}</b><span>${esc(x.sub||'')}</span></div>
-      ${adm()?'<span class="v8-rec-adminmark">แก้ไข</span>':''}`;
-    b.onclick=()=>adm()?openEditor(i):openCard(i);
-    root.appendChild(b)
-  }
-  let add=document.getElementById('v8RecAdd');
-  if(!add){
-    add=document.createElement('button');add.id='v8RecAdd';add.type='button';add.className='v8-rec-add';
-    root.insertAdjacentElement('afterend',add)
-  }
-  add.textContent='＋ เพิ่มพรีวิว';
-  add.style.display=adm()?'block':'none';
-  add.onclick=addCard
+  /* Replaced by renderInline in v8-inline-preview-editor-js */
 }
 
 function ensureModal(){
@@ -5522,12 +5501,7 @@ if(document.readyState!=='loading'){
     </div>
     <div class="v5-banner" id="v5Banner"><div class="v5-banner-track" id="v5BannerTrack"></div><div class="v5-banner-dots" id="v5BannerDots"></div></div>
     <div class="v5-section-head"><h2>ไฮไลท์สตอรี่ ✨</h2></div>
-    <div class="v5-stories">
-      <button class="v5-story" onclick="showPage('preorder')"><div class="v5-story-ring"><div class="v5-story-placeholder">👜</div></div><span>กระเป๋า</span></button>
-      <button class="v5-story" onclick="showPage('wallpaper')"><div class="v5-story-ring"><div class="v5-story-placeholder">🎨</div></div><span>Wallpaper</span></button>
-      <button class="v5-story" onclick="showPage('sticker')"><div class="v5-story-ring"><div class="v5-story-placeholder">✨</div></div><span>Sticker</span></button>
-      <button class="v5-story" onclick="openCoupons()"><div class="v5-story-ring"><div class="v5-story-placeholder">🎟️</div></div><span>คูปอง</span></button>
-    </div>
+    <div class="v5-stories"></div>
     <div class="v5-section-head"><h2>ค้นหาสินค้า 🔎</h2></div>
     <div class="v5-quick"><div class="v5-quick-title">กำลังหาอะไรอยู่คะ? ค้นหาชื่อสินค้า / หมวด / Pre-order ได้เลย</div><div class="v5-quick-row"><input id="v7ProductSearch" type="search" placeholder="เช่น กระเป๋า / Sticker / Princess" oninput="v7SearchProducts()"><button onclick="v7SearchProducts(true)">ค้นหา</button></div><div id="v7SearchResults" class="v7-search-results"></div></div>
 
@@ -5548,11 +5522,7 @@ if(document.readyState!=='loading'){
     </section>
 
     <div class="v5-section-head"><h2>กลุ่มที่แนะนำ 💗</h2><button onclick="showPage('preorder')">ดูทั้งหมด</button></div>
-    <div class="v5-products">
-      <button class="v5-product" onclick="showPage('preorder')"><div class="v5-product-ph">👜</div><div class="v5-product-info"><b>กระเป๋าผ้า HLG</b><span>เลือกลายที่ชอบได้เลย ♡</span></div></button>
-      <button class="v5-product" onclick="showPage('wallpaper')"><div class="v5-product-ph">🎀</div><div class="v5-product-info"><b>Wallpaper Collection</b><span>Digital item</span></div></button>
-      <button class="v5-product" onclick="showPage('sticker')"><div class="v5-product-ph">⭐</div><div class="v5-product-info"><b>Sticker Collection</b><span>ดูคอลเลกชันล่าสุด</span></div></button>
-    </div>
+    <div class="v5-products"></div>
     <div id="v5AdminHomeEditor" class="v5-admin-banner" style="display:none"><h4>จัดการ Banner หน้าแรก</h4><div id="v5BannerEditors"></div><button class="v5-add-banner" onclick="v5AddBanner()">＋ เพิ่ม Banner</button><div class="v5-save-state" id="v5SaveState"></div></div><div id="v6HomeTools" class="v6-home-editbox"><h4>แก้หน้าแรกโดยตรง</h4><div class="v6-story-admin"><button onclick="v6AddStory()">＋ เพิ่ม Story</button><button onclick="v6EditStory(0)">แก้ Story 1</button><button onclick="v6EditStory(1)">แก้ Story 2</button><button onclick="v6EditStory(2)">แก้ Story 3</button><button onclick="v6EditStory(3)">แก้ Story 4</button></div><div style="height:8px"></div><div class="v6-product-admin"><button onclick="v6EditProduct(0)">👜 แก้การ์ดกระเป๋า</button><button onclick="v6EditProduct(1)">🎨 แก้ Wallpaper</button><button onclick="v6EditProduct(2)">✨ แก้ Sticker</button></div></div>
   </div>
 </div>
@@ -7321,10 +7291,6 @@ function save(k,v){localStorage.setItem(k,JSON.stringify(v))}
 function admin(){return sessionStorage.getItem('hlg_admin_session_v2')==='1'}
 function esc(s){return String(s||'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 window.v6RenderHome=function(){
- let stories=load(STORY_KEY,storyDefaults), sr=document.querySelector('.v5-stories');
- if(sr) sr.innerHTML=stories.map((x,i)=>`<button class="v5-story" onclick="${admin()?`v6EditStory(${i})`:(x.target==='coupon'?`openCoupons()`:`showPage('${x.target||'home'}')`)}"><div class="v5-story-ring">${x.src?(x.type==='video'?`<video src="${x.src}" muted playsinline style="width:100%;height:100%;border-radius:50%;object-fit:cover;border:3px solid #fff"></video>`:`<img src="${x.src}">`):`<div class="v5-story-placeholder">${['👜','🎨','✨','🎟️'][i]||'♡'}</div>`}</div><span>${esc(x.name)}</span></button>`).join('');
- let prods=load(PRODUCT_KEY,productDefaults), pr=document.querySelector('.v5-products');
- if(pr) pr.innerHTML=prods.map((x,i)=>`<button class="v5-product" onclick="${admin()?`v6EditProduct(${i})`:`showPage('${x.target||'home'}')`}">${x.src?`<img src="${x.src}" alt="${esc(x.name)}">`:`<div class="v5-product-ph">${['👜','🎀','⭐'][i]||'♡'}</div>`}<div class="v5-product-info"><b>${esc(x.name)}</b><span>${esc(x.sub)}</span></div></button>`).join('');
  v6ApplyMode();
 }
 window.v6ApplyMode=function(){let a=admin();document.getElementById('v6HomeTools')?.classList.toggle('show',a);let be=document.getElementById('v5AdminHomeEditor');if(be)be.style.display=a?'block':'none';document.querySelectorAll('.notice-title,.notice-body,.banner-title,.banner-body,.hero-tag,.hero-sub').forEach(el=>{el.contentEditable=a?'true':'false';el.classList.toggle('v6-editable',a)});}
@@ -9717,12 +9683,19 @@ async function render(){
   const rt=root();if(!rt)return;
   const token=++renderToken;
   renderLock=true;
+  
+  const a=load();
+  const coverPromises = a.map(st => refUrl(st.cover, circleUrls));
+  const covers = await Promise.all(coverPromises);
+  
+  if(token!==renderToken){renderLock=false;return}
+
   circleUrls.forEach(u=>URL.revokeObjectURL(u));circleUrls=[];
   rt.innerHTML='';
-  const a=load();
+
   for(let i=0;i<a.length;i++){
     const st=a[i],b=document.createElement('button');b.type='button';b.className='v5-story';b.dataset.v8clean='1';b.dataset.idx=i;
-    const u=await refUrl(st.cover,circleUrls);if(token!==renderToken){renderLock=false;return}
+    const u=covers[i];
     b.innerHTML=`<div class="v5-story-ring">${u?`<img src="${u}" alt="">`:`<div class="v5-story-placeholder">♡</div>`}</div><span>${escapeHtml(st.name)}</span>`;
     rt.appendChild(b)
   }
@@ -9902,9 +9875,9 @@ window.v8StoryNext=next;
 window.v8StoryPrev=prev;
 
 const oldHome=window.v6RenderHome;
-window.v6RenderHome=function(){try{if(typeof oldHome==='function')oldHome()}catch(e){};setTimeout(()=>{bindRoot();render()},40)};
+window.v6RenderHome=function(){try{if(typeof oldHome==='function')oldHome()}catch(e){};setTimeout(()=>{bindRoot();render()},0)};
 const oldShow=window.showPage;
-window.showPage=function(){const r=oldShow&&oldShow.apply(this,arguments);setTimeout(()=>{bindRoot();render()},45);return r};
+window.showPage=function(){const r=oldShow&&oldShow.apply(this,arguments);setTimeout(()=>{bindRoot();render()},0);return r};
 
 document.addEventListener('DOMContentLoaded',async()=>{
   document.querySelectorAll('#v8StoryAdmin,#v8StableStoryModal,#v8StoryFinalModal').forEach(x=>x.remove());
