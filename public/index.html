@@ -3815,15 +3815,18 @@ async function renderInline(){
   const root=document.querySelector('.v5-products');
   if(!root||rendering)return;
   rendering=true;
+  
+  const a=load().map(normalize);
+  const imagePromises = a.map(x => (x.hidden&&!isAdmin()) ? Promise.resolve(null) : imageUrl(x));
+  const images = await Promise.all(imagePromises);
+
   clearUrls();
   root.classList.add('v8-inline-preview-grid');
   root.innerHTML='';
 
-  const a=load().map(normalize);
-
   for(let i=0;i<a.length;i++){
     const x=a[i];if(x.hidden&&!isAdmin())continue;
-    const u=await imageUrl(x);
+    const u=images[i];
     const card=document.createElement('div');
     card.className='v8-inline-preview-card '+(isAdmin()?'admin':'customer')+(x.hidden?' v8-inline-hidden':'');
     card.dataset.v8InlinePreview='1';
@@ -3954,7 +3957,7 @@ const prevShow=window.showPage;
 if(typeof prevShow==='function'){
   window.showPage=function(){
     const r=prevShow.apply(this,arguments);
-    setTimeout(renderInline,90);
+    setTimeout(renderInline,0);
     return r
   }
 }
@@ -3962,13 +3965,13 @@ const prevHome=window.v6RenderHome;
 if(typeof prevHome==='function'){
   window.v6RenderHome=function(){
     try{prevHome.apply(this,arguments)}catch(e){}
-    setTimeout(renderInline,90)
+    setTimeout(renderInline,0)
   }
 }
 
-document.addEventListener('DOMContentLoaded',()=>setTimeout(renderInline,100));
-window.addEventListener('pageshow',()=>setTimeout(renderInline,100));
-if(document.readyState!=='loading')setTimeout(renderInline,100);
+document.addEventListener('DOMContentLoaded',()=>setTimeout(renderInline,0));
+window.addEventListener('pageshow',()=>setTimeout(renderInline,0));
+if(document.readyState!=='loading')setTimeout(renderInline,0);
 })();
 </script>
 
@@ -7886,76 +7889,6 @@ document.addEventListener('DOMContentLoaded',function(){
  window.v8SetLang=l=>{localStorage.setItem(LANG_KEY,l==='en'?'en':'th');applyLang()};
  window.applyLang=function(){ensureLangSwitch();translateExact(document)};
 
- /* Recommended cards */
- function destinationLabel(t){
-   return ({preorder:'กระเป๋า / Bag',sticker:'Sticker',wallpaper:'Wallpaper',tracking:'เช็กออเดอร์',home:'Home'})[t]||t||'Home'
- }
- window.v8GoRecommended=function(i){
-   const x=load()[i];if(!x)return;
-   if(x.url){let u=x.url.trim();if(u&&!/^https?:\/\//i.test(u))u='https://'+u;window.open(u,'_blank','noopener')}
-   else if(typeof showPage==='function')showPage(x.target||'home')
- }
- window.v8AddRecommended=function(){
-   if(!admin())return;
-   const a=load();a.push({name:'พรีวิวใหม่',sub:'แตะเพื่อดูสินค้า ♡',target:'preorder',src:''});save(a);
-   renderRecommended();v8EditRecommended(a.length-1)
- }
- window.v8DeleteRecommended=function(i){
-   if(!admin()||!confirm('ลบพรีวิวนี้ใช่ไหมคะ?'))return;
-   const a=load();a.splice(i,1);save(a);renderRecommended();
-   if(window.showToast)showToast('ลบพรีวิวแล้ว')
- }
- window.v8EditRecommended=function(i){
-   if(!admin())return;
-   const a=load(),x=a[i]||{name:'พรีวิวใหม่',sub:'',target:'preorder',src:''};
-   if(typeof modal!=='function' && typeof window.v6EditProduct==='function'){window.v6EditProduct(i);return}
-   // use existing V6 modal DOM directly because modal() is closure-scoped.
-   const md=document.getElementById('v6EditModal'),body=document.getElementById('v6ModalBody'),
-         title=document.getElementById('v6ModalTitle'),hint=document.getElementById('v6ModalHint'),saveBtn=document.getElementById('v6ModalSave');
-   if(!md||!body)return;
-   title.textContent='แก้พรีวิวในกลุ่มที่แนะนำ';
-   hint.textContent='เปลี่ยนรูป ชื่อ ข้อความ และหน้าที่ลูกค้าจะไปเมื่อกด';
-   body.innerHTML=`<div class="v6-field"><label>ชื่อพรีวิว</label><input id="v8rName" value="${esc(x.name)}"></div>
-    <div class="v6-field"><label>ข้อความรอง</label><input id="v8rSub" value="${esc(x.sub||'')}"></div>
-    <div class="v6-field"><label>กดแล้วไปหน้า</label><select id="v8rTarget">
-      <option value="preorder">กระเป๋า / หน้าสั่งซื้อ</option><option value="sticker">Sticker</option><option value="wallpaper">Wallpaper</option>
-      <option value="tracking">เช็กออเดอร์</option><option value="home">Home</option></select></div>
-    <div class="v6-field"><label>หรือใส่ลิงก์เว็บไซต์อื่น (ถ้าใส่ จะใช้ลิงก์นี้แทน)</label><input id="v8rUrl" value="${esc(x.url||'')}" placeholder="https://..."></div>
-    <label class="v6-upload">🖼️ เลือกรูปพรีวิว<input id="v8rFile" type="file" accept="image/*"></label>
-    <img id="v8rPreview" class="v6-preview ${x.src?'show':''}" src="${x.src||''}">
-    <div class="v6-actions" style="margin-top:10px"><button type="button" class="v8-rec-delete" onclick="v8DeleteRecommended(${i});v6CloseModal()">✕ ลบพรีวิว</button></div>`;
-   document.getElementById('v8rTarget').value=x.target||'preorder';
-   document.getElementById('v8rFile').onchange=e=>{
-     const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{e.target.dataset.data=rd.result;const im=document.getElementById('v8rPreview');im.src=rd.result;im.classList.add('show')};rd.readAsDataURL(f)
-   };
-   saveBtn.onclick=()=>{
-     x.name=document.getElementById('v8rName').value.trim()||'สินค้า';
-     x.sub=document.getElementById('v8rSub').value.trim();
-     x.target=document.getElementById('v8rTarget').value;
-     x.url=document.getElementById('v8rUrl').value.trim();
-     const f=document.getElementById('v8rFile');if(f.dataset.data)x.src=f.dataset.data;
-     a[i]=x;save(a);v6CloseModal();renderRecommended();if(window.showToast)showToast('บันทึกพรีวิวแล้ว ✓')
-   };
-   md.classList.add('show')
- }
- window.renderRecommended=function(){
-   const pr=document.querySelector('.v5-products');if(!pr)return;
-   const a=load(),adm=admin(),en=lang()==='en';
-   pr.innerHTML=a.map((x,i)=>`<button class="v5-product" type="button" onclick="${adm?`v8EditRecommended(${i})`:`v8GoRecommended(${i})`}">
-     ${x.src?`<img src="${x.src}" alt="${esc(x.name)}">`:`<div class="v5-product-ph">${['👜','🎀','⭐','♡','✦'][i%5]}</div>`}
-     <div class="v5-product-info"><b>${esc(x.name)}</b><span>${esc(x.sub||'')}</span></div>
-     ${adm?`<span class="v8-rec-adminmark">แก้ไข</span>`:''}
-   </button>`).join('');
-   let add=document.getElementById('v8RecAdd');
-   if(!add){add=document.createElement('button');add.id='v8RecAdd';add.type='button';add.className='v8-rec-add';pr.insertAdjacentElement('afterend',add)}
-   add.textContent=en?'＋ Add preview':'＋ เพิ่มพรีวิว';
-   add.onclick=v8AddRecommended;
-   add.style.display=adm?'block':'none'
- }
-
- // Keep compatibility with older editor calls.
- window.v6EditProduct=window.v8EditRecommended;
- window.v6AddProduct=window.v8AddRecommended;
 
  const prevV6=window.v6RenderHome;
  window.v6RenderHome=function(){
