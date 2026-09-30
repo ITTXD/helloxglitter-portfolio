@@ -27,3 +27,15 @@ The user wants to continue with **Ticket 02 (Extract Product & Promo Management)
    - Remove the old `adminPanel-pricing` form from `public/index.html`.
 3. Verify `/api/settings/storefront` is correctly saving configurations.
 4. Run tests, commit, mark Ticket 02 as DONE, and proceed to Ticket 03!
+
+---
+
+## 🎟️ Ticket 03 (Extract Coupon Management)
+**Goal:** Move the storefront's coupon generator and manager (`adminPanel-coupons`) into the `/admin/` portal.
+**Details:**
+Currently, `v8-coupon-admin` injects a heavy admin panel into `public/index.html` (around line 16088).
+1. Create a "Coupons" tab in `/admin/index.html` (e.g., `<button class="topbar-tab" data-view="coupons" onclick="switchView('coupons')">...`).
+2. Create `<div id="viewCoupons" class="admin-view hidden">` inside `/admin/index.html`.
+3. Migrate the coupon generation and management logic from `v8-coupon-admin` to `public/admin/admin.js`.
+4. The storefront still needs the API call to claim/validate coupons (`/api/coupons/validate`), so do NOT delete customer-facing logic! Only move the UI for generating and viewing coupons.
+5. Delete the admin HTML/JS for coupons from `public/index.html`.
