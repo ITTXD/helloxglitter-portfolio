@@ -43,6 +43,18 @@
   #pricingManagerContainer .hp-selected { margin: 6px 0; font-size: 12px; }
   #pricingManagerContainer .hp-sku { display: flex; gap: 6px; align-items: center; font-weight: 500; font-size: 12px; }
   @media (max-width: 650px) { .hlg-grid { grid-template-columns: 1fr; } .hlt-product-line { grid-template-columns: 22px 1fr 1fr 1fr; } .hlt-product-line span { grid-column: 2 / -1; } #pricingManagerContainer .hp-grid { grid-template-columns: 1fr; } #pricingManagerContainer .hp-row { grid-template-columns: 1fr 90px; } }
+
+  /* Coupon campaign editor (migrated from the storefront). */
+  .hlg-coupon-admin { max-width: 850px; margin: auto; padding: 20px; border: 1px solid #efd2df; border-radius: 19px; background: #fff9fc; color: #6c4b5d; box-shadow: 0 9px 25px #a84e7514; }
+  .hlg-coupon-admin h3 { margin: 0 0 8px; color: #aa4270; font-size: 18px; }
+  .hlg-coupon-admin p { font-size: 12px; line-height: 1.6; }
+  .hlg-coupon-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .hlg-coupon-admin label { display: block; margin: 8px 0; font-size: 12px; color: #78536a; }
+  .hlg-coupon-admin input, .hlg-coupon-admin select { box-sizing: border-box; display: block; width: 100%; height: 41px; margin-top: 5px; padding: 8px 10px; border: 1px solid #e7c6d7; border-radius: 10px; background: #fff; color: #634757; font: inherit; font-size: 14px; }
+  .hlg-coupon-admin button { border: 0; border-radius: 10px; background: #bd4d7c; color: #fff; padding: 10px 17px; font: inherit; font-size: 13px; cursor: pointer; }
+  .hlg-coupon-preview { margin: 14px 0; padding: 15px; border: 1px dashed #dd9cb7; border-radius: 13px; background: #fff; color: #755364; line-height: 1.7; font-size: 13px; }
+  .hlg-coupon-status { padding: 11px 13px; border-radius: 11px; background: #fff0f5; color: #9b4a70; font-size: 12px; }
+  @media (max-width: 600px) { .hlg-coupon-admin { padding: 15px; } .hlg-coupon-grid { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -72,6 +84,7 @@
     <div class="topbar-tabs">
       <button class="topbar-tab active" data-view="orders" onclick="switchView('orders')"><i class="ti ti-shopping-bag"></i> ออเดอร์</button>
       <button class="topbar-tab" data-view="products" onclick="switchView('products')"><i class="ti ti-box"></i> สินค้าและโปรโมชั่น</button>
+      <button class="topbar-tab" data-view="coupons" onclick="switchView('coupons')"><i class="ti ti-ticket"></i> คูปอง</button>
       <button class="topbar-tab" data-view="summary" onclick="switchView('summary')"><i class="ti ti-file-description"></i> สรุปยอด</button>
       <button class="topbar-tab" data-view="print" onclick="switchView('print')"><i class="ti ti-printer"></i> พิมพ์ใบแปะหน้าพัสดุ</button>
       <button class="topbar-tab" data-view="tracking" onclick="switchView('tracking')"><i class="ti ti-truck"></i> ใส่เลขพัสดุ</button>
@@ -186,6 +199,15 @@
         <h3><i class="ti ti-typography"></i> ฟอนต์ทั้งเว็บไซต์</h3>
         <div id="fontManagerContainer"></div>
       </section>
+    </div>
+  </div>
+
+  <!-- VIEW: COUPONS -->
+  <div id="viewCoupons" class="admin-view hidden">
+    <div style="padding:20px;max-width:1000px;margin:0 auto">
+      <h2><i class="ti ti-ticket"></i> กติกาแคมเปญคูปอง</h2>
+      <p style="color:#807078;margin-top:8px">ตั้งเงื่อนไขการแจกคูปอง (ซื้อ Sticker ครบยอด → รับส่วนลดกระเป๋า) การบันทึกจะลงฐานข้อมูลกลางทันที</p>
+      <div id="couponManagerContainer"></div>
     </div>
   </div>
 

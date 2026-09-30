@@ -16112,24 +16112,7 @@ const APPLIED_CPN_KEY='hlg_applied_coupon_v1';
 const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
 const admin=()=>{try{return typeof isAdmin==='function'&&isAdmin()}catch(e){return false}};
 
-const defaults={
-  title:'ซื้อ Sticker รับคูปองกระเป๋า',
-  thresholdSatang:30090,
-  discountSatang:10000,
-  expiresAt:'2026-12-31T23:59',
-  earnCategory:'sticker',
-  redeemCategory:'bag',
-  maxUses:1
-};
-
-function baht(n){return (Number(n||0)/100).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})}
-function satang(raw){
-  const v=String(raw||'').trim();
-  if(!/^\d+(?:\.\d{1,2})?$/.test(v))return null;
-  const [whole,decimal='']=v.split('.');
-  const amount=Number(whole)*100+Number(decimal.padEnd(2,'0'));
-  return Number.isSafeInteger(amount)?amount:null;
-}
+// Coupon campaign editor moved to /admin/ (public/admin/admin.js → window.hlgRenderCoupons).
 
 // ── LINE Session Helpers ──
 function getLineUser(){
@@ -16157,59 +16140,13 @@ function setLineUser(u){
 }
 
 // ── Campaign Helpers ──
-let cachedCampaign=null;
-async function fetchCampaign(){
-  try{
-    const res=await fetch('/api/coupons/campaign');
-    if(res.ok){
-      const data=await res.json();
-      if(data.campaign){
-        cachedCampaign=data.campaign;
-        localStorage.setItem(KEY,JSON.stringify(data.campaign));
-        return data.campaign;
-      }
-    }
-  }catch(e){}
-  try{
-    const v=JSON.parse(localStorage.getItem(KEY)||'null');
-    if(v&&typeof v==='object')return {...defaults,...v};
-  }catch(e){}
-  return {...defaults};
-}
 
-function loadLocalCampaign(){
-  if(cachedCampaign)return cachedCampaign;
-  try{
-    const v=JSON.parse(localStorage.getItem(KEY)||'null');
-    return v&&typeof v==='object'?{...defaults,...v}:defaults;
-  }catch(e){return {...defaults}}
-}
-
-// ── Admin Panel Integration ──
-function ensure(){
-  const tabs=$('#page-admin .admin-tabs'),anchor=$('#adminPanel-store');
-  if(!tabs||!anchor)return;
-  let tab=$('#hlgCouponAdminTab');
-  if(!tab){
-    tab=document.createElement('button');
-    tab.id='hlgCouponAdminTab';tab.type='button';tab.className='admin-tab';
-    tab.dataset.adminTab='coupons';tab.textContent='🎟️ คูปอง';
-    tab.onclick=()=>switchAdminTab('coupons',tab);
-    tabs.append(tab);
-  }
-  if(!$('#adminPanel-coupons')){
-    const panel=document.createElement('section');
-    panel.id='adminPanel-coupons';panel.className='admin-panel';
-    anchor.insertAdjacentElement('afterend',panel);
-  }
-}
-
-async function renderAdmin(){
-  if(!admin())return;
-  ensure();
+// NOTE: legacy coupon campaign editor moved to /admin/ — this dead body is removed in ticket 05.
+async function __removedCouponAdmin(){
+  return;
   const panel=$('#adminPanel-coupons');
   if(!panel)return;
-  const v=await fetchCampaign();
+  const v=null;
   panel.innerHTML=`<div class="hlg-coupon-admin">
     <h3>🎟️ ตั้งกติกาแคมเปญคูปอง (เชื่อมฐานข้อมูลกลาง)</h3>
     <p>เงื่อนไขระบบ: ลูกค้าซื้อสินค้าหมวด Sticker ครบยอดที่กำหนด เมื่อร้านยืนยันการชำระเงินแล้ว ระบบจะออกคูปองส่วนลดสำหรับสั่งซื้อกระเป๋า 1 ใบต่อออเดอร์ ผูกกับบัญชี LINE ของลูกค้าโดยอัตโนมัติ</p>
@@ -16613,14 +16550,6 @@ if(typeof originalRenderUnifiedCart==='function'){
   };
 }
 
-// ── Admin Tab Switch Hook ──
-const oldSwitch=window.switchAdminTab;
-window.switchAdminTab=function(tab,button){
-  ensure();
-  const result=oldSwitch?.apply(this,arguments);
-  if(tab==='coupons')renderAdmin();
-  return result;
-};
 
 async function initLineLiff(){
   try{
@@ -16655,9 +16584,7 @@ async function initLineLiff(){
 }
 
 function boot(){
-  ensure();
   initLineLiff();
-  if($('#adminPanel-coupons')?.classList.contains('active'))renderAdmin();
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});
 else boot();

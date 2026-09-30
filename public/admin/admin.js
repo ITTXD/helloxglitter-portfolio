@@ -636,6 +636,9 @@ function switchView(view) {
       if (typeof window.hlgRenderFonts === 'function') window.hlgRenderFonts();
     });
   }
+  var vc = document.getElementById('viewCoupons');
+  if (vc) vc.classList.toggle('hidden', view !== 'coupons');
+  if (view === 'coupons') { if (typeof window.hlgRenderCoupons === 'function') window.hlgRenderCoupons(); }
   if (view === 'summary') renderProductSummary();
   if (view === 'print') renderPrintTable();
   if (view === 'tracking') renderTrackingView();
@@ -1828,9 +1831,141 @@ async function deleteProductRow(id) {
     sample();
   }
 
+  /* ================= COUPON CAMPAIGN EDITOR ================= */
+  var COUPON_KEY = 'hlg_coupon_campaign_draft_v1';
+  var COUPON_DEFAULTS = {
+    title: 'ซื้อ Sticker รับคูปองกระเป๋า',
+    thresholdSatang: 30090,
+    discountSatang: 10000,
+    expiresAt: '2026-12-31T23:59',
+    earnCategory: 'sticker',
+    redeemCategory: 'bag',
+    maxUses: 1
+  };
+  function couponBaht(n) {
+    return (Number(n || 0) / 100).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function couponSatang(raw) {
+    var v = String(raw || '').trim();
+    if (!/^\d+(?:\.\d{1,2})?$/.test(v)) return null;
+    var parts = v.split('.');
+    var decimal = parts[1] || '';
+    var amount = Number(parts[0]) * 100 + Number(decimal.padEnd(2, '0'));
+    return Number.isSafeInteger(amount) ? amount : null;
+  }
+  function couponWarn(msg) { try { showToast('warn', msg); } catch (e) {} }
+
+  async function fetchCouponCampaign() {
+    try {
+      var res = await fetch('/api/coupons/campaign', { credentials: 'include' });
+      if (res.ok) {
+        var data = await res.json();
+        if (data.campaign) {
+          localStorage.setItem(COUPON_KEY, JSON.stringify(data.campaign));
+          return data.campaign;
+        }
+      }
+    } catch (e) {}
+    try {
+      var local = JSON.parse(localStorage.getItem(COUPON_KEY) || 'null');
+      if (local && typeof local === 'object') return Object.assign({}, COUPON_DEFAULTS, local);
+    } catch (e) {}
+    return Object.assign({}, COUPON_DEFAULTS);
+  }
+
+  function renderCoupons() {
+    var panel = $('#couponManagerContainer');
+    if (!panel) return;
+    panel.innerHTML = '<p style="color:#807078">กำลังโหลดกติกาคูปอง…</p>';
+    fetchCouponCampaign().then(function(v) {
+      paintCoupons(panel, v);
+    }).catch(function() {
+      paintCoupons(panel, Object.assign({}, COUPON_DEFAULTS));
+    });
+  }
+
+  function paintCoupons(panel, v) {
+    panel.innerHTML = `<div class="hlg-coupon-admin">
+    <h3>🎟️ ตั้งกติกาแคมเปญคูปอง (เชื่อมฐานข้อมูลกลาง)</h3>
+    <p>เงื่อนไขระบบ: ลูกค้าซื้อสินค้าหมวด Sticker ครบยอดที่กำหนด เมื่อร้านยืนยันการชำระเงินแล้ว ระบบจะออกคูปองส่วนลดสำหรับสั่งซื้อกระเป๋า 1 ใบต่อออเดอร์ ผูกกับบัญชี LINE ของลูกค้าโดยอัตโนมัติ</p>
+    <div class="hlg-coupon-grid">
+      <label>ชื่อโปรโมชัน<input id="hcTitle" maxlength="90"></label>
+      <label>ซื้อ Sticker ครบยอด (บาท หลังหักส่วนลด ก่อนค่าส่ง)<input id="hcThreshold" type="text" inputmode="decimal" placeholder="300.90"></label>
+      <label>มูลค่าคูปองส่วนลด (บาท)<input id="hcDiscount" type="text" inputmode="decimal" placeholder="100.00"></label>
+      <label>วันและเวลาหมดอายุ (เวลาไทย)<input id="hcExpiry" type="datetime-local"></label>
+      <label>ใช้กับหมวดหมู่สินค้า<select id="hcCategory"><option value="bag">กระเป๋า (Bag)</option></select></label>
+      <label>จำนวนครั้งที่ใช้ได้ต่อคูปอง<select id="hcUses"><option value="1">ใช้ได้ครั้งเดียว (Single-use)</option></select></label>
+    </div>
+    <div id="hcPreview" class="hlg-coupon-preview"></div>
+    <div id="hcStatusBanner" class="hlg-coupon-status" style="background:#eaf8ef;color:#187342;border:1px solid #bce6cc">
+      ✅ เชื่อมต่อระบบแจกคูปองออนไลน์แล้ว · ฐานข้อมูลกลางพร้อมทำงาน
+    </div>
+    <div style="display:flex;gap:10px;margin-top:14px;align-items:center">
+      <button id="hcSave" type="button" style="background:#bd4d7c;color:#fff">💾 บันทึกกติกาลงระบบ</button>
+      <span id="hcSaveMsg" style="font-size:12px;color:#a84371"></span>
+    </div>
+  </div>`;
+
+    $('#hcTitle').value = v.title || COUPON_DEFAULTS.title;
+    $('#hcThreshold').value = couponBaht(v.thresholdSatang || v.threshold_satang);
+    $('#hcDiscount').value = couponBaht(v.discountSatang || v.discount_satang);
+    $('#hcExpiry').value = (v.expiresAt || v.expires_at || COUPON_DEFAULTS.expiresAt).slice(0, 16);
+    $('#hcCategory').value = 'bag';
+
+    var update = function() {
+      var threshold = couponSatang($('#hcThreshold').value), discount = couponSatang($('#hcDiscount').value);
+      var title = $('#hcTitle').value.trim() || COUPON_DEFAULTS.title;
+      $('#hcPreview').textContent = threshold === null || discount === null
+        ? 'กรอกจำนวนเงินเป็นบาท ทศนิยมได้ไม่เกิน 2 ตำแหน่ง'
+        : `${title} ♡ ซื้อ Sticker ครบ ${couponBaht(threshold)} ฿ รับส่วนลด ${couponBaht(discount)} ฿ ใช้กับกระเป๋า 1 ครั้ง หมดอายุ ${$('#hcExpiry').value.replace('T', ' ')} น. (เวลาไทย)`;
+    };
+    ['hcTitle', 'hcThreshold', 'hcDiscount', 'hcExpiry'].forEach(function(id) { var el = $('#' + id); if (el) el.addEventListener('input', update); });
+    update();
+
+    $('#hcSave').onclick = async function() {
+      var thresholdSatang = couponSatang($('#hcThreshold').value);
+      var discountSatang = couponSatang($('#hcDiscount').value);
+      var expiresAt = $('#hcExpiry').value;
+      if (thresholdSatang === null || thresholdSatang < 1 || discountSatang === null || discountSatang < 1) { couponWarn('ตรวจยอดซื้อและมูลค่าส่วนลดอีกครั้งค่ะ'); return; }
+      if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(expiresAt) || !Number.isFinite(Date.parse(expiresAt + '+07:00'))) { couponWarn('กรุณาเลือกวันหมดอายุที่ถูกต้อง'); return; }
+      var payload = {
+        title: $('#hcTitle').value.trim().slice(0, 90) || COUPON_DEFAULTS.title,
+        thresholdSatang: thresholdSatang,
+        discountSatang: discountSatang,
+        expiresAt: expiresAt,
+        earnCategory: 'sticker',
+        redeemCategory: 'bag',
+        maxUses: 1
+      };
+      var saveBtn = $('#hcSave'), saveMsg = $('#hcSaveMsg');
+      saveBtn.disabled = true; saveBtn.textContent = 'กำลังบันทึก…';
+      try {
+        var res = await fetch('/api/coupons/campaign', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ campaign: payload })
+        });
+        var data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || 'บันทึกไม่สำเร็จ');
+        localStorage.setItem(COUPON_KEY, JSON.stringify(data.campaign || payload));
+        saveMsg.textContent = '✓ บันทึกกติกาลงฐานข้อมูลกลางสำเร็จแล้ว';
+        adminToast('บันทึกกติกาคูปองออนไลน์แล้ว ✓');
+        setTimeout(function() { if (saveMsg) saveMsg.textContent = ''; }, 4000);
+      } catch (err) {
+        localStorage.setItem(COUPON_KEY, JSON.stringify(payload));
+        saveMsg.textContent = '(บันทึกในเบราว์เซอร์: ' + err.message + ')';
+        adminToast('บันทึกกติกาในเครื่องแล้ว ♡');
+      } finally {
+        saveBtn.disabled = false; saveBtn.textContent = '💾 บันทึกกติกาลงระบบ';
+      }
+    };
+  }
+
   window.hlgRenderTiers = renderTiers;
   window.hlgRenderPricing = renderPricing;
   window.hlgRenderFonts = renderFonts;
+  window.hlgRenderCoupons = renderCoupons;
   window.hlgApplyAdminFont = applyFont;
 
   // Apply the shop font inside the admin portal too (same variable names).

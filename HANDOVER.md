@@ -31,14 +31,23 @@
 
 Products/promos stay **local-only** for now (decided with user). Cloud sync is a separate future ticket.
 
+- **Ticket 03 (Extract Coupon Management)** — DONE.
+  - `/admin/` gained a **คูปอง** tab (`data-view="coupons"` → `#viewCoupons` → `window.hlgRenderCoupons`).
+  - Saves with the admin **session cookie** (the old client used `sessionStorage` `admin_password`, which `/admin/` doesn't have).
+  - Storefront keeps the whole customer path: wallet, LINE login, apply/validate/claim and the cart coupon box.
+  - ⚠️ Ticket wording fixed: the storefront never *generated* or *copied* coupons from its admin panel — generation is server-side and copying is a customer-wallet button. The portal edits **rules only**.
+
 ## 🚀 What's Next
-Continue with **Ticket 03 (Extract Coupon Management)**. See `.scratch/unify-admin/issues/03-extract-coupon-management.md`.
-`v8-coupon-admin` injects the coupon panel around line ~16190 and already anchors on `#adminPanel-store`; migrate its generator/manager UI to a "Coupons" tab in `/admin/`, keeping customer claim/validate logic on the storefront.
+Continue with **Ticket 04 (Isolate Storefront CMS Mode)**. See `.scratch/unify-admin/issues/04-isolate-cms-mode.md`.
+Keep only the Visual CMS tools on the storefront (text editing, section visibility, Highlight Stories, Banners) and make that mode lazy/strictly separated so customer load times aren't affected.
 
 ### Cleanup owed to Ticket 05 (not blocking)
-The storefront still contains unreachable editor bodies (`renderTiers`, `saveTier`, `renderFonts`, pricing `renderAdmin`/`options`/`preview`/`savePromo`/`renderBase`) and their dead CSS. Their panels and all callers are gone, so they never run — Ticket 05 deletes them.
+The storefront still contains unreachable editor bodies and their dead CSS:
+- `renderTiers`, `saveTier`, `renderFonts`, pricing `renderAdmin`/`options`/`preview`/`savePromo`/`renderBase` (ticket 02)
+- `__removedCouponAdmin` (ticket 03, inert via `return;`) plus `#adminPanel-coupons` / `.hlg-coupon-admin` CSS
+Their panels, triggers and callers are gone, so none of them run — Ticket 05 deletes them.
 
 ## 🧪 Verification
-- `npm test` (all suites green) including the new `test/admin-product-promo-migration.test.js`.
+- `npm test` (all suites green) including the new `test/admin-product-promo-migration.test.js` and `test/admin-coupon-migration.test.js`.
 - All 81 inline scripts in `public/index.html` parse; `node --check public/admin/admin.js` passes.
 - Not verified in a real browser (no Chrome available in this environment) — do a manual pass on `/admin/` Products & Promos and the storefront gallery/cart before deploy.
