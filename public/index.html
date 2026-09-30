@@ -5777,20 +5777,14 @@ if(document.readyState!=='loading'){
       <button type="button" id="v8AdminTrackingSave" onclick="v8SaveTrackingAnnouncement()">บันทึกประกาศ ✓</button>
     </div>
     <div class="admin-tabs">
-      <button class="admin-tab active" data-admin-tab="orders" onclick="switchAdminTab('orders',this)"><i class="ti ti-list-check"></i> จัดการคิว</button>
-      <button class="admin-tab" data-admin-tab="store" onclick="switchAdminTab('store',this)"><i class="ti ti-building-store"></i> หน้าร้าน</button>
+      <button class="admin-tab active" data-admin-tab="store" onclick="switchAdminTab('store',this)"><i class="ti ti-building-store"></i> หน้าร้าน</button>
       <a class="admin-tab" href="/admin/" target="_blank" style="text-decoration:none;background:#f3e8ff;color:#7c3aed;font-weight:700;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-external-link"></i> Full Admin Portal ↗</a>
     </div>
-    <section class="admin-panel active" id="adminPanel-orders">
-      <div id="v8QueueDashboard"></div>
-      <div id="adminOrderList" style="display:none"></div>
-      <input id="adminOrderSearch" type="hidden">
-    </section>
+    <section class="admin-panel active" id="adminPanel-store"><div class="admin-card"><div class="admin-section-title">เปิดหน้าร้านเพื่อแก้ไข</div><div class="admin-section-sub">Admin สามารถเข้าแต่ละหน้าจริงได้ ไม่จำกัดอยู่แค่ Home เพื่อแก้ไขข้อมูลหรือโปรโมชั่นบนหน้านั้นๆ ได้ทันที</div><div class="v7-store-links"><button onclick="showPage('preorder')">👜 กระเป๋าผ้า / Pre-order</button><button onclick="showPage('wallpaper')">🎨 Wallpaper</button><button onclick="showPage('sticker')">✨ Sticker</button><button onclick="showPage('home')">🏠 Home</button></div></div></section>
     
     
     
 
-    <section class="admin-panel" id="adminPanel-store"><div class="admin-card"><div class="admin-section-title">เปิดหน้าร้านเพื่อแก้ไข</div><div class="admin-section-sub">Admin สามารถเข้าแต่ละหน้าจริงได้ ไม่จำกัดอยู่แค่ Home</div><div class="v7-store-links"><button onclick="showPage('preorder')">👜 กระเป๋าผ้า / Pre-order</button><button onclick="showPage('wallpaper')">🎨 Wallpaper</button><button onclick="showPage('sticker')">✨ Sticker</button><button onclick="showPage('home')">🏠 Home</button></div></div></section>
   </div>
 </div>
 

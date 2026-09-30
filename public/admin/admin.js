@@ -323,7 +323,7 @@ function renderTable() {
     var custDisplay = escapeHtml(custName) + (custPhone ? '<div style="font-size:11px;color:#807078">📞 ' + escapeHtml(custPhone) + '</div>' : '');
 
     return '<tr class="order-row' + (o.type === 'wallpaper' ? ' order-wallpaper' : '') + '" onclick="openOrder(\'' + escapeHtmlAttr(o.id) + '\')">'
-      + '<td class="order-id">' + escapeHtml(o.id) + (o.slip_data ? ' <i class="ti ti-receipt" style="color:#30a030;font-size:11px" title="มีสลีป"></i>' : '') + '</td>'
+      + '<td class="order-id">' + escapeHtml(o.id) + (o.slip_data ? ' <i class="ti ti-receipt" style="color:#30a030;font-size:11px" title="มีสลีป"></i>' : '') + (o.fast_track ? '<br><span style="color:#8c30d8;font-size:10px;font-weight:800;background:#f3e8fc;padding:2px 4px;border-radius:4px">⚡ FAST TRACK</span>' : '') + '</td>'
       + '<td class="order-customer">' + custDisplay + '</td>'
       + '<td class="order-patterns">' + escapeHtml(patterns) + '</td>'
       + '<td class="order-qty">' + (o.total_bags || 0) + '</td>'
@@ -405,13 +405,14 @@ function openOrder(id) {
   var cAddress = order.customer_address || ((order.customer_info || '').split('\n').slice(2).join('\n')) || '';
 
   html += '<div class="m-section">';
-  html += '<div class="m-section-title">ข้อมูลลูกค้า</div>';
+  html += '<div class="m-section-title" style="display:flex;justify-content:space-between;align-items:center;">ข้อมูลลูกค้า <button type="button" style="border:1px solid #ecc9d6;background:#fff5f9;color:#c04878;border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;font-weight:700" onclick="copyCustomerInfo(\'' + escapeHtmlAttr(cName) + '\', \'' + escapeHtmlAttr(cPhone) + '\', \'' + escapeHtmlAttr(cAddress) + '\')"><i class="ti ti-copy"></i> คัดลอก</button></div>';
   html += '<div style="margin-bottom:8px"><label style="font-size:11px;font-weight:700;color:#c04878;display:block;margin-bottom:3px">ชื่อ-นามสกุล</label><input type="text" class="m-note-input" id="modalCustName" value="' + escapeHtmlAttr(cName) + '" placeholder="ชื่อ-นามสกุล" style="padding:7px 10px;"/></div>';
   html += '<div style="margin-bottom:8px"><label style="font-size:11px;font-weight:700;color:#c04878;display:block;margin-bottom:3px">เบอร์โทรศัพท์</label><input type="tel" class="m-note-input" id="modalCustPhone" value="' + escapeHtmlAttr(cPhone) + '" placeholder="เบอร์โทรศัพท์" style="padding:7px 10px;"/></div>';
   html += '<div style="margin-bottom:8px"><label style="font-size:11px;font-weight:700;color:#c04878;display:block;margin-bottom:3px">ที่อยู่จัดส่ง</label><textarea class="m-note-input" id="modalCustAddress" rows="3" placeholder="ที่อยู่จัดส่ง">' + escapeHtml(cAddress) + '</textarea></div>';
   if (order.email) {
     html += '<div class="m-customer" style="margin-top:8px"><strong>Gmail:</strong> ' + escapeHtml(order.email) + '</div>';
   }
+  html += '<div style="margin-top:12px"><label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;color:#8c30d8;cursor:pointer"><input type="checkbox" id="modalFastTrack" ' + (order.fast_track ? 'checked' : '') + ' style="width:16px;height:16px;accent-color:#8c30d8"/> ⚡ ออเดอร์ด่วน (FAST TRACK)</label></div>';
   html += '</div>';
 
   // Patterns with images and promo pricing
@@ -525,12 +526,14 @@ function saveOrder() {
   var createdAtISO = createdAtInput && createdAtInput.value ? new Date(createdAtInput.value).toISOString() : currentModalOrder.created_at;
   var trackingInput = document.getElementById('modalTracking');
   var trackingNumber = trackingInput ? trackingInput.value.trim() : '';
+  var fastTrack = document.getElementById('modalFastTrack') ? document.getElementById('modalFastTrack').checked : false;
   var body = {
     status: currentModalOrder.status,
     note: note,
     customer_name: custName,
     customer_phone: custPhone,
     customer_address: custAddress,
+    fast_track: fastTrack,
     customer_info: customerInfo,
     created_at: createdAtISO,
     tracking_number: trackingNumber
@@ -1012,3 +1015,10 @@ document.addEventListener('DOMContentLoaded', function() {
     switchDateOrderFilter(tab.dataset.dfilter);
   });
 });
+function copyCustomerInfo(name, phone, address) {
+  var text = [name, phone, address].filter(Boolean).join("
+");
+  navigator.clipboard.writeText(text).then(function() {
+    showToast("คัดลอกข้อมูลลูกค้าแล้ว");
+  });
+}
