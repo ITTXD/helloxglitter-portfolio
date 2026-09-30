@@ -3707,7 +3707,7 @@ function load(){
     const val = localStorage.getItem(META);
     if (val) {
       const a=JSON.parse(val);
-      if(Array.isArray(a)) return a;
+      if(Array.isArray(a) && a.length > 0) return a;
     }
   }catch(e){}
   return [
