@@ -639,6 +639,12 @@ function switchView(view) {
   var vc = document.getElementById('viewCoupons');
   if (vc) vc.classList.toggle('hidden', view !== 'coupons');
   if (view === 'coupons') { if (typeof window.hlgRenderCoupons === 'function') window.hlgRenderCoupons(); }
+  var vs = document.getElementById('viewStock');
+  if (vs) vs.classList.toggle('hidden', view !== 'stock');
+  if (view === 'stock') { if (typeof window.hlgRenderStock === 'function') window.hlgRenderStock(); }
+  var vr = document.getElementById('viewReceipt');
+  if (vr) vr.classList.toggle('hidden', view !== 'receipt');
+  if (view === 'receipt') { if (typeof window.hlgRenderReceipt === 'function') window.hlgRenderReceipt(); }
   if (view === 'summary') renderProductSummary();
   if (view === 'print') renderPrintTable();
   if (view === 'tracking') renderTrackingView();
@@ -1962,10 +1968,208 @@ async function deleteProductRow(id) {
     };
   }
 
+  /* ================= STOCK EDITOR ================= */
+  // Inventory lives in localStorage, shared with the storefront on the same origin.
+  // The key encoding and the order source below MUST match the storefront stock guard
+  // in public/index.html exactly — otherwise the editor writes rows the guard never finds.
+  var STOCK_KEY = 'hlg_inventory_v1';
+  var STOCK_ORDERS_DB = 'HLG_ORDERS_DB_V1';
+  var STOCK_ORDERS_LS = 'hlg_orders_v2';
+  var stockOrderCache = null;
+  function stockKey(x) {
+    // Same shape as the storefront: JSON array [type, name, variant].
+    return JSON.stringify([String(x.type || 'bag'), String(x.name || ''), String(x.variant || '')]);
+  }
+  function stockLoad() {
+    try { var x = JSON.parse(localStorage.getItem(STOCK_KEY) || '{}'); return (x && typeof x === 'object') ? x : {}; }
+    catch (e) { return {}; }
+  }
+  function stockLocalOrders() {
+    if (stockOrderCache) return stockOrderCache;
+    try { var a = JSON.parse(localStorage.getItem(STOCK_ORDERS_LS) || '[]'); if (Array.isArray(a)) { stockOrderCache = a; return a; } }
+    catch (e) {}
+    return [];
+  }
+  // The storefront keeps orders in IndexedDB (HLG_ORDERS_DB_V1 / state / 'orders').
+  // Never create that database here: opening a missing DB with a version would make
+  // the storefront's own open() skip its upgrade step and break its store.
+  function stockReadOrders(force) {
+    return new Promise(function(resolve) {
+      if (force) stockOrderCache = null;
+      var fallback = function() { resolve(stockLocalOrders()); };
+      if (stockOrderCache || !indexedDB.databases) { fallback(); return; }
+      indexedDB.databases().then(function(list) {
+        if (!list || !list.some(function(d) { return d && d.name === STOCK_ORDERS_DB; })) { fallback(); return; }
+        var req = indexedDB.open(STOCK_ORDERS_DB);
+        req.onsuccess = function() {
+          var db = req.result;
+          try {
+            var get = db.transaction('state', 'readonly').objectStore('state').get('orders');
+            get.onsuccess = function() { db.close(); stockOrderCache = Array.isArray(get.result) ? get.result : stockLocalOrders(); resolve(stockOrderCache); };
+            get.onerror = function() { db.close(); fallback(); };
+          } catch (e) { db.close(); fallback(); }
+        };
+        req.onerror = fallback;
+        req.onblocked = fallback;
+      }).catch(fallback);
+    });
+  }
+  function stockUsed(k, row) {
+    var baseline = new Set(row.baseline || []);
+    return stockLocalOrders().filter(function(o) { return !baseline.has(String(o.id)); }).reduce(function(n, o) {
+      return n + (o.items || []).reduce(function(a, x) { return a + (stockKey(x) === k ? Math.max(0, Number(x.qty) || 0) : 0); }, 0);
+    }, 0);
+  }
+  function stockRemaining(x) {
+    var row = stockLoad()[stockKey(x)];
+    return (row && row.managed) ? Math.max(0, Number(row.qty || 0) - stockUsed(stockKey(x), row)) : null;
+  }
+  function stockCatalog() {
+    var m = new Map();
+    catalog().forEach(function(x) { m.set(stockKey(x), { type: x.type, name: x.name, variant: x.variant || '' }); });
+    Object.keys(stockLoad()).forEach(function(k) {
+      try { var a = JSON.parse(k); if (Array.isArray(a) && a.length === 3) m.set(stockKey({ type: a[0], name: a[1], variant: a[2] }), { type: a[0], name: a[1], variant: a[2] }); } catch (e) {}
+    });
+    stockLocalOrders().forEach(function(o) {
+      (o.items || []).forEach(function(x) { if (x.name) m.set(stockKey(x), { type: x.type || 'bag', name: x.name, variant: x.variant || '' }); });
+    });
+    return Array.from(m.values());
+  }
+  function stockPaint() {
+    var root = $('#hlgStockList');
+    if (!root) return;
+    var q = (($('#hlgStockSearch') || {}).value || '').toLowerCase();
+    var cfg = stockLoad();
+    var xs = stockCatalog().filter(function(x) { return (x.name + ' ' + x.variant).toLowerCase().indexOf(q) >= 0; });
+    root.innerHTML = xs.map(function(x) {
+      var k = stockKey(x), r = cfg[k] || {}, left = stockRemaining(x);
+      var label = r.managed ? (left === 0 ? 'หมด' : left <= 5 ? 'ใกล้หมด' : 'พร้อมขาย') : 'ไม่จำกัด';
+      return '<div class="hlg-stock-card" data-stock-key="' + esc(k) + '"><div><b>' + esc(x.name) + '</b><small>' + esc(x.variant || x.type) + '</small></div>'
+        + '<label><input type="checkbox" class="hlg-stock-manage" ' + (r.managed ? 'checked' : '') + '> จำกัดจำนวน</label>'
+        + '<div><input class="hlg-stock-input" type="number" min="0" step="1" inputmode="numeric" value="' + (r.managed ? esc(left) : '') + '" placeholder="จำนวน" aria-label="จำนวน ' + esc(x.name) + '">'
+        + '<div class="hlg-stock-qty ' + (left === null ? 'hlg-stock-off' : left <= 5 ? 'hlg-stock-low' : '') + '">' + label + (left === null ? '' : ' · ' + left + ' ชิ้น') + '</div></div>'
+        + '<button type="button" class="hlg-stock-save">บันทึก</button></div>';
+    }).join('') || '<div class="hlg-stock-intro">ไม่พบสินค้าค่ะ</div>';
+    root.querySelectorAll('.hlg-stock-save').forEach(function(b) {
+      b.onclick = function() {
+        var card = b.closest('[data-stock-key]'), k = card.dataset.stockKey;
+        var managed = card.querySelector('.hlg-stock-manage').checked;
+        var input = card.querySelector('.hlg-stock-input'), val = input.value.trim();
+        if (managed && (!/^\d+$/.test(val) || !Number.isSafeInteger(Number(val)))) { input.focus(); adminToast('กรุณาใส่จำนวนเต็มตั้งแต่ 0 ขึ้นไป'); return; }
+        var next = stockLoad();
+        next[k] = { managed: managed, qty: managed ? Number(val) : 0, baseline: stockLocalOrders().map(function(o) { return String(o.id); }) };
+        try { localStorage.setItem(STOCK_KEY, JSON.stringify(next)); stockPaint(); adminToast('บันทึกสต็อกแล้ว ✓'); }
+        catch (e) { adminToast('บันทึกสต็อกไม่สำเร็จ'); }
+      };
+    });
+  }
+  function renderStock(force) {
+    var root = $('#stockManagerContainer');
+    if (!root) return;
+    if (!$('#hlgStockList')) {
+      root.innerHTML = '<div class="hlg-stock-intro"><b>สต็อกสินค้า ♡</b><br>เปิดดูแลสต็อกเฉพาะสินค้าที่พร้อมส่งได้ แยกตามลายและขนาด ส่วนสินค้าพรีออเดอร์หรือดิจิทัลปล่อยเป็น “ไม่จำกัด” ได้<br>ช่องจำนวนคือจำนวนที่มีพร้อมขาย ณ ตอนที่กดบันทึก ออเดอร์ใหม่จะหักออก และเมื่อลบออเดอร์นั้น จำนวนจะคืนให้อัตโนมัติ</div>'
+        + '<div class="hlg-stock-toolbar"><input id="hlgStockSearch" type="search" placeholder="ค้นหาชื่อสินค้า / ขนาด" aria-label="ค้นหาสต็อก"><button type="button" id="hlgStockRefresh">รีเฟรช</button></div>'
+        + '<div id="hlgStockList"></div>';
+      $('#hlgStockSearch').addEventListener('input', stockPaint);
+      $('#hlgStockRefresh').addEventListener('click', function() { renderStock(true); });
+    }
+    stockReadOrders(!!force).then(function() { stockPaint(); });
+  }
+
+  /* ================= RECEIPT / THANK-YOU EDITOR ================= */
+  var RECEIPT_KEY = 'hlg_receipt_design_v1', RECEIPT_DB = 'HLG_RECEIPT_ASSETS_V1';
+  function receiptSettings() {
+    try { var v = JSON.parse(localStorage.getItem(RECEIPT_KEY) || 'null'); return (v && typeof v === 'object') ? v : {}; }
+    catch (e) { return {}; }
+  }
+  function receiptDb() {
+    return new Promise(function(resolve, reject) {
+      var req = indexedDB.open(RECEIPT_DB, 1);
+      req.onupgradeneeded = function() { if (!req.result.objectStoreNames.contains('assets')) req.result.createObjectStore('assets'); };
+      req.onsuccess = function() { resolve(req.result); };
+      req.onerror = function() { reject(req.error); };
+    });
+  }
+  async function receiptStoreGif(file) {
+    var db = await receiptDb();
+    try {
+      await new Promise(function(resolve, reject) {
+        var tx = db.transaction('assets', 'readwrite');
+        tx.objectStore('assets').put(file, 'thankyou');
+        tx.oncomplete = resolve;
+        tx.onerror = function() { reject(tx.error); };
+      });
+    } finally { db.close(); }
+  }
+  async function receiptGifSource() {
+    var value = receiptSettings().gif;
+    if (value !== 'db:thankyou') return /^(data:image\/gif;base64,|https:\/\/)/i.test(value) ? value : '';
+    try {
+      var db = await receiptDb();
+      var blob = await new Promise(function(resolve, reject) {
+        var req = db.transaction('assets', 'readonly').objectStore('assets').get('thankyou');
+        req.onsuccess = function() { resolve(req.result); };
+        req.onerror = function() { reject(req.error); };
+      });
+      db.close();
+      if (!blob) return '';
+      return await new Promise(function(resolve, reject) {
+        var r = new FileReader();
+        r.onload = function() { resolve(r.result); };
+        r.onerror = function() { reject(r.error); };
+        r.readAsDataURL(blob);
+      });
+    } catch (e) { return ''; }
+  }
+  function renderReceipt() {
+    var p = $('#receiptManagerContainer');
+    if (!p) return;
+    var v = receiptSettings();
+    p.innerHTML = `<div class="hrx-admin"><h3>ตกแต่งหน้าหลังสั่งซื้อ</h3><label>หัวข้อ<input id="hrxTitle" maxlength="80" value="${esc(v.title || '')}"></label><label>คำขอบคุณ<textarea id="hrxThanks" maxlength="350">${esc(v.thanks || '')}</textarea></label><label>ลิงก์ GIF (https://)<input id="hrxGifUrl" type="url" placeholder="https://example.com/thank-you.gif" value="${esc(/^https:\/\//.test(v.gif || '') ? v.gif : '')}"></label><label>หรืออัปโหลด GIF ไม่เกิน 8 MB<input id="hrxGifFile" type="file" accept="image/gif"></label><img id="hrxGifPreview" class="hrx-gif-preview" alt="ตัวอย่าง GIF" hidden><div id="hrxGifStatus" class="hrx-mini">${v.gif ? 'กำลังโหลดตัวอย่าง GIF…' : 'ยังไม่ได้ใส่ GIF'}</div><button class="primary" id="hrxSaveDesign" type="button">บันทึกหน้าขอบคุณ</button><button id="hrxRemoveGif" type="button">ลบ GIF</button><p class="hrx-mini">GIF จะแสดงบนหน้าขอบคุณและในใบสรุปคำสั่งซื้อที่ดาวน์โหลดจากเบราว์เซอร์นี้</p></div>`;
+    if (v.gif) receiptGifSource().then(function(src) {
+      if (!p.isConnected) return;
+      var im = p.querySelector('#hrxGifPreview'), status = p.querySelector('#hrxGifStatus');
+      if (src) { im.src = src; im.hidden = false; status.textContent = 'ตัวอย่าง GIF ที่ใช้อยู่'; }
+      else status.textContent = 'ไม่พบไฟล์ GIF กรุณาอัปโหลดอีกครั้ง';
+    });
+    var value = function() { return { title: p.querySelector('#hrxTitle').value.trim() || 'ขอบคุณค่ะ ♡', thanks: p.querySelector('#hrxThanks').value.trim() }; };
+    p.querySelector('#hrxSaveDesign').onclick = function() {
+      var url = p.querySelector('#hrxGifUrl').value.trim(), gif = url || receiptSettings().gif;
+      if (gif && !/^https:\/\//i.test(gif) && gif !== 'db:thankyou' && !gif.startsWith('data:image/gif;base64,')) { adminToast('ใช้ลิงก์ GIF แบบ https:// ค่ะ'); return; }
+      try { localStorage.setItem(RECEIPT_KEY, JSON.stringify(Object.assign({}, value(), { gif: gif }))); renderReceipt(); adminToast('บันทึกหน้าขอบคุณแล้ว ♡'); }
+      catch (e) { adminToast('บันทึกไม่สำเร็จ พื้นที่เบราว์เซอร์เต็มค่ะ'); }
+    };
+    p.querySelector('#hrxRemoveGif').onclick = function() {
+      try { localStorage.setItem(RECEIPT_KEY, JSON.stringify(Object.assign({}, value(), { gif: '' }))); renderReceipt(); adminToast('ลบ GIF แล้ว'); }
+      catch (e) { adminToast('บันทึกไม่สำเร็จค่ะ'); }
+    };
+    p.querySelector('#hrxGifFile').onchange = async function(e) {
+      var f = e.target.files[0];
+      if (!f) return;
+      if (f.type !== 'image/gif' || f.size > 8 * 1024 * 1024) { adminToast('ใช้ไฟล์ GIF ขนาดไม่เกิน 8 MB ค่ะ'); return; }
+      var status = p.querySelector('#hrxGifStatus');
+      status.textContent = 'กำลังบันทึก GIF…';
+      try {
+        await receiptStoreGif(f);
+        localStorage.setItem(RECEIPT_KEY, JSON.stringify(Object.assign({}, value(), { gif: 'db:thankyou' })));
+        var preview = await receiptGifSource();
+        if (!preview.startsWith('data:image/gif;base64,')) throw Error('GIF readback failed');
+        renderReceipt();
+        adminToast('อัปโหลด GIF และตรวจตัวอย่างแล้ว ♡');
+      } catch (error) {
+        console.error('GIF save failed', error);
+        status.textContent = 'บันทึก GIF ไม่สำเร็จ กรุณาลองใหม่หรือใช้ลิงก์ GIF';
+        adminToast('บันทึก GIF ไม่สำเร็จค่ะ');
+      }
+    };
+  }
+
   window.hlgRenderTiers = renderTiers;
   window.hlgRenderPricing = renderPricing;
   window.hlgRenderFonts = renderFonts;
   window.hlgRenderCoupons = renderCoupons;
+  window.hlgRenderStock = renderStock;
+  window.hlgRenderReceipt = renderReceipt;
   window.hlgApplyAdminFont = applyFont;
 
   // Apply the shop font inside the admin portal too (same variable names).

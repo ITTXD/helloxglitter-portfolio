@@ -55,6 +55,32 @@
   .hlg-coupon-preview { margin: 14px 0; padding: 15px; border: 1px dashed #dd9cb7; border-radius: 13px; background: #fff; color: #755364; line-height: 1.7; font-size: 13px; }
   .hlg-coupon-status { padding: 11px 13px; border-radius: 11px; background: #fff0f5; color: #9b4a70; font-size: 12px; }
   @media (max-width: 600px) { .hlg-coupon-admin { padding: 15px; } .hlg-coupon-grid { grid-template-columns: 1fr; } }
+
+  /* Stock editor (migrated from the storefront). */
+  .hlg-stock-intro { background: #fff7fb; border: 1px solid #f2d7e3; border-radius: 14px; padding: 14px; margin-bottom: 13px; font-size: 12px; line-height: 1.7; color: #7b5568; }
+  .hlg-stock-toolbar { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 13px; }
+  .hlg-stock-toolbar input[type="search"] { flex: 1; min-width: 200px; border: 1px solid #ead3df; border-radius: 11px; padding: 10px 13px; font: inherit; }
+  .hlg-stock-card { background: #fff; border: 1px solid #f0d7e3; border-radius: 15px; padding: 12px 14px; margin-bottom: 8px; display: grid; grid-template-columns: minmax(185px, 2fr) minmax(95px, 1fr) minmax(100px, 1fr) auto; align-items: center; gap: 10px; }
+  .hlg-stock-card b { display: block; color: #80425f; }
+  .hlg-stock-card small { color: #947c89; }
+  .hlg-stock-card input[type="number"] { width: 95px; max-width: 100%; padding: 9px; border: 1px solid #e8cbd9; border-radius: 10px; font: inherit; }
+  #stockManagerContainer button { border: 1px solid #dcaabe; border-radius: 10px; background: #fff4f8; color: #a53d69; padding: 9px 12px; font: inherit; font-weight: 700; cursor: pointer; }
+  .hlg-stock-qty { color: #96627b; font-weight: 700; }
+  .hlg-stock-low { color: #d3486c; }
+  .hlg-stock-off { color: #8c8590; }
+  @media (max-width: 700px) { .hlg-stock-card { grid-template-columns: 1fr 1fr; } .hlg-stock-card > :first-child { grid-column: 1 / -1; } }
+
+  /* Receipt / thank-you editor (migrated from the storefront). */
+  .hrx-admin { background: #fff; border: 1px solid #efcfdd; padding: 17px; border-radius: 16px; margin: 15px 0; color: #82576c; }
+  .hrx-admin h3 { color: #a94471; margin: 0 0 8px; }
+  .hrx-admin label { display: block; margin: 12px 0; font-size: 12px; font-weight: 800; }
+  .hrx-admin input, .hrx-admin textarea { display: block; box-sizing: border-box; width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #e6c5d5; border-radius: 10px; font: inherit; }
+  .hrx-admin textarea { min-height: 70px; }
+  .hrx-admin button { border: 1px solid #ecc2d3; background: #fff; color: #b6527b; border-radius: 12px; padding: 10px 14px; font: inherit; font-weight: 800; cursor: pointer; }
+  .hrx-admin button.primary { background: #d15488; color: #fff; border-color: #d15488; }
+  .hrx-admin .hrx-mini { font-size: 12px; line-height: 1.7; color: #8e6375; }
+  .hrx-admin .hrx-gif-preview { max-width: 260px; max-height: 180px; object-fit: contain; border: 1px solid #efd2dd; border-radius: 12px; margin: 10px 0; }
+  .hrx-admin img[hidden] { display: none !important; }
 </style>
 </head>
 <body>
@@ -85,6 +111,8 @@
       <button class="topbar-tab active" data-view="orders" onclick="switchView('orders')"><i class="ti ti-shopping-bag"></i> ออเดอร์</button>
       <button class="topbar-tab" data-view="products" onclick="switchView('products')"><i class="ti ti-box"></i> สินค้าและโปรโมชั่น</button>
       <button class="topbar-tab" data-view="coupons" onclick="switchView('coupons')"><i class="ti ti-ticket"></i> คูปอง</button>
+      <button class="topbar-tab" data-view="stock" onclick="switchView('stock')"><i class="ti ti-package"></i> สต็อก</button>
+      <button class="topbar-tab" data-view="receipt" onclick="switchView('receipt')"><i class="ti ti-receipt"></i> ใบสรุป / ขอบคุณ</button>
       <button class="topbar-tab" data-view="summary" onclick="switchView('summary')"><i class="ti ti-file-description"></i> สรุปยอด</button>
       <button class="topbar-tab" data-view="print" onclick="switchView('print')"><i class="ti ti-printer"></i> พิมพ์ใบแปะหน้าพัสดุ</button>
       <button class="topbar-tab" data-view="tracking" onclick="switchView('tracking')"><i class="ti ti-truck"></i> ใส่เลขพัสดุ</button>
@@ -208,6 +236,24 @@
       <h2><i class="ti ti-ticket"></i> กติกาแคมเปญคูปอง</h2>
       <p style="color:#807078;margin-top:8px">ตั้งเงื่อนไขการแจกคูปอง (ซื้อ Sticker ครบยอด → รับส่วนลดกระเป๋า) การบันทึกจะลงฐานข้อมูลกลางทันที</p>
       <div id="couponManagerContainer"></div>
+    </div>
+  </div>
+
+  <!-- VIEW: STOCK -->
+  <div id="viewStock" class="admin-view hidden">
+    <div style="padding:20px;max-width:1000px;margin:0 auto">
+      <h2><i class="ti ti-package"></i> สต็อกสินค้า</h2>
+      <p style="color:#807078;margin-top:8px">จำกัดจำนวนเฉพาะสินค้าที่พร้อมส่ง ออเดอร์ใหม่จะหักออก และคืนให้อัตโนมัติเมื่อลบออเดอร์</p>
+      <div id="stockManagerContainer"></div>
+    </div>
+  </div>
+
+  <!-- VIEW: RECEIPT / THANK-YOU -->
+  <div id="viewReceipt" class="admin-view hidden">
+    <div style="padding:20px;max-width:1000px;margin:0 auto">
+      <h2><i class="ti ti-receipt"></i> หน้าขอบคุณ / ใบสรุป</h2>
+      <p style="color:#807078;margin-top:8px">ข้อความและ GIF ที่ลูกค้าเห็นหลังยืนยันการชำระเงิน และในใบสรุปที่ดาวน์โหลด</p>
+      <div id="receiptManagerContainer"></div>
     </div>
   </div>
 

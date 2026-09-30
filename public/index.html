@@ -7625,7 +7625,11 @@ document.addEventListener('DOMContentLoaded',function(){
    let on=false;
    try{on=sessionStorage.getItem('hlg_admin_session_v2')==='1'}catch(e){}
    if(on&&(document.body.classList.contains('v8-third-person-view')||document.body.classList.contains('v8-customer-preview-mode')))on=false;
-   return document.body.classList.toggle('admin-mode',on);
+   const result=document.body.classList.toggle('admin-mode',on);
+   // Lazy-load the Visual CMS editors only once we know we're a real admin
+   // (covers login without a page reload).
+   if(on&&typeof window.hlgLoadAdminScripts==='function')window.hlgLoadAdminScripts();
+   return result;
  };
  function syncAdminClass(){window.hlgAdminModeSync()}
  function boot(){ensureBack();ensureLinks();removeBagMenu();syncAdminClass();updateBack()}
@@ -13563,17 +13567,6 @@ if(document.readyState!=='loading')setTimeout(boot,70);
 }
 </style>
 
-<style id="hlg-stock-admin-css">
-#adminPanel-stock .hlg-stock-intro{background:#fff;border:1px solid #f0d7e3;border-radius:17px;padding:16px;color:#765467;line-height:1.65;margin-bottom:14px}
-#adminPanel-stock .hlg-stock-toolbar{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:13px}
-#adminPanel-stock input[type="search"]{flex:1;min-width:200px;border:1px solid #ead3df;border-radius:11px;padding:10px 13px;font:inherit}
-#adminPanel-stock .hlg-stock-card{background:#fff;border:1px solid #f0d7e3;border-radius:15px;padding:12px 14px;margin-bottom:8px;display:grid;grid-template-columns:minmax(185px,2fr) minmax(95px,1fr) minmax(100px,1fr) auto;align-items:center;gap:10px}
-#adminPanel-stock .hlg-stock-card b{display:block;color:#80425f}#adminPanel-stock .hlg-stock-card small{color:#947c89}
-#adminPanel-stock .hlg-stock-card input[type="number"]{width:95px;max-width:100%;padding:9px;border:1px solid #e8cbd9;border-radius:10px;font:inherit}
-#adminPanel-stock button{border:1px solid #dcaabe;border-radius:10px;background:#fff4f8;color:#a53d69;padding:9px 12px;font:inherit;font-weight:700;cursor:pointer}
-#adminPanel-stock .hlg-stock-qty{color:#96627b;font-weight:700}#adminPanel-stock .hlg-stock-low{color:#d3486c}#adminPanel-stock .hlg-stock-off{color:#8c8590}
-@media(max-width:700px){#adminPanel-stock .hlg-stock-card{grid-template-columns:1fr 1fr}#adminPanel-stock .hlg-stock-card>:first-child{grid-column:1/-1}}
-</style>
 <script id="hlg-stock-admin-js">
 (function(){
  const KEY='hlg_inventory_v1', CART='hlg_unified_cart_v1';
@@ -13596,37 +13589,8 @@ if(document.readyState!=='loading')setTimeout(boot,70);
    return [...m.values()]
  }
  function toast(t){if(typeof showToast==='function')showToast(t)}
- function ensure(){
-   const tabs=document.querySelector('#page-admin .admin-tabs'),host=document.getElementById('adminPanel-orders');if(!tabs||!host)return;
-   if(!document.querySelector('[data-admin-tab="stock"]')){
-     const b=document.createElement('button');b.className='admin-tab';b.dataset.adminTab='stock';b.type='button';b.innerHTML='<i class="ti ti-package"></i> สต็อก';b.onclick=()=>switchAdminTab('stock',b);tabs.appendChild(b)
-   }
-   if(!document.getElementById('adminPanel-stock')){
-     const p=document.createElement('section');p.className='admin-panel';p.id='adminPanel-stock';
-     p.innerHTML='<div class="hlg-stock-intro"><b>สต็อกสินค้า ♡</b><br>เปิดดูแลสต็อกเฉพาะสินค้าที่พร้อมส่งได้ แยกตามลายและขนาด ส่วนสินค้าพรีออเดอร์หรือดิจิทัลปล่อยเป็น “ไม่จำกัด” ได้<br>ช่องจำนวนคือจำนวนที่มีพร้อมขาย ณ ตอนที่กดบันทึก ออเดอร์ใหม่จะหักออก และเมื่อลบออเดอร์นั้น จำนวนจะคืนให้อัตโนมัติ</div><div class="hlg-stock-toolbar"><input id="hlgStockSearch" type="search" placeholder="ค้นหาชื่อสินค้า / ขนาด" aria-label="ค้นหาสต็อก"><button type="button" id="hlgStockRefresh">รีเฟรช</button></div><div id="hlgStockList"></div>';
-     host.insertAdjacentElement('afterend',p);
-     p.querySelector('#hlgStockSearch').addEventListener('input',render);
-     p.querySelector('#hlgStockRefresh').addEventListener('click',render)
-   }
- }
- function render(){
-   const root=document.getElementById('hlgStockList');if(!root)return;
-   const q=(document.getElementById('hlgStockSearch')?.value||'').toLowerCase(),cfg=load();
-   const xs=catalog().filter(x=>(x.name+' '+x.variant).toLowerCase().includes(q));
-   root.innerHTML=xs.map(x=>{
-     const k=key(x),r=cfg[k]||{},left=remaining(x),label=r.managed?(left===0?'หมด':left<=5?'ใกล้หมด':'พร้อมขาย'):'ไม่จำกัด';
-     return `<div class="hlg-stock-card" data-stock-key="${esc(k)}"><div><b>${esc(x.name)}</b><small>${esc(x.variant||x.type)}</small></div><label><input type="checkbox" class="hlg-stock-manage" ${r.managed?'checked':''}> จำกัดจำนวน</label><div><input class="hlg-stock-input" type="number" min="0" step="1" inputmode="numeric" value="${r.managed?esc(left):''}" placeholder="จำนวน" aria-label="จำนวน ${esc(x.name)}"><div class="hlg-stock-qty ${left===null?'hlg-stock-off':left<=5?'hlg-stock-low':''}">${label}${left===null?'':` · ${left} ชิ้น`}</div></div><button type="button" class="hlg-stock-save">บันทึก</button></div>`
-   }).join('')||'<div class="hlg-stock-intro">ไม่พบสินค้าค่ะ</div>';
-   root.querySelectorAll('.hlg-stock-save').forEach(b=>b.onclick=()=>{
-     const c=b.closest('[data-stock-key]'),k=c.dataset.stockKey,managed=c.querySelector('.hlg-stock-manage').checked,input=c.querySelector('.hlg-stock-input');
-     const val=input.value.trim();if(managed&&(!/^\d+$/.test(val)||!Number.isSafeInteger(Number(val)))){input.focus();toast('กรุณาใส่จำนวนเต็มตั้งแต่ 0 ขึ้นไป');return}
-     const next=load();next[k]={managed,qty:managed?Number(val):0,baseline:orders().map(o=>String(o.id))};
-     try{localStorage.setItem(KEY,JSON.stringify(next));render();toast('บันทึกสต็อกแล้ว ✓')}catch(e){toast('บันทึกสต็อกไม่สำเร็จ')}
-   })
- }
- window.hlgRenderStock=render;
- const previousSwitch=window.switchAdminTab;
- window.switchAdminTab=function(tab,btn){ensure();const r=previousSwitch&&previousSwitch.apply(this,arguments);if(tab==='stock')render();return r};
+ // NOTE: the stock editor moved to /admin/ (window.hlgRenderStock). The customer-facing
+ // stock guard + window.hlgStockRemaining below stay here.
  const originalCheckout=window.v8ConfirmUnifiedOrder;
  if(typeof originalCheckout==='function')window.v8ConfirmUnifiedOrder=function(){
    let a=[];try{a=JSON.parse(localStorage.getItem(CART)||'[]')}catch(e){};
@@ -13639,8 +13603,6 @@ if(document.readyState!=='loading')setTimeout(boot,70);
    }
    return originalCheckout.apply(this,arguments)
  };
- document.addEventListener('DOMContentLoaded',ensure);
- if(document.readyState!=='loading')ensure();
 })();
 </script>
 
@@ -14188,18 +14150,9 @@ function renderDone(o){const root=document.getElementById('v8CartContent');if(!r
  root.innerHTML=`<div class="hrx-done">${gif?`<img class="hrx-gif" src="${esc(gif)}" alt="ภาพขอบคุณจากร้าน">`:design.gif==='db:thankyou'?'<img class="hrx-gif" id="hrxGifMedia" alt="ภาพขอบคุณจากร้าน" hidden>':''}<div class="hrx-check">✓</div><h2>${esc(design.title)}</h2><p>${esc(design.thanks)}</p><div class="hrx-code">รหัสออเดอร์ของคุณ<b>${esc(o.id)}</b><small>${esc(orderDate(o))}</small></div><div class="hrx-box"><h3>สรุปที่สั่ง</h3>${items.map(x=>`<div class="hrx-product">${x.image?`<img src="${esc(x.image)}" alt="">`:'<span style="flex:0">🛍️</span>'}<span>${esc(x.name||'สินค้า')}${x.variant?'<br><small>'+esc(x.variant)+'</small>':''} × ${Number(x.qty)||1}</span><strong>${money((Number(x.price)||0)*(Number(x.qty)||1))}</strong></div>`).join('')}${line('ราคาสินค้า',money(sub))}${o.tier_promo?.discount?line('ส่วนลด '+o.tier_promo.name,'−'+money(o.tier_promo.discount)):''}${o.tier_promo?.gifts?line('ของแถม',o.tier_promo.gifts):''}${o.tier_promo?.freeShipping?line('โปรส่งฟรี',o.tier_promo.remoteSurcharge?'ฟรีค่าส่งปกติ · พื้นที่ห่างไกล +'+money(o.tier_promo.remoteSurcharge):'ฟรี'):''}${line('ค่าจัดส่ง',money(o.shipping_cost))}${line('ยอดรวม',money(o.total_price),true)}${line('จำนวน',qty(items)+' ชิ้น')}<p class="hrx-mini"><b>จัดส่งไปที่</b><br>${esc(o.customer_address||'').replace(/\n/g,'<br>')}<br>โทร. ${esc(o.customer_phone||'')}</p></div><div class="hrx-box hrx-payment"><h3>${esc(o.payment_heading||payment.heading||'ชำระเงิน')} · ยอด ${money(o.total_price)}</h3><p class="hrx-mini">${esc(o.payment_note||payment.note||'สแกน QR พร้อมเพย์ตามยอดออเดอร์ หรือโอนเข้าบัญชีด้านล่าง')}</p><div class="hrx-qr-frame"><div class="hrx-qr-head">THAI QR PAYMENT · PromptPay</div><img id="hlgReceiptQr" src="https://helloxglitterstore.vercel.app/images/qrcode.jpeg" onerror="handleImgError(this,'QR Code','./images/qrcode.jpeg')" alt="QR สำหรับชำระเงิน"><div id="hlgQrMessage" class="ht-qr-note"></div></div><div class="hrx-bank"><b>${esc(o.payment_bank_name||payment.bank||'กสิกรไทย')} ${esc(o.payment_bank_account||payment.account||'749-2439-414')}</b><span>ชื่อบัญชี ${esc(o.payment_bank_holder||payment.holder||'Nichakarn E.')}</span><button class="hrx-button" type="button" id="hrxCopy">คัดลอกเลขบัญชี</button></div><div class="hrx-slip-box"><h3>แนบสลิปการโอนเงิน</h3><p class="hrx-mini">${o.payment_slip?'แนบสลิปแล้ว · รอร้านตรวจสอบ':'โอนเงินแล้วแนบสลิปเพื่อให้ร้านตรวจสอบค่ะ'}</p><label class="hrx-slip-drop" for="hrxSlipInput">▤<strong>${o.payment_slip?'แตะเพื่อเปลี่ยนสลิป':'แตะเพื่อเลือกรูปสลิป'}</strong><small>JPG, PNG หรือ WEBP ไม่เกิน 5 MB</small><input id="hrxSlipInput" type="file" accept="image/png,image/jpeg,image/webp" hidden></label>${o.payment_slip?`<img class="hrx-slip-preview" src="${esc(o.payment_slip)}" alt="สลิปที่แนบแล้ว">`:''}<div id="hrxSlipError" class="hrx-error"></div></div></div><div class="hrx-actions"><button class="primary" type="button" id="hrxDownload">↓ ${o.payment_verification==='verified'&&o.payment_verified_by==='admin'&&o.payment_verified_at?'ดาวน์โหลดใบรับชำระเงิน PNG':'ดาวน์โหลดใบสรุป PNG'}</button><button type="button" id="hrxTracking">เช็กสถานะการชำระเงิน →</button></div><button class="hrx-button primary" id="hrxConfirmPayment" type="button" ${o.payment_customer_confirmed_at?'disabled':''}>${o.payment_customer_confirmed_at?'✓ ส่งยืนยันการชำระแล้ว':'✓ ยืนยันการชำระ'}</button></div>`;
  if(design.gif==='db:thankyou')gifSource().then(src=>{const img=root.querySelector('#hrxGifMedia');if(img&&src){img.src=src;img.hidden=false}}).catch(e=>console.error('GIF display failed',e));window.hlgRenderOrderQr?.(o);root.querySelector('#hrxDownload').onclick=()=>window.hrxDownload(o.id);root.querySelector('#hrxCopy').onclick=()=>window.hrxCopyBank(o.payment_bank_account||payment.account);root.querySelector('#hrxSlipInput').onchange=e=>window.hrxPostSlip(o.id,e.target.files[0]);root.querySelector('#hrxTracking').onclick=()=>showPage('tracking');root.querySelector('#hrxConfirmPayment').onclick=()=>window.hrxConfirmPayment(o.id);root.scrollIntoView({block:'start',behavior:'smooth'});
 }
-function admin(){const tabs=document.querySelector('#page-admin .admin-tabs'),anchor=document.getElementById('adminPanel-shipping');if(!tabs||!anchor)return;if(!document.getElementById('adminPanel-receipt')){const panel=document.createElement('section');panel.id='adminPanel-receipt';panel.className='admin-panel';anchor.insertAdjacentElement('afterend',panel);const tab=document.createElement('button');tab.className='admin-tab';tab.dataset.adminTab='receipt';tab.type='button';tab.textContent='🎀 หน้าขอบคุณ';tab.onclick=()=>switchAdminTab('receipt',tab);tabs.append(tab)} }
-function renderAdmin(){
- const p=document.getElementById('adminPanel-receipt');if(!p)return;const v=settings();
- p.innerHTML=`<div class="hrx-admin"><h3>ตกแต่งหน้าหลังสั่งซื้อ</h3><label>หัวข้อ<input id="hrxTitle" maxlength="80" value="${esc(v.title)}"></label><label>คำขอบคุณ<textarea id="hrxThanks" maxlength="350">${esc(v.thanks)}</textarea></label><label>ลิงก์ GIF (https://)<input id="hrxGifUrl" type="url" placeholder="https://example.com/thank-you.gif" value="${esc(/^https:\/\//.test(v.gif)?v.gif:'')}"></label><label>หรืออัปโหลด GIF ไม่เกิน 8 MB<input id="hrxGifFile" type="file" accept="image/gif"></label><img id="hrxGifPreview" class="hrx-gif-preview" alt="ตัวอย่าง GIF" hidden><div id="hrxGifStatus" class="hrx-mini">${v.gif?'กำลังโหลดตัวอย่าง GIF…':'ยังไม่ได้ใส่ GIF'}</div><button class="hrx-button primary" id="hrxSaveDesign" type="button">บันทึกหน้าขอบคุณ</button><button class="hrx-button" id="hrxRemoveGif" type="button">ลบ GIF</button><p class="hrx-mini">GIF จะแสดงบนหน้าขอบคุณและในใบสรุปคำสั่งซื้อที่ดาวน์โหลดจากเบราว์เซอร์นี้</p></div>`;
- if(v.gif)gifSource().then(src=>{if(!p.isConnected)return;const im=p.querySelector('#hrxGifPreview'),status=p.querySelector('#hrxGifStatus');if(src){im.src=src;im.hidden=false;status.textContent='ตัวอย่าง GIF ที่ใช้อยู่'}else status.textContent='ไม่พบไฟล์ GIF กรุณาอัปโหลดอีกครั้ง'});
- const value=()=>({title:p.querySelector('#hrxTitle').value.trim()||'ขอบคุณค่ะ ♡',thanks:p.querySelector('#hrxThanks').value.trim()});
- p.querySelector('#hrxSaveDesign').onclick=()=>{const url=p.querySelector('#hrxGifUrl').value.trim(),gif=url||settings().gif;if(gif&&!/^https:\/\//i.test(gif)&&gif!=='db:thankyou'&&!gif.startsWith('data:image/gif;base64,')){showToast?.('ใช้ลิงก์ GIF แบบ https:// ค่ะ');return}try{localStorage.setItem(SETTINGS,JSON.stringify({...value(),gif}));renderAdmin();showToast?.('บันทึกหน้าขอบคุณแล้ว ♡')}catch(e){showToast?.('บันทึกไม่สำเร็จ พื้นที่เบราว์เซอร์เต็มค่ะ')}};
- p.querySelector('#hrxRemoveGif').onclick=()=>{try{localStorage.setItem(SETTINGS,JSON.stringify({...value(),gif:''}));renderAdmin();showToast?.('ลบ GIF แล้ว')}catch(e){showToast?.('บันทึกไม่สำเร็จค่ะ')}};
- p.querySelector('#hrxGifFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;if(f.type!=='image/gif'||f.size>8*1024*1024){showToast?.('ใช้ไฟล์ GIF ขนาดไม่เกิน 8 MB ค่ะ');return}const status=p.querySelector('#hrxGifStatus');status.textContent='กำลังบันทึก GIF…';try{await storeGif(f);localStorage.setItem(SETTINGS,JSON.stringify({...value(),gif:'db:thankyou'}));const preview=await gifSource();if(!preview.startsWith('data:image/gif;base64,'))throw Error('GIF readback failed');renderAdmin();showToast?.('อัปโหลด GIF และตรวจตัวอย่างแล้ว ♡')}catch(error){console.error('GIF save failed',error);status.textContent='บันทึก GIF ไม่สำเร็จ กรุณาลองใหม่หรือใช้ลิงก์ GIF';showToast?.('บันทึก GIF ไม่สำเร็จค่ะ')}};
-}
-const oldSwitch=window.switchAdminTab;window.switchAdminTab=function(tab,btn){admin();const r=oldSwitch?.apply(this,arguments);if(tab==='receipt')renderAdmin();return r};
-document.addEventListener('DOMContentLoaded',admin);if(document.readyState!=='loading')admin();
+// NOTE: the receipt/thank-you design editor moved to /admin/ (window.hlgRenderReceipt).
+// The customer-facing settings(), gifSource(), receiptMarkup(), renderDone() and the
+// hrx* download/slip/confirm flows above stay here.
 })();
 </script>
 <script id="hlg-orders-indexeddb-js">
@@ -15617,7 +15570,7 @@ body.hlg-text-edit-mode .hlg-text-hover{outline:2px dashed #d84c89!important;out
 #hlgTextDialog button{border:0;border-radius:10px;padding:9px 13px;font:inherit;font-size:11px;font-weight:800;cursor:pointer}
 #hlgTextReset{margin-right:auto;background:#fff1f5;color:#a84871}#hlgTextCancel{background:#f3edf0;color:#795b69}#hlgTextSave{background:#bf4f7d;color:#fff}
 </style>
-<script id="hlg-inline-copy-editor-js">
+<script id="hlg-inline-copy-editor-js" type="text/x-hlg-admin-script">
 (function(){
 'use strict';
 const KEY='hlg_public_copy_v1',originals=new WeakMap(),placeholderOriginals=new WeakMap();
@@ -15704,7 +15657,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 body:not(.admin-mode) .hlg-section-close,body:not(.admin-mode) .hlg-section-cover,body.v8-third-person-view .hlg-section-close,body.v8-third-person-view .hlg-section-cover{display:none!important}
 .v8-banner-inline-shell>.hlg-section-close{right:51px}
 </style>
-<script id="hlg-section-visibility-js">
+<script id="hlg-section-visibility-js" type="text/x-hlg-admin-script">
 (function(){
 'use strict';
 const KEY='hlg_section_visibility_v1';
@@ -15955,7 +15908,7 @@ function config(){try{const v=JSON.parse(localStorage.getItem(KEY)||'null');retu
 let escHandler=null;function close(){const d=$('#hlgPayThanks');if(d){d.remove();document.body.style.overflow=d.dataset.previousOverflow||''}if(escHandler){document.removeEventListener('keydown',escHandler);escHandler=null}}
 function show(order,preview){const v=config();close();const d=document.createElement('div');d.id='hlgPayThanks';d.setAttribute('role','dialog');d.setAttribute('aria-modal','true');d.setAttribute('aria-labelledby','hptTitle');d.dataset.previousOverflow=document.body.style.overflow;const card=document.createElement('div');card.className='hpt-card';card.style.setProperty('--hpt-accent',/^#[0-9a-f]{6}$/i.test(v.accent)?v.accent:defaults.accent);const x=document.createElement('button');x.className='hpt-close';x.type='button';x.setAttribute('aria-label','ปิดป๊อปอัป');x.textContent='×';x.onclick=close;card.append(x);if(v.sparkles){for(const [symbol,pos] of [['✧','a'],['♡','b'],['✦','c']]){const el=document.createElement('span');el.className='hpt-ornament '+pos;el.textContent=symbol;card.append(el)}}const icon=document.createElement('div');icon.className='hpt-icon';icon.textContent=String(v.icon||defaults.icon).slice(0,8);card.append(icon);const h=document.createElement('h2');h.id='hptTitle';h.textContent=v.title;card.append(h);const lead=document.createElement('p');lead.className='hpt-lead';lead.textContent=v.lead;card.append(lead);if(order?.id&&!preview){const id=document.createElement('div');id.className='hpt-order';id.textContent='ออเดอร์ '+order.id;card.append(id)}const steps=document.createElement('div');steps.className='hpt-steps';v.steps.filter(Boolean).forEach((step,i)=>{const row=document.createElement('div');row.className='hpt-step';const number=document.createElement('span');number.className='hpt-num';number.textContent=String(i+1);const text=document.createElement('span');text.textContent=step;row.append(number,text);steps.append(row)});card.append(steps);const footer=document.createElement('p');footer.className='hpt-footer';footer.textContent=v.footer;card.append(footer);const actions=document.createElement('div');actions.className='hpt-actions';const track=document.createElement('button');track.type='button';track.textContent=v.track;track.onclick=()=>{close();if(preview)return;showPage('tracking');setTimeout(()=>{const input=$('#tr-phone');if(input&&order?.customer_phone){input.value=order.customer_phone;input.focus()}},120)};const later=document.createElement('button');later.type='button';later.className='hpt-later';later.textContent=v.later;later.onclick=close;actions.append(track,later);card.append(actions);d.append(card);d.onclick=e=>{if(e.target===d)close()};escHandler=e=>{if(e.key==='Escape'&&d.isConnected)close()};document.addEventListener('keydown',escHandler);document.body.append(d);document.body.style.overflow='hidden';x.focus()}
 window.hrxShowPaymentThanks=order=>show(order,false);
-function ensureAdmin(){const tabs=$('#page-admin .admin-tabs'),anchor=$('#adminPanel-receipt')||$('#adminPanel-store');if(!tabs||!anchor)return;if(!$('#hptAdminTab')){const b=document.createElement('button');b.id='hptAdminTab';b.type='button';b.className='admin-tab';b.dataset.adminTab='paymentThanks';b.textContent='💌 ขอบคุณหลังชำระ';b.onclick=()=>switchAdminTab('paymentThanks',b);tabs.append(b)}if(!$('#adminPanel-paymentThanks')){const p=document.createElement('section');p.id='adminPanel-paymentThanks';p.className='admin-panel';anchor.insertAdjacentElement('afterend',p)}}
+function ensureAdmin(){const tabs=$('#page-admin .admin-tabs'),anchor=$('#adminPanel-store');if(!tabs||!anchor)return;if(!$('#hptAdminTab')){const b=document.createElement('button');b.id='hptAdminTab';b.type='button';b.className='admin-tab';b.dataset.adminTab='paymentThanks';b.textContent='💌 ขอบคุณหลังชำระ';b.onclick=()=>switchAdminTab('paymentThanks',b);tabs.append(b)}if(!$('#adminPanel-paymentThanks')){const p=document.createElement('section');p.id='adminPanel-paymentThanks';p.className='admin-panel';anchor.insertAdjacentElement('afterend',p)}}
 function renderAdmin(){if(!admin())return;ensureAdmin();const p=$('#adminPanel-paymentThanks');if(!p)return;const v=config();p.innerHTML='<div class="hpt-preview-form"><h3>ป๊อปอัปหลังยืนยันการชำระเงิน</h3><p>ข้อความนี้จะขึ้นหลังลูกค้าแนบสลิป กดยืนยัน และระบบบันทึกสำเร็จแล้ว</p><label>หัวข้อ<input id="hptAdminTitle" maxlength="100"></label><label>ข้อความขอบคุณ<textarea id="hptAdminLead" maxlength="500"></textarea></label><label>ขั้นตอนการเช็กสถานะ (หนึ่งบรรทัดต่อหนึ่งขั้น)<textarea id="hptAdminSteps" maxlength="700"></textarea></label><label>ข้อความท้ายป๊อปอัป<textarea id="hptAdminFooter" maxlength="400"></textarea></label><div class="hlgc-grid"><label>ข้อความปุ่มเช็กสถานะ<input id="hptAdminTrack" maxlength="60"></label><label>ข้อความปุ่มปิด<input id="hptAdminLater" maxlength="60"></label><label>อีโมจิด้านบน<input id="hptAdminIcon" maxlength="8"></label><label>สีหลัก<input id="hptAdminAccent" type="color"></label></div><label><input id="hptAdminSparkles" type="checkbox"> แสดงดาวตกแต่งเบา ๆ</label><button type="button" id="hptAdminSave">บันทึกข้อความ</button><button type="button" id="hptAdminPreview">ดูตัวอย่างป๊อปอัป</button></div>';const values={hptAdminTitle:v.title,hptAdminLead:v.lead,hptAdminSteps:v.steps.join('\n'),hptAdminFooter:v.footer,hptAdminTrack:v.track,hptAdminLater:v.later,hptAdminIcon:v.icon,hptAdminAccent:v.accent};for(const [id,value] of Object.entries(values))p.querySelector('#'+id).value=value;p.querySelector('#hptAdminSparkles').checked=!!v.sparkles;p.querySelector('#hptAdminSave').onclick=()=>{const val=id=>p.querySelector('#'+id).value.trim(),steps=val('hptAdminSteps').split(/\n+/).map(x=>x.trim()).filter(Boolean);if(!val('hptAdminTitle')||!val('hptAdminLead')||!steps.length){alert('กรอกหัวข้อ ข้อความ และขั้นตอนอย่างน้อย 1 ข้อค่ะ');return}const next={title:val('hptAdminTitle'),lead:val('hptAdminLead'),steps:steps.slice(0,5),footer:val('hptAdminFooter'),track:val('hptAdminTrack')||defaults.track,later:val('hptAdminLater')||defaults.later,icon:val('hptAdminIcon')||defaults.icon,accent:val('hptAdminAccent'),sparkles:p.querySelector('#hptAdminSparkles').checked};try{localStorage.setItem(KEY,JSON.stringify(next));window.showToast?.('บันทึกป๊อปอัปแล้ว ♡');renderAdmin()}catch(e){alert('บันทึกไม่สำเร็จ พื้นที่เบราว์เซอร์อาจเต็มค่ะ')}};p.querySelector('#hptAdminPreview').onclick=()=>show(null,true)}
 const oldSwitch=window.switchAdminTab;window.switchAdminTab=function(tab,btn){ensureAdmin();const r=oldSwitch?.apply(this,arguments);if(tab==='paymentThanks')renderAdmin();return r};function boot(){ensureAdmin()}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot()
 })();
@@ -16900,6 +16853,37 @@ if(document.readyState==='loading'){
 }else{
   hlgRenderAccountCard();
 }
+</script>
+
+<script id="hlg-admin-lazy-loader-js">
+/* Visual CMS editors are shipped as inert blocks
+   (type="text/x-hlg-admin-script") so customers never parse or execute them.
+   They are injected here only for a real admin session. */
+(function(){
+ 'use strict';
+ function isAdmin(){
+   try{
+     if(sessionStorage.getItem('hlg_admin_session_v2')!=='1')return false;
+     return !document.body.classList.contains('v8-third-person-view')
+         && !document.body.classList.contains('v8-customer-preview-mode');
+   }catch(e){return false}
+ }
+ function run(){
+   const blocks=document.querySelectorAll('script[type="text/x-hlg-admin-script"]');
+   for(const block of blocks){
+     if(block.dataset.hlgLoaded==='1')continue;
+     block.dataset.hlgLoaded='1';
+     const s=document.createElement('script');
+     s.textContent=block.textContent;
+     document.body.appendChild(s);
+   }
+ }
+ window.hlgLoadAdminScripts=run;
+ function maybeRun(){if(isAdmin())run()}
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',maybeRun,{once:true});
+ else maybeRun();
+ window.addEventListener('pageshow',maybeRun);
+})();
 </script>
 </body>
 </html>
