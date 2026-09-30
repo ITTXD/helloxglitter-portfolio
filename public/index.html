@@ -15739,13 +15739,13 @@ function apply(){
    const off=!!hidden[id];el.dataset.hlgHidden=off?'1':'0';el.classList.toggle('hlg-admin-visible',canEdit);
    let close=el.querySelector(':scope > .hlg-section-close');
    if(canEdit&&!off){
-    if(!close){close=document.createElement('button');close.type='button';close.className='hlg-section-close';close.textContent='×';el.appendChild(close)}
+    if(!close){close=document.createElement('button');close.type='button';close.className='hlg-section-close';close.textContent='×';close.dataset.v8clean='1';close.dataset.v8StoryOwner='1';el.appendChild(close)}
     close.title='ซ่อน'+label+'จากลูกค้า';close.setAttribute('aria-label',close.title);
     close.onclick=e=>{e.preventDefault();e.stopPropagation();toggle(id)}
    }else close?.remove();
    let cover=el.querySelector(':scope > .hlg-section-cover');
    if(canEdit&&off){
-    if(!cover){cover=document.createElement('div');cover.className='hlg-section-cover';cover.innerHTML='<button type="button">แสดงส่วนนี้อีกครั้ง</button>';el.appendChild(cover)}
+    if(!cover){cover=document.createElement('div');cover.className='hlg-section-cover';cover.dataset.v8clean='1';cover.dataset.v8StoryOwner='1';cover.innerHTML='<button type="button">แสดงส่วนนี้อีกครั้ง</button>';el.appendChild(cover)}
     cover.querySelector('button').onclick=e=>{e.preventDefault();e.stopPropagation();toggle(id)}
    }else cover?.remove()
   })
