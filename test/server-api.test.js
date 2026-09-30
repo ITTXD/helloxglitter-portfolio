@@ -277,6 +277,40 @@ describe('GET /api/orders/:id (admin)', () => {
     await handler(createReq('GET', '/api/orders/some-id'), res);
     expect(res._status).toBe(401);
   });
+
+  test('404 when order does not exist', async () => {
+    const res = createRes();
+    await handler(createReq('GET', '/api/orders/NON-EXISTENT', null, 'admin_session=test-session-secret'), res);
+    expect(res._status).toBe(404);
+  });
+
+  test('returns order by Firestore document ID', async () => {
+    mockDocs['doc-direct-id'] = { _docId: 'doc-direct-id', id: 'HXG-DIRECT', total_price: 299 };
+    const res = createRes();
+    await handler(createReq('GET', '/api/orders/doc-direct-id', null, 'admin_session=test-session-secret'), res);
+    expect(res._status).toBe(200);
+    const body = JSON.parse(res._body);
+    expect(body.id).toBe('HXG-DIRECT');
+  });
+
+  test('returns order by custom order ID (HXG-...) via fallback query', async () => {
+    mockCollectionData = [{ _docId: 'doc-custom-id', id: 'HXG-CUSTOM-001', total_price: 590 }];
+    const res = createRes();
+    await handler(createReq('GET', '/api/orders/HXG-CUSTOM-001', null, 'admin_session=test-session-secret'), res);
+    expect(res._status).toBe(200);
+    const body = JSON.parse(res._body);
+    expect(body._docId).toBe('doc-custom-id');
+    expect(body.total_price).toBe(590);
+  });
+
+  test('returns sticker order by custom ID', async () => {
+    mockCollectionData = [{ _docId: 'doc-sticker-id', id: 'HXG-STICKER-99', type: 'sticker', total_price: 138 }];
+    const res = createRes();
+    await handler(createReq('GET', '/api/orders/HXG-STICKER-99', null, 'admin_session=test-session-secret'), res);
+    expect(res._status).toBe(200);
+    const body = JSON.parse(res._body);
+    expect(body.type).toBe('sticker');
+  });
 });
 
 describe('PUT /api/orders/:id', () => {

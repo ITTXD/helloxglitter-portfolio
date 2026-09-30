@@ -132,6 +132,27 @@ async function fsFindByField(collectionName, fieldName, fieldValue) {
   return { _docId: d.id, ...d.data() };
 }
 
+async function findOrderRecord(id) {
+  if (!id) return null;
+  // 1. Check orders by Doc ID
+  let order = await fsGetDoc('orders', id);
+  if (order) return { order, collectionName: 'orders', docId: order._docId || id };
+
+  // 2. Check orders by custom ID field (e.g. HXG-...)
+  order = await fsFindByField('orders', 'id', id);
+  if (order) return { order, collectionName: 'orders', docId: order._docId || id };
+
+  // 3. Check sticker_orders by Doc ID
+  order = await fsGetDoc('sticker_orders', id);
+  if (order) return { order, collectionName: 'sticker_orders', docId: order._docId || id };
+
+  // 4. Check sticker_orders by custom ID field
+  order = await fsFindByField('sticker_orders', 'id', id);
+  if (order) return { order, collectionName: 'sticker_orders', docId: order._docId || id };
+
+  return null;
+}
+
 // ==================== CONFIG ====================
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -1020,9 +1041,9 @@ async function handleApi(req, res) {
   if (pathname.startsWith('/api/orders/') && method === 'GET') {
     if (!isAdmin(req)) { send401(res); return true; }
     const id = pathname.split('/api/orders/')[1];
-    const order = await fsGetDoc('orders', id);
-    if (!order) { send404(res); return true; }
-    sendJson(res, 200, order);
+    const record = await findOrderRecord(id);
+    if (!record) { send404(res); return true; }
+    sendJson(res, 200, record.order);
     return true;
   }
 
@@ -1031,13 +1052,9 @@ async function handleApi(req, res) {
     if (!isAdmin(req)) { send401(res); return true; }
     const id = pathname.split('/api/orders/')[1];
     const body = await readBody(req);
-    var existing = await fsGetDoc('orders', id);
-    var docId = id;
-    if (!existing) {
-      const byCustom = await fsFindByField('orders', 'id', id);
-      if (byCustom) { existing = byCustom; docId = byCustom._docId; }
-    }
-    if (!existing) { send404(res); return true; }
+    const record = await findOrderRecord(id);
+    if (!record) { send404(res); return true; }
+    const { order: existing, collectionName, docId } = record;
     if (body.note !== undefined) {
       body.note_status = body.note ? 'on' : 'off';
     }
@@ -1053,7 +1070,7 @@ async function handleApi(req, res) {
       body.customer_address = cust.customer_address;
       body.customer_info = cust.customer_info;
     }
-    await fsUpdateDoc('orders', docId, body);
+    await fsUpdateDoc(collectionName, docId, body);
     sendJson(res, 200, { success: true });
     return true;
   }
@@ -1062,14 +1079,9 @@ async function handleApi(req, res) {
   if (pathname.startsWith('/api/orders/') && method === 'DELETE') {
     if (!isAdmin(req)) { send401(res); return true; }
     const id = pathname.split('/api/orders/')[1];
-    var existing = await fsGetDoc('orders', id);
-    var docId = id;
-    if (!existing) {
-      const byCustom = await fsFindByField('orders', 'id', id);
-      if (byCustom) { existing = byCustom; docId = byCustom._docId; }
-    }
-    if (!existing) { send404(res); return true; }
-    await fsDeleteDoc('orders', docId);
+    const record = await findOrderRecord(id);
+    if (!record) { send404(res); return true; }
+    await fsDeleteDoc(record.collectionName, record.docId);
     sendJson(res, 200, { success: true });
     return true;
   }
@@ -1079,13 +1091,8 @@ async function handleApi(req, res) {
     if (!isAdmin(req)) { send401(res); return true; }
     const id = pathname.split('/api/orders/')[1].replace('/slip', '');
     const body = await readBody(req);
-    var existing = await fsGetDoc('orders', id);
-    var docId = id;
-    if (!existing) {
-      const byCustom = await fsFindByField('orders', 'id', id);
-      if (byCustom) { existing = byCustom; docId = byCustom._docId; }
-    }
-    if (!existing) { send404(res); return true; }
+    const record = await findOrderRecord(id);
+    if (!record) { send404(res); return true; }
 
     if (!body.slip_data) { sendJson(res, 400, { error: 'ไม่มีข้อมูลสลีป' }); return true; }
 
@@ -1096,7 +1103,7 @@ async function handleApi(req, res) {
       status: 1,
     };
 
-    await fsUpdateDoc('orders', docId, updateData);
+    await fsUpdateDoc(record.collectionName, record.docId, updateData);
     sendJson(res, 200, { success: true, verified: true, message: 'อัปโหลดสลีปสำเร็จ' });
     return true;
   }
@@ -1105,13 +1112,8 @@ async function handleApi(req, res) {
   if (pathname.startsWith('/api/orders/') && pathname.endsWith('/slip-public') && method === 'POST') {
     const id = pathname.split('/api/orders/')[1].replace('/slip-public', '');
     const body = await readBody(req);
-    var existing = await fsGetDoc('orders', id);
-    var docId = id;
-    if (!existing) {
-      const byCustom = await fsFindByField('orders', 'id', id);
-      if (byCustom) { existing = byCustom; docId = byCustom._docId; }
-    }
-    if (!existing) { send404(res); return true; }
+    const record = await findOrderRecord(id);
+    if (!record) { send404(res); return true; }
 
     if (!body.slip_data) { sendJson(res, 400, { error: 'ไม่มีข้อมูลสลีป' }); return true; }
 

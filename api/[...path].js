@@ -92,6 +92,43 @@ function extractCustomerFields(data) {
   };
 }
 
+async function findOrderRecord(id) {
+  if (!id) return null;
+  // 1. Check orders by Doc ID
+  try {
+    const d = await getDoc(doc(db, 'orders', id));
+    if (d.exists()) return { order: { _docId: d.id, ...d.data() }, collectionName: 'orders', docId: d.id };
+  } catch (e) {}
+
+  // 2. Check orders by custom ID field
+  try {
+    const q = query(collection(db, 'orders'), where('id', '==', id), limit(1));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const d = snap.docs[0];
+      return { order: { _docId: d.id, ...d.data() }, collectionName: 'orders', docId: d.id };
+    }
+  } catch (e) {}
+
+  // 3. Check sticker_orders by Doc ID
+  try {
+    const d = await getDoc(doc(db, 'sticker_orders', id));
+    if (d.exists()) return { order: { _docId: d.id, ...d.data() }, collectionName: 'sticker_orders', docId: d.id };
+  } catch (e) {}
+
+  // 4. Check sticker_orders by custom ID field
+  try {
+    const q = query(collection(db, 'sticker_orders'), where('id', '==', id), limit(1));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const d = snap.docs[0];
+      return { order: { _docId: d.id, ...d.data() }, collectionName: 'sticker_orders', docId: d.id };
+    }
+  } catch (e) {}
+
+  return null;
+}
+
 function sendJson(res, status, data) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(data));
@@ -911,10 +948,9 @@ module.exports = async (req, res) => {
     if (pathname.startsWith('/api/orders/') && method === 'GET') {
       if (!isAdmin(req)) { send401(res); return; }
       const id = pathname.split('/api/orders/')[1];
-      const d = await getDoc(doc(db, 'orders', id));
-      const result = d.exists() ? { _docId: d.id, ...d.data() } : null;
-      if (!result) { send404(res); return; }
-      sendJson(res, 200, result);
+      const record = await findOrderRecord(id);
+      if (!record) { send404(res); return; }
+      sendJson(res, 200, record.order);
       return;
     }
 
@@ -923,14 +959,9 @@ module.exports = async (req, res) => {
       if (!isAdmin(req)) { send401(res); return; }
       const id = pathname.split('/api/orders/')[1];
       const body = await readBody(req);
-      let existing = await getDoc(doc(db, 'orders', id)).then(d => d.exists() ? { _docId: d.id, ...d.data() } : null);
-      let docId = id;
-      if (!existing) {
-        const q = query(collection(db, 'orders'), where('id', '==', id), limit(1));
-        const snap = await getDocs(q);
-        if (!snap.empty) { existing = { _docId: snap.docs[0].id, ...snap.docs[0].data() }; docId = snap.docs[0].id; }
-      }
-      if (!existing) { send404(res); return; }
+      const record = await findOrderRecord(id);
+      if (!record) { send404(res); return; }
+      const { order: existing, collectionName, docId } = record;
 
       const updates = {};
       if (body.status !== undefined) updates.status = body.status;
@@ -956,8 +987,8 @@ module.exports = async (req, res) => {
       if (body.tracking_carrier !== undefined) updates.tracking_carrier = body.tracking_carrier;
       updates.updated_at = new Date().toISOString();
 
-      await updateDoc(doc(db, 'orders', docId), updates);
-      const updated = await getDoc(doc(db, 'orders', docId)).then(d => ({ _docId: d.id, ...d.data() }));
+      await updateDoc(doc(db, collectionName, docId), updates);
+      const updated = await getDoc(doc(db, collectionName, docId)).then(d => ({ _docId: d.id, ...d.data() }));
       sendJson(res, 200, { success: true, ...updated });
       return;
     }
@@ -966,15 +997,9 @@ module.exports = async (req, res) => {
     if (pathname.startsWith('/api/orders/') && method === 'DELETE') {
       if (!isAdmin(req)) { send401(res); return; }
       const id = pathname.split('/api/orders/')[1];
-      let existing = await getDoc(doc(db, 'orders', id)).then(d => d.exists() ? { _docId: d.id, ...d.data() } : null);
-      let docId = id;
-      if (!existing) {
-        const q = query(collection(db, 'orders'), where('id', '==', id), limit(1));
-        const snap = await getDocs(q);
-        if (!snap.empty) { existing = { _docId: snap.docs[0].id, ...snap.docs[0].data() }; docId = snap.docs[0].id; }
-      }
-      if (!existing) { send404(res); return; }
-      await deleteDoc(doc(db, 'orders', docId));
+      const record = await findOrderRecord(id);
+      if (!record) { send404(res); return; }
+      await deleteDoc(doc(db, record.collectionName, record.docId));
       sendJson(res, 200, { success: true });
       return;
     }

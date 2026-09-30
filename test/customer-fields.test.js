@@ -342,6 +342,33 @@ async function runTests() {
     assert.strictEqual(data.status >= 0, true);
   });
 
+  console.log('\n── 8. GET /api/orders/:id (ORDER ID & DOC ID LOOKUP) ──');
+
+  await asyncTest('GET /api/orders/:id succeeds with custom HXG-... ID (Admin)', async () => {
+    const docId = Object.keys(inMemoryOrders)[0];
+    const orderId = inMemoryOrders[docId].id;
+    const res = createRes();
+    await serverHandler(createReq('GET', `/api/orders/${orderId}`, null, 'admin_session=test-secret'), res);
+    assert.strictEqual(res._status, 200);
+    const data = JSON.parse(res._body);
+    assert.strictEqual(data.id, orderId);
+  });
+
+  await asyncTest('GET /api/orders/:id succeeds with Firestore docId (Admin)', async () => {
+    const docId = Object.keys(inMemoryOrders)[0];
+    const res = createRes();
+    await serverHandler(createReq('GET', `/api/orders/${docId}`, null, 'admin_session=test-secret'), res);
+    assert.strictEqual(res._status, 200);
+    const data = JSON.parse(res._body);
+    assert.strictEqual(data._docId, docId);
+  });
+
+  await asyncTest('GET /api/orders/:id returns 404 for unknown order ID', async () => {
+    const res = createRes();
+    await serverHandler(createReq('GET', '/api/orders/NON-EXISTENT-ID', null, 'admin_session=test-secret'), res);
+    assert.strictEqual(res._status, 404);
+  });
+
   console.log('\n========================================');
   console.log(`Results: ${PASSED} passed, ${FAILED} failed`);
   console.log('========================================');
