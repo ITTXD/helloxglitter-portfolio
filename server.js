@@ -535,7 +535,7 @@ async function handleApi(req, res) {
     }
 
     const finalTotalPrice = Math.max(0, basePrice - couponDiscount);
-    const orderId = generateOrderId();
+    const orderId = (body.id || '').trim() || generateOrderId();
 
     const order = {
       id: orderId,
@@ -556,11 +556,14 @@ async function handleApi(req, res) {
       coupon_discount: couponDiscount,
       shipping_cost: body.shipping_cost != null ? body.shipping_cost : (body.is_remote ? 40 : 0),
       is_remote: body.is_remote || false,
-      status: 0,
+      status: body.status !== undefined ? Number(body.status) : 0,
       note: body.note || '',
       note_status: body.note ? 'on' : 'off',
-      tracking_number: '',
-      tracking_carrier: '',
+      tracking_number: body.tracking_number || '',
+      tracking_carrier: body.tracking_carrier || '',
+      slip_data: body.slip_data || null,
+      slip_verified: !!body.slip_verified,
+      slip_uploaded_at: body.slip_data ? new Date().toISOString() : null,
     };
 
     if (validatedCoupon) {
@@ -1357,6 +1360,8 @@ const requestHandler = async (req, res) => {
     sendJson(res, 500, { error: 'Internal server error' });
   }
 };
+
+requestHandler._localMemStore = localMemStore;
 
 if (process.env.VERCEL) {
   module.exports = requestHandler;
