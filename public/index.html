@@ -3933,13 +3933,7 @@ async function renderInline(){
 function bindObserver(){
   const root=document.querySelector('.v5-products');
   if(!root)return;
-  if(observer)observer.disconnect();
-  observer=new MutationObserver(()=>{
-    if(rendering)return;
-    const foreign=[...root.children].some(el=>el.dataset.v8InlinePreview!=='1');
-    if(foreign)setTimeout(renderInline,20)
-  });
-  observer.observe(root,{childList:true})
+  /* Observer removed to prevent hover infinite loops */
 }
 
 window.v8InlinePreviewRender=renderInline;
