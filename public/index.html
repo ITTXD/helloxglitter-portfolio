@@ -4438,82 +4438,7 @@ window.v5DeleteBanner=function(){};
 window.v5MoveBanner=function(){};
 window.v5PickBanner=function(){};
 
-/* =========================================================
-   STORY HIGHLIGHT — ONE OWNER ONLY
-========================================================= */
-const S_META='hlg_story_meta_stable_v1';
-const S_INIT='hlg_story_single_owner_initialized';
-const S_LEGACY=['hlg_v6_stories','hlg_story_final_v1','hlg_story_clean_v2','hlg_story_meta_stable_v1_backup'];
-let storyObs=null;
-
-function sLoad(){
-  try{
-    const x=JSON.parse(localStorage.getItem(S_META)||'[]');
-    return Array.isArray(x)?x:[]
-  }catch(e){return[]}
-}
-function markStoryInitialized(){
-  /* If the stable key exists, even [] means the user intentionally has no highlights. */
-  if(localStorage.getItem(S_META)!==null)localStorage.setItem(S_INIT,'1')
-}
-function purgeLegacyStoryMetadata(){
-  S_LEGACY.forEach(k=>{try{localStorage.removeItem(k)}catch(e){}});
-}
-async function renderStoryOwner(){
-  const root=document.querySelector('.v5-stories');if(!root)return;
-  const rows=sLoad();
-  root.innerHTML='';
-
-  for(let i=0;i<rows.length;i++){
-    const st=rows[i];
-    const btn=document.createElement('button');
-    btn.type='button';
-    btn.className='v5-story';
-    btn.dataset.v8StoryOwner='1';
-
-    let u='';
-    try{
-      if(typeof sourceUrl==='function')u=await sourceUrl(st.cover)
-    }catch(e){}
-    if(!u && st.cover?.url)u=st.cover.url;
-
-    btn.innerHTML=`<div class="v5-story-ring">${u?`<img src="${u}" alt="">`:`<div class="v5-story-placeholder">♡</div>`}</div><span>${String(st.name||'Story').replace(/[<>]/g,'')}</span>`;
-    btn.onclick=()=>admin()?window.v8EditHighlight?.(i):window.v8OpenHighlight?.(i);
-    root.appendChild(btn)
-  }
-  if(admin()){
-    const add=document.createElement('button');
-    add.type='button';add.className='v5-story';add.dataset.v8StoryOwner='1';
-    add.innerHTML='<div class="v5-story-ring"><div class="v5-story-placeholder">＋</div></div><span>เพิ่ม Highlight</span>';
-    add.onclick=()=>window.v8AddHighlight?.();
-    root.appendChild(add)
-  }
-  bindStoryOwnerObserver()
-}
-function bindStoryOwnerObserver(){
-  const root=document.querySelector('.v5-stories');if(!root)return;
-  if(storyObs)storyObs.disconnect();
-  storyObs=new MutationObserver(()=>{
-    const foreign=[...root.children].some(x=>x.dataset.v8StoryOwner!=='1');
-    if(foreign)setTimeout(renderStoryOwner,0)
-  });
-  storyObs.observe(root,{childList:true})
-}
-function ownStorySystem(){
-  markStoryInitialized();
-  purgeLegacyStoryMetadata();
-
-  /* The stable functions remain the only editor/viewer implementation. */
-  if(typeof window.v8StableRenderStoryCircles==='function'){
-    window.v8StableRenderStoryCircles=renderStoryOwner
-  }
-  window.v6RenderStories=renderStoryOwner;
-  window.renderStoryCircles=renderStoryOwner;
-  window.v6AddStory=function(){return window.v8AddHighlight?.()};
-  window.v6EditStory=function(i){return window.v8EditHighlight?.(i)};
-
-  document.getElementById('v8StoryAdmin')?.remove();
-}
+/* STORY HIGHLIGHT SYSTEM MOVED TO v8-story-clean-manager */
 function syncAll(){
   removeOldHomeTools();
   renderBannerOwner();
@@ -7780,14 +7705,10 @@ document.addEventListener('DOMContentLoaded',function(){
  function saveStories(a){localStorage.setItem(STORY_KEY,JSON.stringify(a))}
  let viewer={story:0,item:0,timer:null};
  function renderStoryCircles(){
-   const root=document.querySelector('.v5-stories');if(!root)return;
-   const a=loadStories(),adm=admin();
-   root.innerHTML=a.map((x,i)=>`
-    <button class="v5-story" type="button" onclick="${adm?`v8EditHighlight(${i})`:`v8OpenHighlight(${i})`}">
-      <div class="v5-story-ring">${x.cover?`<img src="${x.cover}" alt="">`:`<div class="v5-story-placeholder">♡</div>`}</div>
-      <span>${esc(x.name||'Story')}</span>
-    </button>`).join('')+
-    (adm?`<button class="v5-story v8-story-admin-only" type="button" onclick="v8AddHighlight()"><div class="v5-story-ring"><div class="v5-story-placeholder">＋</div></div><span>เพิ่ม Highlight</span></button>`:'');
+   // Delegated to v8-story-clean-manager
+   if(typeof window.renderStoryCircles==='function' && window.renderStoryCircles!==renderStoryCircles){
+     return window.renderStoryCircles();
+   }
  }
  function ensureViewer(){
    let v=document.getElementById('v8StoryViewer');if(v)return v;
@@ -8392,17 +8313,9 @@ document.addEventListener('DOMContentLoaded',function(){
 
  /* Stable story rendering */
  async function stableRenderStoryCircles(){
-   const root=document.querySelector('.v5-stories');if(!root)return;
-   const rows=metaLoad();root.innerHTML='';
-   for(let i=0;i<rows.length;i++){
-     const st=rows[i],btn=document.createElement('button');btn.type='button';btn.className='v5-story';
-     const u=await sourceUrl(st.cover);
-     btn.innerHTML=`<div class="v5-story-ring">${u?`<img src="${u}" alt="">`:`<div class="v5-story-placeholder">♡</div>`}</div><span>${String(st.name||'Story').replace(/[<>]/g,'')}</span>`;
-     btn.onclick=()=>admin()?v8EditHighlight(i):v8OpenHighlight(i);
-     root.appendChild(btn)
-   }
-   if(admin()){
-     const b=document.createElement('button');b.type='button';b.className='v5-story';b.innerHTML='<div class="v5-story-ring"><div class="v5-story-placeholder">＋</div></div><span>เพิ่ม Highlight</span>';b.onclick=v8AddHighlight;root.appendChild(b)
+   // Delegated to v8-story-clean-manager to prevent infinite MutationObserver loops
+   if(typeof window.renderStoryCircles==='function' && window.renderStoryCircles!==stableRenderStoryCircles){
+     return window.renderStoryCircles();
    }
  }
  window.v8StableRenderStoryCircles=stableRenderStoryCircles;
