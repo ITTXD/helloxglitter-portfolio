@@ -4808,25 +4808,7 @@ function syncAdminUI(){
 window.openLoginModal=showLogin;
 window.v8OpenAdminLogin=showLogin;
 
-/* Some legacy files call handleLogin; keep it deterministic and single-owner. */
-window.handleLogin=async function(e){
-  if(e&&e.preventDefault)e.preventDefault();
-  const oldInput=
-    document.querySelector('#adminPassword')||
-    document.querySelector('#adminPass')||
-    document.querySelector('input[type="password"]');
-  const v=(oldInput?.value||'').trim();
-  if(v===ADMIN_PASSWORD){
-    try{await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:v})})}catch(e){}
-    setAdmin(true);
-    document.querySelectorAll('#adminLoginModal,.admin-login-modal').forEach(x=>x.classList.remove('show'));
-    if(typeof window.showToast==='function')showToast('เข้าสู่ระบบ Admin แล้ว ✓');
-    setTimeout(openAdmin,50);
-    return true
-  }
-  showLogin();
-  return false
-};
+
 
 const oldLogout=window.logoutHLG;
 window.logoutHLG=async function(){
