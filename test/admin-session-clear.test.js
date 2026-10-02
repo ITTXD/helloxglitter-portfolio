@@ -65,5 +65,20 @@ assert(
   'ไม่พบ handleLogin set session'
 );
 
+
+// 5. boot() ต้องลบ class admin-mode ออกจาก body
+assert(
+  "boot() removes 'admin-mode' class from body",
+  /function boot\(\)\s*\{[\s\S]{0,600}classList\.remove[\s\S]{0,100}admin-mode/.test(html),
+  'ไม่พบ classList.remove admin-mode ใน boot()'
+);
+
+// 6. boot() ต้องลบ admin-visible ออกจาก bottom nav
+assert(
+  "boot() removes 'admin-visible' from bottom nav",
+  /function boot\(\)\s*\{[\s\S]{0,800}admin-visible/.test(html),
+  'ไม่พบ admin-visible removal ใน boot()'
+);
+
 console.log(`\n📊 ผลลัพธ์: ${passed} ผ่าน, ${failed} ล้มเหลว\n`);
 if (failed > 0) process.exit(1);

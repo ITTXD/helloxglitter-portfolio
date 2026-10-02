@@ -7582,9 +7582,28 @@ document.addEventListener('DOMContentLoaded',function(){
  };
  function syncAdminClass(){window.hlgAdminModeSync()}
  function boot(){
-    // Clear admin session on every page load/refresh — admin must log in again each visit.
-    try{sessionStorage.removeItem('hlg_admin_session_v2')}catch(e){}
-    ensureBack();ensureLinks();removeBagMenu();syncAdminClass();updateBack()
+    // ===== HARD CLEAR: admin state on every page load/refresh =====
+    // sessionStorage persists through refreshes, so we must nuke it explicitly.
+    // Admin must log in again on each visit. This keeps customers on a clean
+    // storefront with no admin chrome visible.
+    try{
+      sessionStorage.removeItem('hlg_admin_session_v2');
+      sessionStorage.removeItem('hlg_admin');
+    }catch(e){}
+    // Strip every admin class from <body> immediately (before any other script runs)
+    document.body.classList.remove(
+      'admin-mode',
+      'v8-third-person-view',
+      'v8-customer-preview-mode'
+    );
+    // Hide the admin tab in the bottom nav directly
+    var nav=document.getElementById('v8BottomQuickNav');
+    if(nav){
+      nav.classList.remove('admin-visible');
+      var adminBtn=nav.querySelector('[data-nav="admin"]');
+      if(adminBtn)adminBtn.style.display='none';
+    }
+    ensureBack();ensureLinks();removeBagMenu();syncAdminClass();updateBack();
   }
   document.addEventListener('DOMContentLoaded',boot); if(document.readyState!=='loading')boot();
  window.addEventListener('hashchange',()=>{setTimeout(()=>{removeBagMenu();updateBack();syncAdminClass()},30)});
