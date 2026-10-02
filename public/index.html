@@ -6551,18 +6551,9 @@ async function loadStorefrontSettingsFromCloud(){
 }
 
 async function checkAdminAuthStatus(){
-  try {
-    var res = await fetch('/api/check-auth');
-    if(res.ok) {
-      var data = await res.json();
-      if(data.authenticated) {
-        sessionStorage.setItem(HLG_ADMIN_KEY, '1');
-        document.body.classList.add('admin-mode');
-        renderDrawerMenu();
-        if(typeof hlgRenderAccountCard === 'function') hlgRenderAccountCard();
-      }
-    }
-  } catch(e) {}
+  // Never auto-activate admin mode on load or refresh.
+  // The storefront always loads in clean customer mode.
+  // Admin must explicitly enter PIN via the drawer menu.
 }
 
 function renderDrawerMenu(){
@@ -6625,11 +6616,27 @@ async function handleLogin(e){
 
 async function logoutHLG(){
   try {
-    await fetch('/api/logout', { method: 'POST' });
+    await fetch('/api/logout', { method: 'POST', credentials: 'include' });
   } catch(e) {}
-  sessionStorage.removeItem(HLG_ADMIN_KEY);
-  document.body.classList.remove('admin-mode');
+  try {
+    sessionStorage.removeItem('hlg_admin_session_v2');
+    sessionStorage.removeItem('hlg_admin');
+    sessionStorage.removeItem('hlg_admin_pwd');
+    sessionStorage.removeItem('hlg_admin_customer_preview_v3');
+    sessionStorage.removeItem('hlg_admin_customer_preview_backup_v3');
+  } catch(e) {}
+  document.body.classList.remove('admin-mode', 'v8-third-person-view', 'v8-customer-preview-mode');
+  var nav = document.getElementById('v8BottomQuickNav');
+  if(nav){
+    nav.classList.remove('admin-visible', 'v8-has-admin');
+    nav.querySelectorAll('.v8-final-admin-tab, [data-nav="admin"], [data-nav="admin-final"]').forEach(function(el){ el.style.display = 'none'; });
+    var wrap = document.getElementById('v8AdminBranchWrap');
+    if(wrap) wrap.remove();
+  }
   renderDrawerMenu();
+  if(typeof v6ApplyMode === 'function') v6ApplyMode();
+  if(typeof v6RenderHome === 'function') v6RenderHome();
+  if(typeof v5RenderBanner === 'function') v5RenderBanner();
   if(typeof hlgRenderAccountCard === 'function') hlgRenderAccountCard();
   showPage('home');
   showToast('ออกจากระบบแอดมินแล้ว');
@@ -7367,7 +7374,34 @@ window.v6AddStory=function(){let a=load(STORY_KEY,storyDefaults);a.push({name:'S
 window.v6EditProduct=function(i){if(!admin())return;let a=load(PRODUCT_KEY,productDefaults),x=a[i]||{name:'สินค้าใหม่',sub:'',target:'preorder',src:''};modal('แก้การ์ดหน้าแรก','เปลี่ยนรูป ชื่อ ข้อความ และหน้าปลายทางได้',`<div class="v6-field"><label>ชื่อ</label><input id="v6name" value="${esc(x.name)}"></div><div class="v6-field"><label>ข้อความรอง</label><input id="v6sub" value="${esc(x.sub)}"></div><div class="v6-field"><label>กดแล้วไปหน้า</label><select id="v6target"><option value="preorder">กระเป๋า</option><option value="wallpaper">Wallpaper</option><option value="sticker">Sticker</option><option value="tracking">เช็คคิว</option></select></div><label class="v6-upload">🖼️ เลือกรูปสินค้า<input id="v6file" type="file" accept="image/*" onchange="v6FilePreview(this,'v6img','v6vid')"></label><img id="v6img" class="v6-preview ${x.src?'show':''}" src="${x.src||''}"><video id="v6vid" class="v6-video"></video>`,()=>{let f=document.getElementById('v6file');x.name=document.getElementById('v6name').value.trim()||'สินค้า';x.sub=document.getElementById('v6sub').value.trim();x.target=document.getElementById('v6target').value;if(f.dataset.data)x.src=f.dataset.data;a[i]=x;save(PRODUCT_KEY,a);v6CloseModal();v6RenderHome();showToast('บันทึกการ์ดแล้ว ✓')});setTimeout(()=>document.getElementById('v6target').value=x.target||'preorder',0)}
 // Login now enters visual edit mode on Home.
 window.handleLogin=function(e){e.preventDefault();let pw=document.getElementById('loginPassword').value||'',err=document.getElementById('loginError');if(pw!=='333999'){err&&err.classList.add('show');return false}err&&err.classList.remove('show');sessionStorage.setItem('hlg_admin_session_v2','1');document.getElementById('loginPassword').value='';closeLoginModal();renderDrawerMenu();showPage('home');setTimeout(()=>{v6RenderHome();v6ApplyMode();if(window.v5RenderBanner)v5RenderBanner();showToast('เข้าสู่ระบบแอดมินแล้ว ♡')},30);return false}
-const oldLogout=window.logoutHLG;window.logoutHLG=function(){sessionStorage.removeItem('hlg_admin_session_v2');renderDrawerMenu();v6ApplyMode();showPage('home');showToast('ออกจาก Admin แล้ว')}
+const oldLogout=window.logoutHLG;
+window.logoutHLG=function(){
+  if(typeof oldLogout==='function'){
+    try{ oldLogout.apply(this,arguments); }catch(e){}
+  }
+  try{
+    sessionStorage.removeItem('hlg_admin_session_v2');
+    sessionStorage.removeItem('hlg_admin');
+    sessionStorage.removeItem('hlg_admin_pwd');
+    sessionStorage.removeItem('hlg_admin_customer_preview_v3');
+    sessionStorage.removeItem('hlg_admin_customer_preview_backup_v3');
+  }catch(e){}
+  try{ fetch('/api/logout', { method: 'POST', credentials: 'include' }).catch(function(){}); }catch(e){}
+  document.body.classList.remove('admin-mode', 'v8-third-person-view', 'v8-customer-preview-mode');
+  var nav = document.getElementById('v8BottomQuickNav');
+  if(nav){
+    nav.classList.remove('admin-visible', 'v8-has-admin');
+    nav.querySelectorAll('.v8-final-admin-tab, [data-nav="admin"], [data-nav="admin-final"]').forEach(function(el){ el.style.display = 'none'; });
+    var wrap = document.getElementById('v8AdminBranchWrap');
+    if(wrap) wrap.remove();
+  }
+  renderDrawerMenu();
+  if(typeof v6ApplyMode==='function')v6ApplyMode();
+  if(typeof v6RenderHome==='function')v6RenderHome();
+  if(typeof v5RenderBanner==='function')v5RenderBanner();
+  showPage('home');
+  showToast('ออกจาก Admin แล้ว');
+};
 const oldShow=window.showPage;window.showPage=function(n){oldShow(n);setTimeout(()=>{v6ApplyMode();v6RenderHome()},20)}
 document.addEventListener('DOMContentLoaded',()=>{restoreText();v6RenderHome();v6ApplyMode()});
 })();
@@ -7582,26 +7616,26 @@ document.addEventListener('DOMContentLoaded',function(){
  };
  function syncAdminClass(){window.hlgAdminModeSync()}
  function boot(){
-    // ===== HARD CLEAR: admin state on every page load/refresh =====
-    // sessionStorage persists through refreshes, so we must nuke it explicitly.
-    // Admin must log in again on each visit. This keeps customers on a clean
-    // storefront with no admin chrome visible.
+    // ===== HARD CLEAR: admin & preview state on every page load/refresh =====
     try{
       sessionStorage.removeItem('hlg_admin_session_v2');
       sessionStorage.removeItem('hlg_admin');
+      sessionStorage.removeItem('hlg_admin_pwd');
+      sessionStorage.removeItem('hlg_admin_customer_preview_v3');
+      sessionStorage.removeItem('hlg_admin_customer_preview_backup_v3');
     }catch(e){}
-    // Strip every admin class from <body> immediately (before any other script runs)
+    try{ fetch('/api/logout', { method: 'POST', credentials: 'include' }).catch(function(){}); }catch(e){}
     document.body.classList.remove(
       'admin-mode',
       'v8-third-person-view',
       'v8-customer-preview-mode'
     );
-    // Hide the admin tab in the bottom nav directly
     var nav=document.getElementById('v8BottomQuickNav');
     if(nav){
-      nav.classList.remove('admin-visible');
-      var adminBtn=nav.querySelector('[data-nav="admin"]');
-      if(adminBtn)adminBtn.style.display='none';
+      nav.classList.remove('admin-visible', 'v8-has-admin');
+      nav.querySelectorAll('.v8-final-admin-tab, [data-nav="admin"], [data-nav="admin-final"]').forEach(function(el){ el.style.display='none'; });
+      var wrap=document.getElementById('v8AdminBranchWrap');
+      if(wrap) wrap.remove();
     }
     ensureBack();ensureLinks();removeBagMenu();syncAdminClass();updateBack();
   }
@@ -10600,18 +10634,36 @@ window.handleLogin=function(e){
 /* Final logout owner */
 const legacyLogout=window.logoutHLG;
 window.logoutHLG=function(){
-  try{sessionStorage.removeItem(KEY)}catch(e){}
+  try{
+    sessionStorage.removeItem('hlg_admin_session_v2');
+    sessionStorage.removeItem('hlg_admin');
+    sessionStorage.removeItem('hlg_admin_pwd');
+    sessionStorage.removeItem('hlg_admin_customer_preview_v3');
+    sessionStorage.removeItem('hlg_admin_customer_preview_backup_v3');
+  }catch(e){}
+  try{ fetch('/api/logout', { method: 'POST', credentials: 'include' }).catch(function(){}); }catch(e){}
 
-  document.body.classList.remove('admin-mode');
+  document.body.classList.remove('admin-mode', 'v8-third-person-view', 'v8-customer-preview-mode');
 
-  // Avoid calling legacy logout first because some older versions can redraw
-  // conflicting admin UI. We only use it for extra cleanup after our state is set.
   if(typeof legacyLogout==='function'){
     try{
-      // temporarily prevent it from restoring the admin key
       legacyLogout.apply(this,arguments);
-      try{sessionStorage.removeItem(KEY)}catch(e){}
+      try{
+        sessionStorage.removeItem('hlg_admin_session_v2');
+        sessionStorage.removeItem('hlg_admin');
+        sessionStorage.removeItem('hlg_admin_pwd');
+        sessionStorage.removeItem('hlg_admin_customer_preview_v3');
+        sessionStorage.removeItem('hlg_admin_customer_preview_backup_v3');
+      }catch(e){}
     }catch(e){}
+  }
+
+  var nav=document.getElementById('v8BottomQuickNav');
+  if(nav){
+    nav.classList.remove('admin-visible', 'v8-has-admin');
+    nav.querySelectorAll('.v8-final-admin-tab, [data-nav="admin"], [data-nav="admin-final"]').forEach(function(el){ el.style.display = 'none'; });
+    var wrap = document.getElementById('v8AdminBranchWrap');
+    if(wrap) wrap.remove();
   }
 
   if(typeof window.renderDrawerMenu==='function'){
@@ -16529,18 +16581,52 @@ if(document.readyState==='loading'){
 
 <script id="hlg-force-home-on-load">
 (function(){
-  function forceHome() {
+  function nukeAdminAndForceHome() {
+    try {
+      sessionStorage.removeItem('hlg_admin_session_v2');
+      sessionStorage.removeItem('hlg_admin');
+      sessionStorage.removeItem('hlg_admin_pwd');
+      sessionStorage.removeItem('hlg_admin_customer_preview_v3');
+      sessionStorage.removeItem('hlg_admin_customer_preview_backup_v3');
+    } catch(e) {}
+
+    try {
+      fetch('/api/logout', { method: 'POST', credentials: 'include' }).catch(function(){});
+    } catch(e) {}
+
+    document.body.classList.remove(
+      'admin-mode',
+      'v8-third-person-view',
+      'v8-customer-preview-mode'
+    );
+
+    var nav = document.getElementById('v8BottomQuickNav');
+    if (nav) {
+      nav.classList.remove('admin-visible', 'v8-has-admin');
+      nav.querySelectorAll('.v8-final-admin-tab, [data-nav="admin"], [data-nav="admin-final"]').forEach(function(el){
+        el.style.display = 'none';
+        el.remove();
+      });
+      var wrap = document.getElementById('v8AdminBranchWrap');
+      if (wrap) wrap.remove();
+    }
+
     if (typeof window.showPage === 'function') {
-      // Force the home page on initial load. Prevents getting stuck on admin view
-      // if the browser's bfcache or state restoration mistakenly restores the admin page.
       window.showPage('home');
     }
   }
+
+  nukeAdminAndForceHome();
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', forceHome);
-  } else {
-    forceHome();
+    document.addEventListener('DOMContentLoaded', nukeAdminAndForceHome);
   }
+
+  setTimeout(nukeAdminAndForceHome, 80);
+  setTimeout(nukeAdminAndForceHome, 250);
+  setTimeout(nukeAdminAndForceHome, 600);
+
+  window.addEventListener('pageshow', nukeAdminAndForceHome);
 })();
 </script>
 </body>
