@@ -1679,6 +1679,7 @@ async function handleApi(req, res) {
         total_price: o.total_price,
         created_at: o.created_at,
         note: o.note || '',
+        admin_note: o.admin_note || o.note || '',
         tracking_number: o.tracking_number || '',
         tracking_carrier: o.tracking_carrier || '',
         customer_name: o.customer_name || (o.customer_info || '').split('\n')[0] || '',

@@ -8130,10 +8130,10 @@ window.v8RenderQueue=function(){
  let root=document.getElementById('v8QueueDashboard');if(!root||!isAdmin())return;
  let all=getOrders().slice().sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
  let q=norm(document.getElementById('v8Search')?.value),qd=normalizePhone(q);
- let rows=all.filter(o=>{if(filter==='wait'&&Number(o.status||0)>=4)return false;if(filter==='done'&&Number(o.status||0)<4)return false;if(filter==='fast'&&!isFast(o))return false;if(filter==='history'&&Number(o.status||0)<4)return false;if(!q)return true;let its=itemPairs(o).map(x=>x.name).join(' ');let t=[o.customer_name,o.customer_phone,o.customer_address,o.queue_no,o.tracking_number,o.id,its,o.preorder_batch].join(' ').toLowerCase();return t.includes(q)||(qd&&normalizePhone(o.customer_phone).includes(qd))});
- let wait=all.filter(o=>Number(o.status||0)<4).length,done=all.filter(o=>Number(o.status||0)>=4).length,fast=all.filter(isFast).length;
- let body=rows.map(o=>{let its=itemPairs(o),it=its[0]||{name:'-',qty:0,image:''};let more=its.length>1?' +'+(its.length-1)+' รายการ':'';let dt=o.created_at?new Date(o.created_at).toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'}):'-';let doneO=Number(o.status||0)>=4;return `<tr><td>${escHtml(dt)}</td><td class="v8q-customer"><b>${escHtml(o.customer_name||'-')}</b><span>📞 ${escHtml(normalizePhone(o.customer_phone)||'-')}</span><span>📍 ${escHtml((o.customer_address||'-').slice(0,42))}</span>${o.slip_data?`<br><a href="${escAttr(o.slip_data)}" target="_blank" style="color:#0284c7;font-size:11px;font-weight:700">🧾 ดูสลิป ${o.slip_verified?'✓':''}</a>`:''}</td><td class="v8q-money">฿${Number(o.total_price||0).toLocaleString()}</td><td><span class="v8q-status ${doneO?'':'wait'}">${escHtml(statusText(o))}</span></td><td class="v8q-queue">${escHtml(o.queue_no||'-')}</td><td><div class="v8q-trackrow"><input class="v8q-track" data-track="${escAttr(o.id)}" value="${escAttr(o.tracking_number||'')}" placeholder="กรอกเลข Tracking"><button class="v8q-confirm ${o.tracking_number&&doneO?'ok':''}" onclick="v8ConfirmTrack('${escAttr(o.id)}',this)">${o.tracking_number&&doneO?'✓ ยืนยันแล้ว':'✓ ยืนยัน'}</button></div></td><td><div class="v8q-items">${it.image?`<img class="v8q-thumb" src="${escAttr(it.image)}">`:`<div class="v8q-thumb" style="display:grid;place-items:center">🛍️</div>`}<div class="v8q-itemtext"><b>${escHtml(it.name)}</b> ×${it.qty}${more}<br><span>${escHtml(o.preorder_batch||'')}</span></div></div></td><td><button class="v8q-edit" onclick="v8EditOrder('${escAttr(o.id)}')">✎ แก้ไข</button></td></tr>`}).join('');
- root.innerHTML=`<div class="v8q-shell"><div class="v8q-top"><div class="v8q-brand"><div class="v8q-logo">✧</div><div><div class="v8q-title">ระบบจัดการคิวหลังบ้าน (Admin Dashboard) <span class="v8q-cloud">● Live Cloud Sync</span></div><div class="v8q-sub">แก้ไขข้อมูลลูกค้า / คิวจัดส่งแล้ว / เลข Tracking / รายการสินค้า</div></div></div><div class="v8q-actions"><a class="v8q-btn" href="/admin/" target="_blank" style="background:#4f46e5;color:white;text-decoration:none;display:inline-flex;align-items:center;gap:4px">🚀 Full Admin Portal ↗</a><button class="v8q-btn" onclick="showPage('home')">← หน้าร้าน</button><button class="v8q-btn gray" onclick="v8Backup()">↓ Backup Data</button></div></div><div class="v8q-tabs"><button class="v8q-tab active">◷ รอดำเนินการ ${wait}</button><button class="v8q-tab">🚚 จัดส่งแล้ว ${done}</button><button class="v8q-tab">🗃 เก็บข้อมูลเก่า ${done}</button></div><div class="v8q-stats"><div class="v8q-stat"><span>ออเดอร์ทั้งหมด</span><b>${all.length}</b></div><div class="v8q-stat wait"><span>กำลังทำ / รอดำเนินการ</span><b>${wait}</b></div><div class="v8q-stat done"><span>จัดส่งเสร็จสิ้นแล้ว</span><b>${done}</b></div><div class="v8q-stat fast"><span>งานด่วน FAST TRACK</span><b>${fast}</b></div></div><div class="v8q-toolbar"><input id="v8Search" class="v8q-search" type="search" placeholder="ค้นหาชื่อ, เบอร์โทร, เลขคิว, Tracking, ที่อยู่, สินค้า..." oninput="v8RenderQueue()"><div class="v8q-filters"><button class="v8q-filter ${filter==='all'?'active':''}" onclick="v8SetFilter('all',this)">ทั้งหมด</button><button class="v8q-filter ${filter==='wait'?'active':''}" onclick="v8SetFilter('wait',this)">⌛ รอคิว</button><button class="v8q-filter ${filter==='done'?'active':''}" onclick="v8SetFilter('done',this)">☑ ส่งแล้ว</button><button class="v8q-filter ${filter==='fast'?'active':''}" onclick="v8SetFilter('fast',this)">⚡ งานด่วน</button><button class="v8q-filter ${filter==='history'?'active':''}" onclick="v8SetFilter('history',this)">🗃 History</button></div></div><div class="v8q-mobile-note">บนมือถือเลื่อนตารางซ้าย–ขวาเพื่อดูข้อมูลทั้งหมด</div><div class="v8q-tablewrap"><table class="v8q-table"><thead><tr><th>เวลาแจ้งโอน</th><th>ข้อมูลลูกค้า</th><th>ยอดเงิน</th><th>สถานะ</th><th>เลขคิว</th><th>Tracking</th><th>รายการที่สั่ง</th><th>จัดการ</th></tr></thead><tbody>${body||`<tr><td colspan="8" class="v8q-empty">ไม่พบออเดอร์</td></tr>`}</tbody></table></div><div class="v8q-history">ข้อมูลที่จัดส่งแล้วจะยังคงอยู่ใน History และค้นย้อนหลังได้ • Backup Data จะดาวน์โหลดข้อมูลออเดอร์ทั้งหมดเป็น JSON</div></div>`;
+  let rows=all.filter(o=>{if(filter==='wait'&&Number(o.status||0)>=4)return false;if(filter==='done'&&Number(o.status||0)<4)return false;if(filter==='fast'&&!isFast(o))return false;if(filter==='history'&&Number(o.status||0)<4)return false;if(filter==='shopee'&&!(o.channel==='shopee'||o.shopee_order_sn))return false;if(!q)return true;let its=itemPairs(o).map(x=>x.name).join(' ');let t=[o.customer_name,o.customer_phone,o.customer_address,o.queue_no,o.tracking_number,o.id,o.shopee_order_sn,its,o.preorder_batch].join(' ').toLowerCase();return t.includes(q)||(qd&&normalizePhone(o.customer_phone).includes(qd))});
+  let wait=all.filter(o=>Number(o.status||0)<4).length,done=all.filter(o=>Number(o.status||0)>=4).length,fast=all.filter(isFast).length;
+  let body=rows.map(o=>{let isShopee=o.channel==='shopee'||Boolean(o.shopee_order_sn);let its=itemPairs(o),it=its[0]||{name:isShopee?'ออเดอร์ Shopee':'-',qty:isShopee?1:0,image:''};let more=its.length>1?' +'+(its.length-1)+' รายการ':'';let dt=o.created_at?new Date(o.created_at).toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'}):'-';let doneO=Number(o.status||0)>=4;let shopeeBadge=isShopee?'<span style="background:#ee4d2d;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;margin-left:4px">Shopee</span>':'';let shopeeSn=(isShopee&&o.shopee_order_sn)?`<br><span style="font-size:11px;font-family:monospace;font-weight:700;color:#ee4d2d">🛍️ SN: ${escHtml(o.shopee_order_sn)}</span>`:'';let moneyTxt=isShopee?'<span style="color:#ee4d2d;font-weight:700">Shopee</span>':`฿${Number(o.total_price||0).toLocaleString()}`;return `<tr><td>${escHtml(dt)}</td><td class="v8q-customer"><b>${escHtml(o.customer_name||'-')}</b>${shopeeBadge}<span>📞 ${escHtml(normalizePhone(o.customer_phone)||'-')}</span><span>📍 ${escHtml((o.customer_address||'-').slice(0,42))}</span>${shopeeSn}${o.slip_data?`<br><a href="${escAttr(o.slip_data)}" target="_blank" style="color:#0284c7;font-size:11px;font-weight:700">🧾 ดูสลิป ${o.slip_verified?'✓':''}</a>`:''}</td><td class="v8q-money">${moneyTxt}</td><td><span class="v8q-status ${doneO?'':'wait'}">${escHtml(statusText(o))}</span></td><td class="v8q-queue">${escHtml(o.queue_no||'-')}</td><td><div class="v8q-trackrow"><input class="v8q-track" data-track="${escAttr(o.id)}" value="${escAttr(o.tracking_number||'')}" placeholder="กรอกเลข Tracking"><button class="v8q-confirm ${o.tracking_number&&doneO?'ok':''}" onclick="v8ConfirmTrack('${escAttr(o.id)}',this)">${o.tracking_number&&doneO?'✓ ยืนยันแล้ว':'✓ ยืนยัน'}</button></div></td><td><div class="v8q-items">${it.image?`<img class="v8q-thumb" src="${escAttr(it.image)}">`:`<div class="v8q-thumb" style="display:grid;place-items:center">${isShopee?'🧡':'🛍️'}</div>`}<div class="v8q-itemtext"><b>${escHtml(it.name)}</b> ×${it.qty}${more}<br><span>${escHtml(o.preorder_batch||(isShopee?'Shopee':''))}</span></div></div></td><td><button class="v8q-edit" onclick="v8EditOrder('${escAttr(o.id)}')">✎ แก้ไข</button></td></tr>`}).join('');
+  root.innerHTML=`<div class="v8q-shell"><div class="v8q-top"><div class="v8q-brand"><div class="v8q-logo">✧</div><div><div class="v8q-title">ระบบจัดการคิวหลังบ้าน (Admin Dashboard) <span class="v8q-cloud">● Live Cloud Sync</span></div><div class="v8q-sub">แก้ไขข้อมูลลูกค้า / คิวจัดส่งแล้ว / เลข Tracking / รายการสินค้า</div></div></div><div class="v8q-actions"><a class="v8q-btn" href="/admin/" target="_blank" style="background:#4f46e5;color:white;text-decoration:none;display:inline-flex;align-items:center;gap:4px">🚀 Full Admin Portal ↗</a><button class="v8q-btn" onclick="showPage('home')">← หน้าร้าน</button><button class="v8q-btn gray" onclick="v8Backup()">↓ Backup Data</button></div></div><div class="v8q-tabs"><button class="v8q-tab active">◷ รอดำเนินการ ${wait}</button><button class="v8q-tab">🚚 จัดส่งแล้ว ${done}</button><button class="v8q-tab">🗃 เก็บข้อมูลเก่า ${done}</button></div><div class="v8q-stats"><div class="v8q-stat"><span>ออเดอร์ทั้งหมด</span><b>${all.length}</b></div><div class="v8q-stat wait"><span>กำลังทำ / รอดำเนินการ</span><b>${wait}</b></div><div class="v8q-stat done"><span>จัดส่งเสร็จสิ้นแล้ว</span><b>${done}</b></div><div class="v8q-stat fast"><span>งานด่วน FAST TRACK</span><b>${fast}</b></div></div><div class="v8q-toolbar"><input id="v8Search" class="v8q-search" type="search" placeholder="ค้นหาชื่อ, เบอร์โทร, เลขคิว, Tracking, ที่อยู่, สินค้า..." oninput="v8RenderQueue()"><div class="v8q-filters"><button class="v8q-filter ${filter==='all'?'active':''}" onclick="v8SetFilter('all',this)">ทั้งหมด</button><button class="v8q-filter ${filter==='wait'?'active':''}" onclick="v8SetFilter('wait',this)">⌛ รอคิว</button><button class="v8q-filter ${filter==='done'?'active':''}" onclick="v8SetFilter('done',this)">☑ ส่งแล้ว</button><button class="v8q-filter ${filter==='fast'?'active':''}" onclick="v8SetFilter('fast',this)">⚡ งานด่วน</button><button class="v8q-filter ${filter==='shopee'?'active':''}" onclick="v8SetFilter('shopee',this)">🧡 Shopee</button><button class="v8q-filter ${filter==='history'?'active':''}" onclick="v8SetFilter('history',this)">🗃 History</button></div></div><div class="v8q-mobile-note">บนมือถือเลื่อนตารางซ้าย–ขวาเพื่อดูข้อมูลทั้งหมด</div><div class="v8q-tablewrap"><table class="v8q-table"><thead><tr><th>เวลาแจ้งโอน</th><th>ข้อมูลลูกค้า</th><th>ยอดเงิน</th><th>สถานะ</th><th>เลขคิว</th><th>Tracking</th><th>รายการที่สั่ง</th><th>จัดการ</th></tr></thead><tbody>${body||`<tr><td colspan="8" class="v8q-empty">ไม่พบออเดอร์</td></tr>`}</tbody></table></div><div class="v8q-history">ข้อมูลที่จัดส่งแล้วจะยังคงอยู่ใน History และค้นย้อนหลังได้ • Backup Data จะดาวน์โหลดข้อมูลออเดอร์ทั้งหมดเป็น JSON</div></div>`;
  let si=document.getElementById('v8Search');if(si&&q){si.value=q;try{si.focus();si.setSelectionRange(q.length,q.length)}catch(e){}}
 }
 const oldSwitch=window.switchAdminTab;window.switchAdminTab=function(name,btn){if(oldSwitch)oldSwitch(name,btn);if(name==='orders')setTimeout(v8RenderQueue,0)};
@@ -8180,7 +8180,11 @@ window.renderCustomerOrderCard=function(o){
  var status=Math.max(0,Math.min(Number(o.status)||0,HLG_STATUSES.length-1));
  var tl=HLG_STATUSES.map(function(st,i){var cls=i<status?'done':(i===status?'current':'');return '<div class="tr-tl-step"><div class="tr-tl-dot-col"><div class="tr-tl-dot '+cls+'"></div>'+(i<HLG_STATUSES.length-1?'<div class="tr-tl-line"></div>':'')+'</div><div class="tr-tl-text"><div class="tr-tl-label">'+escHtml(st)+'</div></div></div>'}).join('');
  var its=orderItemsWithImages(o);var items=its.length?its.map(function(x){return '<div class="tr-item-card">'+(x.image?'<img class="tr-item-img" src="'+escAttr(x.image)+'" alt="'+escAttr(x.name)+'">':'<div class="tr-item-ph">🛍️</div>')+'<div class="tr-item-info"><div class="tr-item-name">'+escHtml(x.name)+' × '+x.qty+'</div>'+(x.variant?'<div class="tr-item-sub">'+escHtml(x.variant)+'</div>':'')+'</div></div>'}).join(''):'<div class="tr-detail-row"><span class="tr-detail-label">ยังไม่มีรายละเอียดรูปสินค้าในออเดอร์เก่านี้</span></div>';
- return '<div class="tr-order-card"><div class="tr-order-head"><div><span class="tr-order-id">'+escHtml(o.id||'')+'</span><div class="tr-queue-badge"><i class="ti ti-ticket"></i> คิว '+escHtml(o.queue_no||'รอจัดคิว')+'</div></div><span class="tr-status-badge s'+Math.min(status,3)+'">'+escHtml(HLG_STATUSES[status])+'</span></div><div class="tr-timeline">'+tl+'</div>'+(o.admin_note?'<div class="customer-track-hint"><strong>💌 ข้อความจากร้าน:</strong> '+escHtml(o.admin_note)+'</div>':'')+'<div style="margin-top:10px;padding-top:10px;border-top:1px solid #fadadd"><div style="font-size:11px;font-weight:900;color:#b64d76;margin-bottom:3px">สินค้าที่สั่ง</div>'+items+'<div class="tr-detail-row"><span class="tr-detail-label">ยอดรวม</span><span class="tr-detail-val" style="color:#d45a8a">'+Number(o.total_price||0).toLocaleString()+' ฿</span></div>'+(o.tracking_number?'<div class="tr-detail-row"><span class="tr-detail-label">เลขพัสดุ</span><span class="tr-detail-val">'+escHtml(o.tracking_number)+'</span></div>':'')+'</div></div>';
+ var isShopee = o.channel === 'shopee' || Boolean(o.shopee_order_sn);
+ var channelBadge = isShopee ? '<span class="tr-shopee-badge" style="display:inline-flex;align-items:center;gap:3px;background:#ffebe5;color:#ee4d2d;border:1px solid #ffd0c4;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:800;margin-left:6px;vertical-align:middle">Shopee</span>' : '';
+ var shopeeRow = (isShopee && o.shopee_order_sn) ? '<div class="tr-detail-row"><span class="tr-detail-label">เลขออเดอร์ Shopee</span><span class="tr-detail-val" style="font-family:monospace;font-weight:700;color:#ee4d2d">'+escHtml(o.shopee_order_sn)+'</span></div>' : '';
+ var carrierTxt = o.tracking_carrier ? (' (' + escHtml(o.tracking_carrier) + ')') : '';
+ return '<div class="tr-order-card '+(isShopee?'shopee-order':'')+'"><div class="tr-order-head"><div><span class="tr-order-id">'+escHtml(o.id||'')+' '+channelBadge+'</span><div class="tr-queue-badge"><i class="ti ti-ticket"></i> คิว '+escHtml(o.queue_no||'รอจัดคิว')+'</div></div><span class="tr-status-badge s'+Math.min(status,3)+'">'+escHtml(HLG_STATUSES[status])+'</span></div><div class="tr-timeline">'+tl+'</div>'+(o.admin_note?'<div class="customer-track-hint"><strong>💌 ข้อความจากร้าน:</strong> '+escHtml(o.admin_note)+'</div>':'')+shopeeRow+'<div style="margin-top:10px;padding-top:10px;border-top:1px solid #fadadd"><div style="font-size:11px;font-weight:900;color:#b64d76;margin-bottom:3px">สินค้าที่สั่ง</div>'+items+'<div class="tr-detail-row"><span class="tr-detail-label">ยอดรวม</span><span class="tr-detail-val" style="color:#d45a8a">'+(isShopee?'ชำระผ่าน Shopee':(Number(o.total_price||0).toLocaleString()+' ฿'))+'</span></div>'+(o.tracking_number?'<div class="tr-detail-row"><span class="tr-detail-label">เลขพัสดุ'+carrierTxt+'</span><span class="tr-detail-val" style="font-weight:700;color:#15905f">'+escHtml(o.tracking_number)+'</span></div>':'')+'</div></div>';
 };
 
 function markMusic(on){var b=document.getElementById('musicBtn');if(b)b.classList.toggle('is-playing',!!on)}
@@ -13095,8 +13099,16 @@ function statusInfo(o){
   return {idx,name:statuses[idx]||'กำลังดำเนินการ',total:statuses.length};
 }
 function carrierInfo(o){
-  const code=String(o.shipping_carrier||'').toUpperCase().replace(/[^A-Z]/g,'');
-  return {FLASH:{name:'Flash',cls:'flash'},SPX:{name:'SPX',cls:'spx'},JT:{name:'J&T',cls:'jt'}}[code]||{name:'ยังไม่ระบุขนส่ง',cls:'unknown'};
+  const raw=String(o.tracking_carrier||o.shipping_carrier||'').toUpperCase();
+  if(raw.includes('SPX')||raw.includes('SHOPEE'))return {name:'SPX Express',cls:'spx'};
+  if(raw.includes('FLASH'))return {name:'Flash Express',cls:'flash'};
+  if(raw.includes('JT')||raw.includes('J&T'))return {name:'J&T Express',cls:'jt'};
+  const clean=raw.replace(/[^A-Z]/g,'');
+  if(clean==='FLASH')return {name:'Flash Express',cls:'flash'};
+  if(clean==='SPX')return {name:'SPX Express',cls:'spx'};
+  if(clean==='JT')return {name:'J&T Express',cls:'jt'};
+  const fallback=String(o.tracking_carrier||o.shipping_carrier||'').trim();
+  return fallback?{name:fallback,cls:'unknown'}:{name:'ยังไม่ระบุขนส่ง',cls:'unknown'};
 }
 window.v8TrackCopyTracking=async function(button){
   const tracking=button?.dataset?.tracking||'';if(!tracking)return;
@@ -13161,11 +13173,16 @@ function card(o){
   const created=o.created_at?new Date(o.created_at).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'}):'';
   const queueCode=String(o.queue_no||'').trim();
   const style=updateStyle();
+  const isShopee = (o.channel === 'shopee') || Boolean(o.shopee_order_sn);
+  const shopeeSn = String(o.shopee_order_sn || '').trim();
 
   return `
     <div class="v8track-dashboard">
       <div class="v8track-card">
-        <div class="v8track-label">คิวของคุณ</div>
+        <div class="v8track-label" style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+          <span>คิวของคุณ</span>
+          ${isShopee ? '<span class="v8track-shopee-badge" style="background:#ee4d2d;color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:99px;letter-spacing:0.5px">Shopee</span>' : ''}
+        </div>
         <div class="v8track-queue-number">${esc(ordinal)}</div>
         <div class="v8track-queue-code">${queueCode?esc(queueCode):'กำลังรอร้านจัดเลขคิว'}</div>
         <div class="v8track-status-name">♡ ${esc(st.name)}</div>
@@ -13190,6 +13207,7 @@ function card(o){
       <div class="v8track-update-title">HLG UPDATE</div>
       <p>${note?esc(note):'ตอนนี้ออเดอร์ของคุณอยู่ในขั้นตอน “'+esc(st.name)+'” ค่ะ หากมีอัปเดตจากร้านจะแสดงตรงนี้ ♡'}</p>
       <div class="v8track-order-meta">
+        ${isShopee && shopeeSn ? `<div><b>Shopee Order SN:</b> <span style="font-family:monospace;font-weight:700;color:#ee4d2d">${esc(shopeeSn)}</span></div>` : ''}
         ${orderId?`<div><b>Order:</b> ${esc(orderId)}</div>`:''}
         ${created?`<div><b>วันที่สั่ง:</b> ${esc(created)}</div>`:''}
         ${o.payment_verification==='verified'&&o.payment_verified_by==='admin'&&o.payment_verified_at?`<button type="button" class="v8track-btn" style="margin-top:12px" data-receipt-order="${esc(orderId)}" onclick="window.hrxDownload(this.dataset.receiptOrder)">↓ ดาวน์โหลดใบรับชำระเงิน PNG</button>`:''}
@@ -13272,18 +13290,50 @@ window.trackSearch=function(){
     phonesMatch(o.customer_phone||o.phone||o.tel||o.mobile||'',raw)
   );
 
-  if(!matches.length){
-    currentOrder=null;
-    res.innerHTML=`<div class="v8track-empty">
-      ยังไม่พบออเดอร์จากเบอร์นี้ค่ะ<br>
-      <span style="font-size:9px">ลองตรวจสอบว่าเป็นเบอร์เดียวกับที่ใช้ตอนสั่งซื้อ</span>
-    </div>`;
-    return;
+  if(matches.length){
+    const active=currentActiveOrder(matches);
+    currentOrder=active;
+    res.innerHTML=active?card(active):'';
+  } else {
+    res.innerHTML='<div class="v8track-empty" style="color:#ee4d2d"><i class="ti ti-loader"></i> กำลังค้นหาข้อมูลพัสดุ…</div>';
   }
 
-  const active=currentActiveOrder(matches);
-  currentOrder=active;
-  res.innerHTML=active?card(active):'';
+  // Live cloud search fallback/refresh
+  fetch('/api/track/phone/'+encodeURIComponent(raw))
+    .then(r=>r.ok?r.json():null)
+    .then(data=>{
+      if(data&&Array.isArray(data.orders)&&data.orders.length){
+        const liveOrders=data.orders;
+        const active=currentActiveOrder(liveOrders);
+        currentOrder=active;
+        res.innerHTML=active?card(active):'';
+        try{
+          const rows=orderRows();
+          let changed=false;
+          liveOrders.forEach(lo=>{
+            const idx=rows.findIndex(x=>x.id===lo.id||(lo.shopee_order_sn&&x.shopee_order_sn===lo.shopee_order_sn));
+            if(idx>=0){rows[idx]=Object.assign({},rows[idx],lo);changed=true;}
+            else{rows.unshift(lo);changed=true;}
+          });
+          if(changed&&typeof window.saveOrders==='function')window.saveOrders(rows);
+        }catch(e){}
+      } else if(!matches.length){
+        currentOrder=null;
+        res.innerHTML=`<div class="v8track-empty">
+          ยังไม่พบออเดอร์จากเบอร์นี้ค่ะ<br>
+          <span style="font-size:9px">ลองตรวจสอบว่าเป็นเบอร์เดียวกับที่ใช้ตอนสั่งซื้อ หรือลงทะเบียน Shopee นะคะ</span>
+        </div>`;
+      }
+    })
+    .catch(()=>{
+      if(!matches.length){
+        currentOrder=null;
+        res.innerHTML=`<div class="v8track-empty">
+          ยังไม่พบออเดอร์จากเบอร์นี้ค่ะ<br>
+          <span style="font-size:9px">ลองตรวจสอบว่าเป็นเบอร์เดียวกับที่ใช้ตอนสั่งซื้อ</span>
+        </div>`;
+      }
+    });
 };
 
 /* Override the old customer order card in case another old handler calls it. */

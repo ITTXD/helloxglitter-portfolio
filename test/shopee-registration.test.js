@@ -249,10 +249,25 @@ async function runTests() {
     );
   });
 
-  test('Storefront tracking card displays [Shopee] badge for Shopee orders', () => {
+  test('v8 Tracking Engine card and carrierInfo support Shopee and SPX', () => {
     assert.ok(
-      indexHtml.includes('channel===\'shopee\'') || indexHtml.includes('channel === \'shopee\'') || indexHtml.includes('o.shopee_order_sn'),
-      'renderCustomerOrderCard must check for Shopee orders and render Shopee badge/info'
+      indexHtml.includes('v8track-shopee-badge') || indexHtml.includes('Shopee Order SN'),
+      'v8 tracking card must render Shopee badge or Shopee Order SN'
+    );
+    assert.ok(
+      indexHtml.includes('SPX Express'),
+      'carrierInfo must map SPX / Shopee to SPX Express'
+    );
+    assert.ok(
+      indexHtml.includes('/api/track/phone/'),
+      'trackSearch must fetch /api/track/phone/ for live search'
+    );
+  });
+
+  test('In-page admin queue (v8RenderQueue) supports Shopee orders and filtering', () => {
+    assert.ok(
+      indexHtml.includes("filter==='shopee'") || indexHtml.includes('🧡 Shopee'),
+      'v8RenderQueue must have Shopee filter'
     );
   });
 
@@ -265,6 +280,10 @@ async function runTests() {
     assert.ok(
       adminJs.includes('shopee') || adminHtml.includes('shopee'),
       'admin portal must support Shopee filter/badge'
+    );
+    assert.ok(
+      adminHtml.includes('chtab') && adminHtml.includes('switchChannelFilter'),
+      'admin index.html must contain channel filter tabs'
     );
   });
 
