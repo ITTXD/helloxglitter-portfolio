@@ -2710,13 +2710,18 @@ async function openProduct(i){
   </div>`
 }
 function openCard(i){
-  const x=load()[i];if(!x)return;
+  const a=load(), x=a[i];if(!x)return;
   if(x.target==='product')return openProduct(i);
   if(x.target==='external'){
     let u=(x.url||'').trim();if(u&&!/^https?:\/\//i.test(u))u='https://'+u;if(u)window.open(u,'_blank','noopener');return
   }
   if(x.target==='cart'&&typeof v8OpenCart==='function')return v8OpenCart();
-  if(typeof showPage==='function')showPage(x.target||'home')
+  var targetPage = x.target || 'home';
+  if(targetPage === 'bag') targetPage = 'preorder';
+  if(typeof window.hlgEnsureCategoryPage === 'function') {
+    window.hlgEnsureCategoryPage(targetPage);
+  }
+  if(typeof showPage==='function')showPage(targetPage)
 }
 
 /* override older recommended system */
@@ -3755,7 +3760,17 @@ function load(){
     { target: 'sticker', name: 'Sticker Collection', sub: 'ดูคอลเลกชันล่าสุด', src: null }
   ];
 }
-function save(a){localStorage.setItem(META,JSON.stringify(a||[]))}
+function save(a){
+  localStorage.setItem(META,JSON.stringify(a||[]));
+  if(isAdmin()){
+    fetch('/api/preview-cards', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ preview_cards: a || [] })
+    }).catch(function(e){ console.warn('Preview cloud sync error:', e); });
+  }
+}
 function esc(v){
   return String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 }
@@ -3800,6 +3815,7 @@ async function delBlob(key){
   }catch(e){}
 }
 async function imageUrl(x){
+  if(x?.image_url || x?.imageUrl) return x.image_url || x.imageUrl;
   if(x?.imageKey){
     const b=await getBlob(x.imageKey);
     if(b){
@@ -3818,6 +3834,7 @@ function normalize(x){
     sub:x?.sub||'',
     target:x?.target||'product',
     url:x?.url||'',
+    image_url:x?.image_url||x?.imageUrl||'',
     imageKey:x?.imageKey||'',
     legacySrc:x?.legacySrc||'',
     hidden:x?.hidden===true
@@ -3828,12 +3845,24 @@ function targetOptions(v){
     ['product','หน้าสินค้าของพรีวิวนี้'],
     ['preorder','กระเป๋าผ้า'],
     ['sticker','Sticker'],
-    ['wallpaper','Wallpaper'],
+    ['wallpaper','Wallpaper']
+  ];
+  try {
+    const cats = JSON.parse(localStorage.getItem('hlg_categories_v2') || '[]');
+    if(Array.isArray(cats)) {
+      cats.forEach(c => {
+        if(c && c.id && !['bag','sticker','wallpaper','preorder'].includes(c.id)) {
+          rows.push([c.id, '🎀 ' + (c.name || c.id)]);
+        }
+      });
+    }
+  } catch(e){}
+  rows.push(
     ['cart','ตะกร้าของฉัน'],
     ['tracking','ติดตามคิว / พัสดุ'],
     ['home','หน้าหลัก'],
     ['external','ลิงก์ภายนอก']
-  ];
+  );
   return rows.map(x=>`<option value="${x[0]}" ${v===x[0]?'selected':''}>${x[1]}</option>`).join('')
 }
 
@@ -3841,136 +3870,145 @@ async function renderInline(){
   const root=document.querySelector('.v5-products');
   if(!root||rendering)return;
   rendering=true;
-  
-  const a=load().map(normalize);
-  clearUrls();
+  try {
+    const a=load().map(normalize);
+    clearUrls();
 
-  const imagePromises = a.map(x => (x.hidden&&!isAdmin()) ? Promise.resolve(null) : imageUrl(x));
-  const images = await Promise.all(imagePromises);
+    const imagePromises = a.map(x => (x.hidden&&!isAdmin()) ? Promise.resolve(null) : imageUrl(x));
+    const images = await Promise.all(imagePromises);
 
-  root.classList.add('v8-inline-preview-grid');
-  root.innerHTML='';
+    root.classList.add('v8-inline-preview-grid');
+    root.innerHTML='';
 
-  for(let i=0;i<a.length;i++){
-    const x=a[i];if(x.hidden&&!isAdmin())continue;
-    const u=images[i];
-    const card=document.createElement('div');
-    card.className='v8-inline-preview-card '+(isAdmin()?'admin':'customer')+(x.hidden?' v8-inline-hidden':'');
-    card.dataset.v8InlinePreview='1';
+    for(let i=0;i<a.length;i++){
+      const x=a[i];if(x.hidden&&!isAdmin())continue;
+      const u=images[i];
+      const card=document.createElement('div');
+      card.className='v8-inline-preview-card '+(isAdmin()?'admin':'customer')+(x.hidden?' v8-inline-hidden':'');
+      card.dataset.v8InlinePreview='1';
 
-    if(isAdmin()){
-      card.innerHTML=`
-        <button class="v8-inline-delete" type="button" title="${x.hidden?'แสดงพรีวิวอีกครั้ง':'ซ่อนพรีวิวจากลูกค้า'}" aria-label="${x.hidden?'แสดงพรีวิวอีกครั้ง':'ซ่อนพรีวิวจากลูกค้า'}">${x.hidden?'↺':'×'}</button>
-        <div class="v8-inline-preview-image" data-image>
-          ${u?`<img src="${u}" alt="${esc(x.name)}"><button class="v8-inline-remove-img" type="button">ลบรูป</button>`:`<div class="v8-inline-preview-empty"><strong>＋</strong><span>แตะเพื่อเพิ่มรูป</span></div>`}
-          <input data-file type="file" accept="image/*" hidden>
-        </div>
-        <div class="v8-inline-edit-body">
-          <div class="v8-inline-edit-label">ชื่อ</div>
-          <input data-name value="${esc(x.name)}" placeholder="ชื่อสินค้า">
-          <div class="v8-inline-edit-label">ข้อความรอง</div>
-          <input data-sub value="${esc(x.sub)}" placeholder="ข้อความสั้น ๆ">
-          <div class="v8-inline-edit-label">กดแล้วไปที่</div>
-          <select data-target>${targetOptions(x.target)}</select>
-          <input data-url type="url" value="${esc(x.url)}" placeholder="https://..." style="${x.target==='external'?'':'display:none'}">
-          <div class="v8-inline-saved" data-state>${x.hidden?'ซ่อนจากลูกค้าแล้ว · กด ↺ เพื่อแสดงอีกครั้ง':''}</div>
-        </div>`;
+      if(isAdmin()){
+        card.innerHTML=`
+          <button class="v8-inline-delete" type="button" title="${x.hidden?'แสดงพรีวิวอีกครั้ง':'ซ่อนพรีวิวจากลูกค้า'}" aria-label="${x.hidden?'แสดงพรีวิวอีกครั้ง':'ซ่อนพรีวิวจากลูกค้า'}">${x.hidden?'↺':'×'}</button>
+          <div class="v8-inline-preview-image" data-image>
+            ${u?`<img src="${u}" alt="${esc(x.name)}"><button class="v8-inline-remove-img" type="button">ลบรูป</button>`:`<div class="v8-inline-preview-empty"><strong>＋</strong><span>แตะเพื่อเพิ่มรูป</span></div>`}
+            <input data-file type="file" accept="image/*" hidden>
+          </div>
+          <div class="v8-inline-edit-body">
+            <div class="v8-inline-edit-label">ชื่อ</div>
+            <input data-name value="${esc(x.name)}" placeholder="ชื่อสินค้า">
+            <div class="v8-inline-edit-label">ข้อความรอง</div>
+            <input data-sub value="${esc(x.sub)}" placeholder="ข้อความสั้น ๆ">
+            <div class="v8-inline-edit-label">กดแล้วไปที่</div>
+            <select data-target>${targetOptions(x.target)}</select>
+            <input data-url type="url" value="${esc(x.url)}" placeholder="https://..." style="${x.target==='external'?'':'display:none'}">
+            <div class="v8-inline-saved" data-state>${x.hidden?'ซ่อนจากลูกค้าแล้ว · กด ↺ เพื่อแสดงอีกครั้ง':''}</div>
+          </div>`;
 
-      const file=card.querySelector('[data-file]');
-      card.querySelector('[data-image]').onclick=e=>{
-        if(e.target===file||e.target.closest('.v8-inline-remove-img'))return;
-        file.click()
-      };
-      const remImgBtn=card.querySelector('.v8-inline-remove-img');
-      if(remImgBtn){
-        remImgBtn.onclick=async(e)=>{
+        const file=card.querySelector('[data-file]');
+        card.querySelector('[data-image]').onclick=e=>{
+          if(e.target===file||e.target.closest('.v8-inline-remove-img'))return;
+          file.click()
+        };
+        const remImgBtn=card.querySelector('.v8-inline-remove-img');
+        if(remImgBtn){
+          remImgBtn.onclick=async(e)=>{
+            e.stopPropagation();
+            const rows=load().map(normalize),cur=rows[i];if(!cur)return;
+            if(cur.imageKey)await delBlob(cur.imageKey);
+            cur.imageKey='';cur.legacySrc='';cur.image_url='';
+            rows[i]=cur;save(rows);
+            await renderInline();
+            if(window.showToast)showToast('ลบรูปพรีวิวแล้ว ✓');
+          }
+        }
+        file.onchange=async()=>{
+          const f=file.files?.[0];if(!f)return;
+          const rows=load().map(normalize),cur=rows[i];if(!cur)return;
+          const reader = new FileReader();
+          reader.onload = async function() {
+            cur.image_url = reader.result;
+            cur.imageKey = '';
+            cur.legacySrc = '';
+            rows[i] = cur;
+            save(rows);
+            await renderInline();
+            if(window.showToast)showToast('เปลี่ยนรูปพรีวิวแล้ว ✓');
+          };
+          reader.readAsDataURL(f);
+        };
+        card.querySelector('.v8-inline-delete').onclick=async e=>{
           e.stopPropagation();
           const rows=load().map(normalize),cur=rows[i];if(!cur)return;
-          if(cur.imageKey)await delBlob(cur.imageKey);
-          cur.imageKey='';cur.legacySrc='';
-          rows[i]=cur;save(rows);
+          cur.hidden=!cur.hidden;rows[i]=cur;save(rows);
           await renderInline();
-          if(window.showToast)showToast('ลบรูปพรีวิวแล้ว ✓');
+          if(window.showToast)showToast(cur.hidden?'ซ่อนพรีวิวจากลูกค้าแล้ว ✓':'แสดงพรีวิวอีกครั้งแล้ว ✓')
+        };
+
+        const name=card.querySelector('[data-name]');
+        const sub=card.querySelector('[data-sub]');
+        const target=card.querySelector('[data-target]');
+        const url=card.querySelector('[data-url]');
+        const state=card.querySelector('[data-state]');
+
+        function persist(){
+          const rows=load().map(normalize),cur=rows[i];if(!cur)return;
+          cur.name=(name.value||'').trim()||'สินค้า';
+          cur.sub=(sub.value||'').trim();
+          cur.target=target.value||'product';
+          cur.url=(url.value||'').trim();
+          rows[i]=cur;save(rows);
+          state.textContent='บันทึกแล้ว ✓';
+          clearTimeout(state._tm);
+          state._tm=setTimeout(()=>state.textContent='',1200)
+        }
+        name.onchange=persist;
+        sub.onchange=persist;
+        target.onchange=()=>{
+          url.style.display=target.value==='external'?'block':'none';
+          persist()
+        };
+        url.onchange=persist;
+
+      }else{
+        const defaultIcon = x.target === 'preorder' ? '👜' : x.target === 'wallpaper' ? '🎀' : x.target === 'sticker' ? '⭐' : '♡';
+        card.innerHTML=`
+          <div class="v8-inline-preview-image">
+            ${u?`<img src="${u}" alt="${esc(x.name)}">`:`<div class="v8-inline-preview-empty" style="font-size:30px;background:linear-gradient(145deg,#fff0f6,#f1eaff)"><strong>${defaultIcon}</strong></div>`}
+          </div>
+          <div class="v8-inline-customer-info">
+            <b>${esc(x.name)}</b>
+            <span>${esc(x.sub)}</span>
+          </div>`;
+        card.onclick=()=>{
+          if(typeof window.v8GoRecommended==='function')window.v8GoRecommended(i)
         }
       }
-      file.onchange=async()=>{
-        const f=file.files?.[0];if(!f)return;
-        const rows=load().map(normalize),cur=rows[i];if(!cur)return;
-        if(cur.imageKey)await delBlob(cur.imageKey);
-        cur.imageKey=await putBlob(f);cur.legacySrc='';
-        rows[i]=cur;save(rows);
-        await renderInline();
-        if(window.showToast)showToast('เปลี่ยนรูปพรีวิวแล้ว ✓')
-      };
-      card.querySelector('.v8-inline-delete').onclick=async e=>{
-        e.stopPropagation();
-        const rows=load().map(normalize),cur=rows[i];if(!cur)return;
-        cur.hidden=!cur.hidden;rows[i]=cur;save(rows);
-        await renderInline();
-        if(window.showToast)showToast(cur.hidden?'ซ่อนพรีวิวจากลูกค้าแล้ว ✓':'แสดงพรีวิวอีกครั้งแล้ว ✓')
-      };
-
-      const name=card.querySelector('[data-name]');
-      const sub=card.querySelector('[data-sub]');
-      const target=card.querySelector('[data-target]');
-      const url=card.querySelector('[data-url]');
-      const state=card.querySelector('[data-state]');
-
-      function persist(){
-        const rows=load().map(normalize),cur=rows[i];if(!cur)return;
-        cur.name=(name.value||'').trim()||'สินค้า';
-        cur.sub=(sub.value||'').trim();
-        cur.target=target.value||'product';
-        cur.url=(url.value||'').trim();
-        rows[i]=cur;save(rows);
-        state.textContent='บันทึกแล้ว ✓';
-        clearTimeout(state._tm);
-        state._tm=setTimeout(()=>state.textContent='',1200)
-      }
-      name.onchange=persist;
-      sub.onchange=persist;
-      target.onchange=()=>{
-        url.style.display=target.value==='external'?'block':'none';
-        persist()
-      };
-      url.onchange=persist;
-
-    }else{
-      const defaultIcon = x.target === 'preorder' ? '👜' : x.target === 'wallpaper' ? '🎀' : x.target === 'sticker' ? '⭐' : '♡';
-      card.innerHTML=`
-        <div class="v8-inline-preview-image">
-          ${u?`<img src="${u}" alt="${esc(x.name)}">`:`<div class="v8-inline-preview-empty" style="font-size:30px;background:linear-gradient(145deg,#fff0f6,#f1eaff)"><strong>${defaultIcon}</strong></div>`}
-        </div>
-        <div class="v8-inline-customer-info">
-          <b>${esc(x.name)}</b>
-          <span>${esc(x.sub)}</span>
-        </div>`;
-      card.onclick=()=>{
-        if(typeof window.v8GoRecommended==='function')window.v8GoRecommended(i)
-      }
+      root.appendChild(card)
     }
-    root.appendChild(card)
+
+    if(isAdmin()){
+      const add=document.createElement('button');
+      add.type='button';
+      add.className='v8-inline-add-card';
+      add.dataset.v8InlinePreview='1';
+      add.innerHTML='<div class="v8-inline-add-circle">＋</div><span>เพิ่มพรีวิวใหม่</span>';
+      add.onclick=()=>{
+        const rows=load().map(normalize);
+        rows.push(normalize({name:'สินค้าใหม่',sub:'',target:'product'}));
+        save(rows);renderInline()
+      };
+      root.appendChild(add)
+    }
+
+    document.getElementById('v8PreviewStableModal')?.remove();
+    document.getElementById('v8RecAdd')?.remove();
+  } catch(err) {
+    console.error('renderInline error:', err);
+  } finally {
+    rendering=false;
+    bindObserver()
   }
-
-  if(isAdmin()){
-    const add=document.createElement('button');
-    add.type='button';
-    add.className='v8-inline-add-card';
-    add.dataset.v8InlinePreview='1';
-    add.innerHTML='<div class="v8-inline-add-circle">＋</div><span>เพิ่มพรีวิวใหม่</span>';
-    add.onclick=()=>{
-      const rows=load().map(normalize);
-      rows.push(normalize({name:'สินค้าใหม่',sub:'',target:'product'}));
-      save(rows);renderInline()
-    };
-    root.appendChild(add)
-  }
-
-  document.getElementById('v8PreviewStableModal')?.remove();
-  document.getElementById('v8RecAdd')?.remove();
-
-  rendering=false;
-  bindObserver()
 }
 
 function bindObserver(){
@@ -6574,6 +6612,18 @@ async function loadStorefrontSettingsFromCloud(){
           if(!mergedPay.id || !String(mergedPay.id).trim()) mergedPay.id = '004999017222364';
           localStorage.setItem('hlg_promptpay_v1', JSON.stringify(mergedPay));
         }
+        if(Array.isArray(s.categories)) {
+          localStorage.setItem('hlg_categories_v2', JSON.stringify(s.categories));
+          if(typeof window.hlgRenderCategoryPills === 'function') window.hlgRenderCategoryPills();
+        }
+        if(Array.isArray(s.custom_products)) {
+          localStorage.setItem('hlg_custom_products_v1', JSON.stringify(s.custom_products));
+          if(typeof window.hlgSyncCustomProducts === 'function') window.hlgSyncCustomProducts();
+        }
+        if(Array.isArray(s.preview_cards) && s.preview_cards.length > 0) {
+          localStorage.setItem('hlg_preview_cards_v2', JSON.stringify(s.preview_cards));
+          if(typeof window.v8InlinePreviewRender === 'function') window.v8InlinePreviewRender();
+        }
       }
     }
   } catch(e) {
@@ -6946,6 +6996,10 @@ function closeCoupons(){ var x=document.getElementById('couponSheet');if(x)x.cla
 /* 6. PAGE SWITCHER & NAVIGATION */
 function showPage(page) {
   closeMenu();
+  if (page === 'bag') page = 'preorder';
+  if (typeof window.hlgEnsureCategoryPage === 'function') {
+    window.hlgEnsureCategoryPage(page);
+  }
   if(window._hlgCurrentPage && window._hlgCurrentPage!==page) window._hlgPrevPage=window._hlgCurrentPage;
   window._hlgCurrentPage=page;
   document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
@@ -15537,16 +15591,209 @@ let rows=[],urls=[];
 const $=s=>document.querySelector(s),admin=()=>{try{return typeof isAdmin==='function'&&isAdmin()}catch(e){return false}};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function message(s){if(typeof showToast==='function')showToast(s);else alert(s)}
-function read(){try{const x=JSON.parse(localStorage.getItem(KEY)||'[]');return Array.isArray(x)?x.filter(y=>y&&y.id&&['bag','sticker'].includes(y.type)):[]}catch(e){return []}}
+function read(){try{const x=JSON.parse(localStorage.getItem(KEY)||'[]');return Array.isArray(x)?x.filter(y=>y&&y.id):[]}catch(e){return []}}
 function openDB(){return new Promise((resolve,reject)=>{if(!window.indexedDB){reject(Error('เบราว์เซอร์นี้ไม่รองรับพื้นที่เก็บรูป'));return}const q=indexedDB.open(DB,1);q.onupgradeneeded=()=>{if(!q.result.objectStoreNames.contains(STORE))q.result.createObjectStore(STORE)};q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error||Error('เปิดพื้นที่รูปไม่สำเร็จ'))})}
 async function media(key,blob){const db=await openDB();try{return await new Promise((resolve,reject)=>{const t=db.transaction(STORE,blob===undefined?'readonly':'readwrite'),q=blob===undefined?t.objectStore(STORE).get(key):blob===null?t.objectStore(STORE).delete(key):t.objectStore(STORE).put(blob,key);q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error||Error('บันทึกรูปไม่สำเร็จ'))})}finally{db.close()}}
-async function hydrate(){for(const u of urls)URL.revokeObjectURL(u);urls=[];rows=read();await Promise.all(rows.map(async x=>{x._img=x.imageUrl||'';if(x.imageKey){try{const blob=await media(x.imageKey);if(blob){x._img=URL.createObjectURL(blob);urls.push(x._img)}}catch(e){console.warn('Product image unavailable',e)}}}));sync()}
-function sync(){if(typeof ALL_PATTERNS==='undefined'||typeof STICKER_PATTERNS==='undefined')return;ALL_PATTERNS=ALL_PATTERNS.filter(x=>!x._hlgCustomId);STICKER_PATTERNS=STICKER_PATTERNS.filter(x=>!x._hlgCustomId);for(const x of rows){const img=x._img||x.imageUrl||'';if(x.type==='bag')ALL_PATTERNS.push({name:x.name,size:x.size,sizeKey:x.sizeKey,priceOrig:Number(x.price),img,localImg:'',_hlgCustomId:x.id});else STICKER_PATTERNS.push({name:x.name,price:Number(x.price),img,localImg:'',_hlgCustomId:x.id})}try{const key='hlg_unified_cart_v1',cart=JSON.parse(localStorage.getItem(key)||'[]');if(Array.isArray(cart)){let changed=false;for(const item of cart){const product=rows.find(x=>x.name===item.name&&x.type===item.type);if(product&&item.image!==product._img){item.image=product._img||product.imageUrl||'';changed=true}}if(changed)localStorage.setItem(key,JSON.stringify(cart))}}catch(e){console.warn('Cart image refresh',e)}const sellingSticker=rows.some(x=>x.type==='sticker');const coming=$('#page-sticker .sticker-coming-soon-card');if(coming)coming.hidden=sellingSticker;const tag=$('#page-sticker .hero-tag'),sub=$('#page-sticker .hero-sub');if(tag)tag.textContent=sellingSticker?'✨ Sticker จากร้าน ⭐':'✨ ลายสติกเกอร์ตัวอย่าง (Coming Soon) ⭐';if(sub)sub.textContent=sellingSticker?'เลือก Sticker ที่ชอบ แล้วกดใส่ตะกร้าได้เลยค่ะ 💖':'สติกเกอร์แผงละ 69 บาท · เปิดให้ชมลายตัวอย่างก่อนเปิดรับออเดอร์เร็วๆ นี้นะคะ 💖';if(typeof buildGallery==='function')buildGallery();if(typeof stickerBuildGallery==='function')stickerBuildGallery();decorateSticker();if(typeof v8UpdateCartFloat==='function')v8UpdateCartFloat();if($('#page-cart')?.classList.contains('active')&&typeof renderUnifiedCart==='function')renderUnifiedCart()}
+async function hydrate(){for(const u of urls)URL.revokeObjectURL(u);urls=[];rows=read();await Promise.all(rows.map(async x=>{x._img=x.image_url||x.imageUrl||'';if(x.imageKey){try{const blob=await media(x.imageKey);if(blob){x._img=URL.createObjectURL(blob);urls.push(x._img)}}catch(e){console.warn('Product image unavailable',e)}}}));sync()}
+function sync(){if(typeof ALL_PATTERNS==='undefined'||typeof STICKER_PATTERNS==='undefined')return;ALL_PATTERNS=ALL_PATTERNS.filter(x=>!x._hlgCustomId);STICKER_PATTERNS=STICKER_PATTERNS.filter(x=>!x._hlgCustomId);for(const x of rows){const img=x._img||x.image_url||x.imageUrl||'';const catId=x.category_id||x.type||'bag';if(catId==='bag')ALL_PATTERNS.push({name:x.name,size:x.size,sizeKey:x.sizeKey,priceOrig:Number(x.price),img,localImg:'',_hlgCustomId:x.id});else if(catId==='sticker')STICKER_PATTERNS.push({name:x.name,price:Number(x.price),img,localImg:'',_hlgCustomId:x.id})}try{const key='hlg_unified_cart_v1',cart=JSON.parse(localStorage.getItem(key)||'[]');if(Array.isArray(cart)){let changed=false;for(const item of cart){const product=rows.find(x=>x.name===item.name&&(x.category_id===item.categoryId||x.type===item.type));if(product&&item.image!==product._img){item.image=product._img||product.image_url||product.imageUrl||'';changed=true}}if(changed)localStorage.setItem(key,JSON.stringify(cart))}}catch(e){console.warn('Cart image refresh',e)}const sellingSticker=rows.some(x=>(x.category_id==='sticker'||x.type==='sticker'));const coming=$('#page-sticker .sticker-coming-soon-card');if(coming)coming.hidden=sellingSticker;const tag=$('#page-sticker .hero-tag'),sub=$('#page-sticker .hero-sub');if(tag)tag.textContent=sellingSticker?'✨ Sticker จากร้าน ⭐':'✨ ลายสติกเกอร์ตัวอย่าง (Coming Soon) ⭐';if(sub)sub.textContent=sellingSticker?'เลือก Sticker ที่ชอบ แล้วกดใส่ตะกร้าได้เลยค่ะ 💖':'สติกเกอร์แผงละ 69 บาท · เปิดให้ชมลายตัวอย่างก่อนเปิดรับออเดอร์เร็วๆ นี้นะคะ 💖';if(typeof buildGallery==='function')buildGallery();if(typeof stickerBuildGallery==='function')stickerBuildGallery();decorateSticker();if(typeof v8UpdateCartFloat==='function')v8UpdateCartFloat();if($('#page-cart')?.classList.contains('active')&&typeof renderUnifiedCart==='function')renderUnifiedCart()}
 function decorateSticker(){document.querySelectorAll('#stickerGallery .gcard').forEach((card,i)=>{const x=typeof STICKER_PATTERNS!=='undefined'?STICKER_PATTERNS[i]:null;if(!x?._hlgCustomId)return;const label=card.querySelector('.glabel');if(!label||label.querySelector('.hlg-sticker-buy'))return;const button=document.createElement('button');button.className='hlg-sticker-buy';button.type='button';button.textContent='＋ ใส่ตะกร้า';button.onclick=e=>{e.stopPropagation();const key='hlg_unified_cart_v1';let cart=[];try{cart=JSON.parse(localStorage.getItem(key)||'[]');if(!Array.isArray(cart))cart=[]}catch(e){}const old=cart.find(c=>c.type==='sticker'&&c.name===x.name);if(old)old.qty=Number(old.qty||1)+1;else cart.push({type:'sticker',name:x.name,variant:'',qty:1,price:Number(x.price),image:x.img,requiresEmail:false});try{localStorage.setItem(key,JSON.stringify(cart));if(typeof v8UpdateCartFloat==='function')v8UpdateCartFloat();message('เพิ่ม Sticker ลงตะกร้าแล้ว ♡')}catch(err){message('ตะกร้าเต็ม กรุณาลองใหม่')}};label.append(button)})}
 const oldSticker=window.stickerBuildGallery;window.stickerBuildGallery=function(){const r=oldSticker?.apply(this,arguments);decorateSticker();return r};
+window.hlgSyncCustomProducts=hydrate;
 function boot(){hydrate().catch(console.error)}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.error)});
+})();
+</script>
+
+<script id="hlg-dynamic-categories-js">
+(function(){
+  'use strict';
+  const CAT_KEY = 'hlg_categories_v2';
+  const PROD_KEY = 'hlg_custom_products_v1';
+  const CART_KEY = 'hlg_unified_cart_v1';
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function getCategories() {
+    try {
+      const a = JSON.parse(localStorage.getItem(CAT_KEY) || '[]');
+      if (Array.isArray(a) && a.length > 0) return a;
+    } catch(e) {}
+    return [
+      { id: 'bag', name: 'กระเป๋าผ้า', description: 'กระเป๋าผ้าลายน่ารัก 4 ไซส์ 46 ลาย', is_builtin: true, show_on_home: true },
+      { id: 'sticker', name: 'Sticker', description: 'สติกเกอร์ไดคัทสุดคิ้วท์', is_builtin: true, show_on_home: true },
+      { id: 'wallpaper', name: 'Wallpaper', description: 'Digital item วอลเปเปอร์มือถือ', is_builtin: true, show_on_home: true }
+    ];
+  }
+
+  function getCustomProducts() {
+    try {
+      const a = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
+      return Array.isArray(a) ? a.filter(function(x) { return x && x.id; }) : [];
+    } catch(e) { return []; }
+  }
+
+  window.hlgAddCustomProductToCart = function(productId) {
+    const prods = getCustomProducts();
+    const p = prods.find(function(x) { return String(x.id) === String(productId); });
+    if (!p) {
+      if (typeof showToast === 'function') showToast('ไม่พบสินค้านี้ค่ะ');
+      return;
+    }
+    let cart = [];
+    try {
+      cart = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
+      if (!Array.isArray(cart)) cart = [];
+    } catch(e) { cart = []; }
+
+    const found = cart.find(function(item) {
+      return (item.productId && String(item.productId) === String(p.id)) ||
+             (item.name === p.name && item.variant === (p.size || ''));
+    });
+
+    if (found) {
+      found.qty = Number(found.qty || 1) + 1;
+    } else {
+      cart.push({
+        type: 'custom',
+        categoryId: p.category_id || p.type || 'other',
+        productId: p.id,
+        name: p.name,
+        variant: p.size || '',
+        qty: 1,
+        price: Number(p.price) || 0,
+        image: p.image_url || p.imageUrl || '',
+        requiresEmail: false
+      });
+    }
+
+    try {
+      localStorage.setItem(CART_KEY, JSON.stringify(cart));
+      if (typeof v8UpdateCartFloat === 'function') v8UpdateCartFloat();
+      if (typeof renderUnifiedCart === 'function' && document.getElementById('page-cart')?.classList.contains('active')) {
+        renderUnifiedCart();
+      }
+      if (typeof showToast === 'function') showToast('เพิ่ม ' + p.name + ' ลงตะกร้าแล้ว ♡');
+    } catch(err) {
+      if (typeof showToast === 'function') showToast('บันทึกตะกร้าไม่สำเร็จ กรุณาลองใหม่');
+    }
+  };
+
+  window.hlgEnsureCategoryPage = function(categoryId) {
+    if (!categoryId) return null;
+    const reserved = ['home', 'preorder', 'bag', 'sticker', 'wallpaper', 'cart', 'tracking', 'admin', 'thankyou', 'wpcheck', 'external', 'product'];
+    if (reserved.indexOf(categoryId) >= 0) return null;
+
+    const cats = getCategories();
+    const cat = cats.find(function(c) { return c.id === categoryId; }) || {
+      id: categoryId,
+      name: categoryId,
+      description: ''
+    };
+
+    let pageEl = document.getElementById('page-' + categoryId);
+    if (!pageEl) {
+      pageEl = document.createElement('div');
+      pageEl.id = 'page-' + categoryId;
+      pageEl.className = 'page';
+      const anchor = document.getElementById('page-cart') || document.querySelector('.page');
+      if (anchor && anchor.parentNode) {
+        anchor.parentNode.insertBefore(pageEl, anchor);
+      } else {
+        document.body.appendChild(pageEl);
+      }
+    }
+
+    const prods = getCustomProducts().filter(function(p) {
+      return (p.category_id === categoryId) || (p.type === categoryId);
+    });
+
+    const coverHtml = cat.cover_url ? `<div style="max-width:320px;margin:0 auto 12px;border-radius:16px;overflow:hidden;box-shadow:0 4px 16px rgba(184,75,123,0.12)"><img src="${esc(cat.cover_url)}" alt="${esc(cat.name)}" style="width:100%;height:auto;display:block"></div>` : '';
+
+    const productsHtml = prods.length > 0 ? prods.map(function(p) {
+      const img = p.image_url || p.imageUrl || '';
+      return `
+        <div class="gcard" style="background:#fff;border:1px solid #f2d5e1;border-radius:18px;overflow:hidden;box-shadow:0 4px 16px rgba(184,75,123,0.08);display:flex;flex-direction:column">
+          <div style="aspect-ratio:1/1;position:relative;background:#fff5f9;display:flex;align-items:center;justify-content:center;overflow:hidden">
+            ${img ? `<img src="${esc(img)}" alt="${esc(p.name)}" style="width:100%;height:100%;object-fit:cover">` : `<div style="font-size:36px">🎀</div>`}
+          </div>
+          <div style="padding:12px;display:flex;flex-direction:column;flex:1">
+            <div style="font-weight:700;font-size:14px;color:#4a2b38;margin-bottom:4px">${esc(p.name)}</div>
+            ${p.description ? `<div style="font-size:12px;color:#8a6d7b;margin-bottom:6px;line-height:1.4">${esc(p.description)}</div>` : ''}
+            ${p.size ? `<div style="font-size:11px;color:#a8537a;margin-bottom:6px">ขนาด: ${esc(p.size)}</div>` : ''}
+            <div style="margin-top:auto;display:flex;align-items:center;justify-content:space-between;padding-top:8px;border-top:1px solid #fbf0f4">
+              <span style="font-weight:800;font-size:15px;color:#b84070">${Number(p.price).toLocaleString()} ฿</span>
+              <button type="button" class="hlg-cat-add-btn" style="border:none;border-radius:10px;background:#bc4b7b;color:#fff;padding:7px 12px;font:inherit;font-size:12px;font-weight:600;cursor:pointer" onclick="hlgAddCustomProductToCart('${esc(p.id)}')">＋ ใส่ตะกร้า</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('') : `
+      <div style="text-align:center;padding:48px 16px;color:#8a6d7b;grid-column:1/-1;background:#fff;border-radius:18px;border:1px dashed #f2d5e1">
+        <div style="font-size:36px;margin-bottom:8px">🎀</div>
+        <b>ยังไม่มีสินค้าในหมวดหมู่นี้ค่ะ ♡</b>
+        <p style="font-size:12px;margin:6px 0 0">แอดมินสามารถเพิ่มสินค้าลงในหมวดหมู่นี้ได้จากระบบหลังบ้าน</p>
+      </div>
+    `;
+
+    pageEl.innerHTML = `
+      <div class="page-backbar"><button class="page-backbtn" type="button" onclick="goBackPage()"><i class="ti ti-arrow-left"></i> ย้อนกลับ</button></div>
+      <div class="hero cat-hero" style="text-align:center;padding:26px 16px 16px;background:linear-gradient(180deg,#fff5f9 0%,#ffffff 100%)">
+        ${coverHtml}
+        <div class="hero-tag" style="display:inline-block;padding:4px 14px;border-radius:20px;background:#ffe4ee;color:#b84070;font-size:12px;font-weight:700;margin-bottom:8px">🎀 คอลเลกชัน</div>
+        <h1 style="font-size:24px;color:#94345d;margin:0 0 6px">${esc(cat.name)}</h1>
+        <div class="hero-sub" style="font-size:13px;color:#7e5e6e;margin:0">${esc(cat.description || 'เลือกสินค้าที่ชอบ แล้วกดใส่ตะกร้าได้เลยค่ะ 💖')}</div>
+      </div>
+      <div class="sec" style="max-width:960px;margin:0 auto;padding:0 14px 40px">
+        <div class="sec-title" style="margin-bottom:14px"><i class="ti ti-heart"></i> รายการสินค้า (${prods.length} รายการ)</div>
+        <div class="hlg-custom-cat-grid" id="catGrid-${esc(categoryId)}" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(160px, 1fr));gap:14px">
+          ${productsHtml}
+        </div>
+      </div>
+    `;
+
+    return pageEl;
+  };
+
+  window.hlgRenderCategoryPills = function() {
+    const cats = getCategories().filter(function(c) { return c && c.show_on_home !== false; });
+    let container = document.getElementById('hlgHomeCategoryPills');
+    const homeProducts = document.querySelector('#page-home .v5-products');
+    if (!homeProducts) return;
+
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'hlgHomeCategoryPills';
+      container.style.cssText = 'display:flex;gap:8px;overflow-x:auto;padding:8px 12px 14px;scrollbar-width:none;-webkit-overflow-scrolling:touch;';
+      const head = homeProducts.previousElementSibling;
+      if (head && head.parentNode) {
+        head.parentNode.insertBefore(container, homeProducts);
+      }
+    }
+
+    if (!container) return;
+    container.innerHTML = cats.map(function(c) {
+      const isBuiltin = ['bag', 'sticker', 'wallpaper'].indexOf(c.id) >= 0;
+      const targetPage = c.id === 'bag' ? 'preorder' : c.id;
+      const icon = c.id === 'bag' ? '👜' : c.id === 'sticker' ? '✨' : c.id === 'wallpaper' ? '🎨' : '🎀';
+      return `
+        <button type="button" class="hlg-cat-pill" onclick="${isBuiltin ? `showPage('${targetPage}')` : `hlgEnsureCategoryPage('${c.id}');showPage('${c.id}')`}" style="flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:20px;border:1px solid #f2d5e1;background:#fff;color:#8a4465;font:inherit;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(184,75,123,0.06);white-space:nowrap">
+          <span>${icon}</span>
+          <span>${esc(c.name)}</span>
+        </button>
+      `;
+    }).join('');
+  };
+
+  document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(function() {
+      if (typeof window.hlgRenderCategoryPills === 'function') window.hlgRenderCategoryPills();
+    }, 150);
+  });
 })();
 </script>
 <style id="hlg-queue-copy-style">

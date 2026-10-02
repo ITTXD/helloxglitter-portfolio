@@ -630,7 +630,9 @@ function switchView(view) {
   document.getElementById('viewTracking').classList.toggle('hidden', view !== 'tracking');
   if (view === 'products') {
     hydrateProducts().then(function() {
+      renderCategoryManager();
       renderProductsView();
+      renderPreviewManager();
       if (typeof window.hlgRenderTiers === 'function') window.hlgRenderTiers();
       if (typeof window.hlgRenderPricing === 'function') window.hlgRenderPricing();
       if (typeof window.hlgRenderFonts === 'function') window.hlgRenderFonts();
@@ -1048,15 +1050,13 @@ const PRODUCT_KEY = "hlg_custom_products_v1";
 // Must match the storefront product manager (public/index.html) so images written
 // from /admin/ are visible to customers and vice versa.
 const PRODUCT_DB = "hlg_product_media_v1", PRODUCT_STORE = "images";
-let customProducts = [];
-let customProductImageUrls = [];
+const CATEGORY_KEY = "hlg_categories_v2";
+const PREVIEW_KEY = "hlg_preview_cards_v2";
 
-function readProducts() {
-  try {
-    const x = JSON.parse(localStorage.getItem(PRODUCT_KEY) || "[]");
-    return Array.isArray(x) ? x.filter(y => y && y.id && ["bag","sticker"].includes(y.type)) : [];
-  } catch(e) { return []; }
-}
+let adminCategories = [];
+let customProducts = [];
+let adminPreviewCards = [];
+let customProductImageUrls = [];
 
 function openProductDB() {
   return new Promise((resolve, reject) => {
@@ -1083,58 +1083,407 @@ async function productMedia(key, blob) {
   }
 }
 
-async function hydrateProducts() {
-  for (const u of customProductImageUrls) URL.revokeObjectURL(u);
-  customProductImageUrls = [];
-  customProducts = readProducts();
-  await Promise.all(customProducts.map(async x => {
-    x._img = x.imageUrl || "";
-    if (x.imageKey) {
-      try {
-        const blob = await productMedia(x.imageKey);
-        if (blob) {
-          x._img = URL.createObjectURL(blob);
-          customProductImageUrls.push(x._img);
-        }
-      } catch(e) { console.warn("Product image unavailable", e); }
+async function fetchCategories() {
+  try {
+    const res = await fetch('/api/categories', { credentials: 'include' });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.success && Array.isArray(data.categories)) {
+        adminCategories = data.categories;
+        localStorage.setItem(CATEGORY_KEY, JSON.stringify(adminCategories));
+        return adminCategories;
+      }
     }
-  }));
+  } catch (err) {
+    console.warn('Failed to fetch categories from API:', err);
+  }
+  try {
+    const cached = JSON.parse(localStorage.getItem(CATEGORY_KEY) || '[]');
+    if (Array.isArray(cached) && cached.length > 0) adminCategories = cached;
+  } catch (e) {}
+  if (!adminCategories.length) {
+    adminCategories = [
+      { id: 'bag', name: 'กระเป๋าผ้า', description: 'กระเป๋าผ้าลายน่ารัก 4 ไซส์ 46 ลาย', is_builtin: true, show_on_home: true },
+      { id: 'sticker', name: 'Sticker', description: 'สติกเกอร์ไดคัทสุดคิ้วท์', is_builtin: true, show_on_home: true },
+      { id: 'wallpaper', name: 'Wallpaper', description: 'Digital item วอลเปเปอร์มือถือ', is_builtin: true, show_on_home: true }
+    ];
+  }
+  return adminCategories;
 }
 
+async function fetchCustomProducts() {
+  try {
+    const res = await fetch('/api/products', { credentials: 'include' });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.success && Array.isArray(data.products)) {
+        customProducts = data.products;
+        localStorage.setItem(PRODUCT_KEY, JSON.stringify(customProducts));
+        return customProducts;
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to fetch products from API:', err);
+  }
+  try {
+    const cached = JSON.parse(localStorage.getItem(PRODUCT_KEY) || '[]');
+    if (Array.isArray(cached)) customProducts = cached;
+  } catch (e) {}
+  return customProducts;
+}
+
+async function fetchPreviewCards() {
+  try {
+    const res = await fetch('/api/preview-cards', { credentials: 'include' });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.success && Array.isArray(data.preview_cards)) {
+        adminPreviewCards = data.preview_cards;
+        localStorage.setItem(PREVIEW_KEY, JSON.stringify(adminPreviewCards));
+        return adminPreviewCards;
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to fetch preview cards from API:', err);
+  }
+  try {
+    const cached = JSON.parse(localStorage.getItem(PREVIEW_KEY) || '[]');
+    if (Array.isArray(cached) && cached.length > 0) adminPreviewCards = cached;
+  } catch (e) {}
+  if (!adminPreviewCards.length) {
+    adminPreviewCards = [
+      { target: 'preorder', name: 'กระเป๋าผ้า HLG', sub: 'เลือกลายที่ชอบได้เลย ♡', image_url: '' },
+      { target: 'wallpaper', name: 'Wallpaper Collection', sub: 'Digital item', image_url: '' },
+      { target: 'sticker', name: 'Sticker Collection', sub: 'ดูคอลเลกชันล่าสุด', image_url: '' }
+    ];
+  }
+  return adminPreviewCards;
+}
+
+async function hydrateProducts() {
+  for (const u of customProductImageUrls) {
+    try { URL.revokeObjectURL(u); } catch(e){}
+  }
+  customProductImageUrls = [];
+
+  await Promise.all([
+    fetchCategories(),
+    fetchCustomProducts(),
+    fetchPreviewCards()
+  ]);
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(Error('อ่านรูปภาพไม่สำเร็จ'));
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ==================== 1. CATEGORY MANAGER ==================== */
+function renderCategoryManager() {
+  const container = document.getElementById("categoryManagerContainer");
+  if (!container) return;
+
+  container.innerHTML = `
+    <div style="background:#fff;border:1px solid #f2d5e1;border-radius:16px;padding:18px;margin:12px 0;box-shadow:0 6px 18px #b84b7b12;">
+      <h3 style="margin:0 0 8px;color:#a83e6a">สร้าง / แก้ไขหมวดหมู่สินค้า</h3>
+      <p style="font-size:12px;color:#866d79;margin:0 0 14px;line-height:1.6">
+        สร้างหมวดหมู่ใหม่เพื่อเปิดหน้ารวมสินค้าของหมวดนั้น และเลือกให้แสดงเป็นการ์ดพรีวิวบนหน้าแรกอัตโนมัติได้
+      </p>
+      <form id="hlgCatForm">
+        <input type="hidden" id="hlgCatEditId">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:12px;">
+          <label style="display:block;font-size:13px;color:#765461;font-weight:600">
+            ชื่อหมวดหมู่ <span style="color:#d45a8a">*</span>
+            <input id="hlgCatName" required maxlength="90" placeholder="เช่น พวงกุญแจ, กระเป๋าเป้, GripTok" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+          </label>
+          <label style="display:block;font-size:13px;color:#765461;font-weight:600">
+            คำอธิบายสั้น ๆ
+            <input id="hlgCatDesc" maxlength="150" placeholder="เช่น สินค้าน่ารัก งานอะคริลิคเคลือบกลิตเตอร์" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+          </label>
+          <label style="display:block;font-size:13px;color:#765461;font-weight:600">
+            อัปโหลดรูปหน้าปกหมวด
+            <input id="hlgCatCoverFile" type="file" accept="image/*" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+          </label>
+          <label style="display:block;font-size:13px;color:#765461;font-weight:600">
+            หรือใส่ลิงก์รูป HTTPS
+            <input id="hlgCatCoverUrl" type="url" placeholder="https://..." style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+          </label>
+        </div>
+        <div style="margin:12px 0 6px">
+          <label style="font-size:13px;color:#765461;font-weight:600;display:inline-flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" id="hlgCatShowHome" checked style="width:16px;height:16px">
+            สร้างการ์ดพรีวิวบนหน้าแรก (กลุ่มที่แนะนำ 💗) อัตโนมัติ
+          </label>
+        </div>
+        <div style="margin-top:14px;display:flex;gap:8px">
+          <button type="submit" id="hlgCatSaveBtn" style="border:0;border-radius:10px;padding:10px 18px;background:#bc4b7b;color:#fff;font:inherit;font-size:13px;font-weight:700;cursor:pointer;">
+            บันทึกหมวดหมู่
+          </button>
+          <button type="button" id="hlgCatCancelBtn" style="border:0;border-radius:10px;padding:10px 14px;background:#fceaf1;color:#a83e6a;font:inherit;font-size:13px;cursor:pointer;">
+            ยกเลิก
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div style="background:#fff;border:1px solid #f2d5e1;border-radius:16px;padding:18px;margin:12px 0;box-shadow:0 6px 18px #b84b7b12;">
+      <h3 style="margin:0 0 12px;color:#a83e6a">หมวดหมู่ทั้งหมดในระบบ</h3>
+      <div id="hlgCategoryList"></div>
+    </div>
+  `;
+
+  document.getElementById("hlgCatForm").onsubmit = saveCategory;
+  document.getElementById("hlgCatCancelBtn").onclick = resetCategoryForm;
+  renderCategoryList();
+}
+
+function renderCategoryList() {
+  const container = document.getElementById("hlgCategoryList");
+  if (!container) return;
+  container.innerHTML = "";
+
+  if (!adminCategories.length) {
+    container.textContent = "ยังไม่มีหมวดหมู่";
+    return;
+  }
+
+  adminCategories.forEach(c => {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;gap:12px;align-items:center;border-top:1px solid #f4dfeb;padding:12px 0;";
+
+    const img = document.createElement("img");
+    img.src = c.cover_url || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24'%3E%3Ctext y='18' font-size='18'%3E🎀%3C/text%3E%3C/svg%3E";
+    img.alt = c.name;
+    img.style.cssText = "width:50px;height:50px;object-fit:cover;border-radius:10px;background:#fff2f8;border:1px solid #f4dce7;";
+
+    const info = document.createElement("div");
+    info.style.cssText = "flex:1;min-width:0;";
+
+    const titleRow = document.createElement("div");
+    titleRow.style.cssText = "display:flex;align-items:center;gap:6px;flex-wrap:wrap;";
+
+    const nameEl = document.createElement("b");
+    nameEl.textContent = c.name;
+    nameEl.style.cssText = "color:#7b3c58;font-size:14px;";
+
+    const idBadge = document.createElement("span");
+    idBadge.textContent = "ID: " + c.id;
+    idBadge.style.cssText = "font-size:10px;padding:2px 6px;border-radius:6px;background:#fceaf1;color:#b24775;";
+
+    titleRow.append(nameEl, idBadge);
+
+    if (c.is_builtin) {
+      const builtinBadge = document.createElement("span");
+      builtinBadge.textContent = "หมวดหลัก";
+      builtinBadge.style.cssText = "font-size:10px;padding:2px 6px;border-radius:6px;background:#f0e6ff;color:#7c3aed;";
+      titleRow.append(builtinBadge);
+    }
+
+    const descEl = document.createElement("small");
+    const count = customProducts.filter(p => (p.category_id || p.type) === c.id).length;
+    descEl.textContent = (c.description || "ไม่มีคำอธิบาย") + " · มี " + count + " สินค้า";
+    descEl.style.cssText = "display:block;color:#927888;font-size:12px;margin-top:3px;";
+
+    info.append(titleRow, descEl);
+
+    const actions = document.createElement("div");
+    actions.style.cssText = "display:flex;gap:6px;align-items:center;";
+
+    const editBtn = document.createElement("button");
+    editBtn.textContent = "แก้ไข";
+    editBtn.type = "button";
+    editBtn.style.cssText = "border:0;border-radius:8px;padding:7px 12px;background:#fceaf1;color:#a83e6a;font:inherit;font-size:12px;cursor:pointer;";
+    editBtn.onclick = () => editCategoryRow(c.id);
+    actions.append(editBtn);
+
+    if (!c.is_builtin) {
+      const delBtn = document.createElement("button");
+      delBtn.textContent = "ลบ";
+      delBtn.type = "button";
+      delBtn.style.cssText = "border:0;border-radius:8px;padding:7px 12px;background:#fff0f5;color:#c53063;font:inherit;font-size:12px;cursor:pointer;";
+      delBtn.onclick = () => deleteCategory(c.id);
+      actions.append(delBtn);
+    }
+
+    row.append(img, info, actions);
+    container.append(row);
+  });
+}
+
+function editCategoryRow(id) {
+  const c = adminCategories.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById("hlgCatEditId").value = c.id;
+  document.getElementById("hlgCatName").value = c.name;
+  document.getElementById("hlgCatDesc").value = c.description || "";
+  document.getElementById("hlgCatCoverUrl").value = c.cover_url || "";
+  document.getElementById("hlgCatShowHome").checked = c.show_on_home !== false;
+  document.getElementById("hlgCatSaveBtn").textContent = "อัปเดตหมวดหมู่";
+  document.getElementById("hlgCatForm").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function resetCategoryForm() {
+  document.getElementById("hlgCatEditId").value = "";
+  document.getElementById("hlgCatName").value = "";
+  document.getElementById("hlgCatDesc").value = "";
+  document.getElementById("hlgCatCoverFile").value = "";
+  document.getElementById("hlgCatCoverUrl").value = "";
+  document.getElementById("hlgCatShowHome").checked = true;
+  document.getElementById("hlgCatSaveBtn").textContent = "บันทึกหมวดหมู่";
+}
+
+async function saveCategory(e) {
+  e.preventDefault();
+  const id = document.getElementById("hlgCatEditId").value;
+  const name = document.getElementById("hlgCatName").value.trim();
+  const description = document.getElementById("hlgCatDesc").value.trim();
+  const coverUrlInput = document.getElementById("hlgCatCoverUrl").value.trim();
+  const showOnHome = document.getElementById("hlgCatShowHome").checked;
+  const file = document.getElementById("hlgCatCoverFile").files[0];
+
+  if (!name) { showToast("กรุณากรอกชื่อหมวดหมู่"); return; }
+
+  let cover_url = coverUrlInput;
+  if (file) {
+    try {
+      cover_url = await fileToBase64(file);
+    } catch (err) {
+      showToast("อ่านไฟล์รูปภาพไม่สำเร็จ");
+      return;
+    }
+  }
+
+  const btn = document.getElementById("hlgCatSaveBtn");
+  btn.disabled = true;
+  btn.textContent = "กำลังบันทึก...";
+
+  try {
+    const url = id ? `/api/categories/${encodeURIComponent(id)}` : '/api/categories';
+    const method = id ? 'PUT' : 'POST';
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ name, description, cover_url, show_on_home: showOnHome })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw Error(data.error || 'บันทึกหมวดหมู่ไม่สำเร็จ');
+    }
+
+    await hydrateProducts();
+    resetCategoryForm();
+    renderCategoryManager();
+    renderProductsView();
+    renderPreviewManager();
+    showToast("success", id ? "อัปเดตหมวดหมู่เรียบร้อยแล้ว ✓" : "สร้างหมวดหมู่ใหม่แล้ว ♡");
+  } catch (err) {
+    console.error(err);
+    showToast("error", err.message || "บันทึกหมวดหมู่ไม่สำเร็จ");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = id ? "อัปเดตหมวดหมู่" : "บันทึกหมวดหมู่";
+  }
+}
+
+async function deleteCategory(id) {
+  const c = adminCategories.find(x => x.id === id);
+  if (!c) return;
+  if (!confirm(`ลบหมวดหมู่ "${c.name}" ใช่ไหมคะ? (สินค้าในหมวดนี้และการ์ดพรีวิวจะถูกลบไปด้วย)`)) return;
+
+  try {
+    const res = await fetch(`/api/categories/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      credentials: 'include'
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw Error(data.error || 'ลบไม่สำเร็จ');
+
+    await hydrateProducts();
+    renderCategoryManager();
+    renderProductsView();
+    renderPreviewManager();
+    showToast("success", "ลบหมวดหมู่เรียบร้อยแล้ว ✓");
+  } catch (err) {
+    showToast("error", err.message || "ลบหมวดหมู่ไม่สำเร็จ");
+  }
+}
+
+/* ==================== 2. DYNAMIC PRODUCT MANAGER ==================== */
 function renderProductsView() {
   const p = document.getElementById("productManagerContainer");
   if (!p) return;
+
+  const categoryOptions = adminCategories.map(c => {
+    const icon = c.id === 'bag' ? '👜' : c.id === 'sticker' ? '✨' : c.id === 'wallpaper' ? '🎨' : '🎀';
+    return `<option value="${c.id}">${icon} ${esc(c.name)}</option>`;
+  }).join('');
+
   p.innerHTML = `
     <div style="background:#fff;border:1px solid #f2d5e1;border-radius:16px;padding:18px;margin:12px 0;box-shadow:0 6px 18px #b84b7b12;">
-      <h3 style="margin:0 0 12px;color:#a83e6a">เพิ่มสินค้า Sticker / กระเป๋า</h3>
+      <h3 style="margin:0 0 12px;color:#a83e6a">เพิ่ม / แก้ไขสินค้า</h3>
       <form id="hlgProductForm">
         <input type="hidden" id="hlgEditId">
         <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;">
-          <label style="display:block;font-size:13px;color:#765461;font-weight:600">ประเภท<select id="hlgType" style="display:block;width:100%;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff"><option value="bag">กระเป๋า</option><option value="sticker">Sticker</option></select></label>
-          <label style="display:block;font-size:13px;color:#765461;font-weight:600">ชื่อสินค้า<input id="hlgName" required maxlength="90" placeholder="เช่น กระเป๋าลายดาว" style="display:block;width:100%;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff"></label>
-          <label id="hlgSizeWrap" style="display:block;font-size:13px;color:#765461;font-weight:600">ขนาดกระเป๋า<select id="hlgSize" style="display:block;width:100%;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff"><option value="normal">Normal · 15×16"</option><option value="large">Large · 15.5×4×16"</option><option value="easy">Easy Bag · 10.5×5×14"</option><option value="maxi">Maxi · 18×20"</option></select></label>
-          <label style="display:block;font-size:13px;color:#765461;font-weight:600">ราคา (บาท)<input id="hlgPrice" type="number" min="1" max="999999" step="1" required placeholder="เช่น 69" style="display:block;width:100%;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff"></label>
-          <label style="display:block;font-size:13px;color:#765461;font-weight:600">อัปโหลดรูปสินค้า<input id="hlgImageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" style="display:block;width:100%;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff"></label>
-          <label style="display:block;font-size:13px;color:#765461;font-weight:600">หรือใส่ลิงก์รูป HTTPS<input id="hlgImageUrl" type="url" placeholder="https://..." style="display:block;width:100%;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff"></label>
+          <label style="display:block;font-size:13px;color:#765461;font-weight:600">
+            หมวดหมู่สินค้า <span style="color:#d45a8a">*</span>
+            <select id="hlgType" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+              ${categoryOptions}
+            </select>
+          </label>
+          <label style="display:block;font-size:13px;color:#765461;font-weight:600">
+            ชื่อสินค้า <span style="color:#d45a8a">*</span>
+            <input id="hlgName" required maxlength="90" placeholder="เช่น กระเป๋าลายดาว, พวงกุญแจโบว์ชมพู" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+          </label>
+          <label id="hlgSizeWrap" style="display:block;font-size:13px;color:#765461;font-weight:600">
+            ขนาดกระเป๋า
+            <select id="hlgSize" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+              <option value="normal">Normal · 15×16"</option>
+              <option value="large">Large · 15.5×4×16"</option>
+              <option value="easy">Easy Bag · 10.5×5×14"</option>
+              <option value="maxi">Maxi · 18×20"</option>
+            </select>
+          </label>
+          <label style="display:block;font-size:13px;color:#765461;font-weight:600">
+            ราคา (บาท) <span style="color:#d45a8a">*</span>
+            <input id="hlgPrice" type="number" min="0" max="999999" step="1" required placeholder="เช่น 69" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+          </label>
+          <label style="display:block;font-size:13px;color:#765461;font-weight:600">
+            คำอธิบายสั้น ๆ
+            <input id="hlgProdDesc" maxlength="150" placeholder="เช่น ไซส์กะทัดรัด จุของได้เยอะ" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+          </label>
+          <label style="display:block;font-size:13px;color:#765461;font-weight:600">
+            อัปโหลดรูปสินค้า
+            <input id="hlgImageFile" type="file" accept="image/*" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+          </label>
+          <label style="display:block;font-size:13px;color:#765461;font-weight:600">
+            หรือใส่ลิงก์รูป HTTPS
+            <input id="hlgImageUrl" type="url" placeholder="https://..." style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+          </label>
         </div>
-        <p style="font-size:12px;color:#866d79;margin-top:8px">รูปที่อัปโหลดจะถูกเก็บไว้ในเบราว์เซอร์เครื่องนี้ ส่วนลิงก์รูปจะแสดงให้ลูกค้าเห็นด้วย</p>
+        <p style="font-size:12px;color:#866d79;margin-top:8px">รูปและข้อมูลสินค้าจะบันทึกขึ้นฐานข้อมูลออนไลน์ ทุกเครื่องและลูกค้าจะเห็นพร้อมกันทันที</p>
         <div style="margin-top:12px">
-          <button type="submit" id="hlgProductSave" style="border:0;border-radius:10px;padding:9px 14px;background:#bc4b7b;color:#fff;font:inherit;font-size:13px;cursor:pointer;">บันทึกสินค้า</button>
-          <button type="button" class="hlg-cancel" id="hlgProductCancel" style="border:0;border-radius:10px;padding:9px 14px;background:#fceaf1;color:#a83e6a;font:inherit;font-size:13px;cursor:pointer;margin-left:8px;">ยกเลิกแก้ไข</button>
+          <button type="submit" id="hlgProductSave" style="border:0;border-radius:10px;padding:10px 18px;background:#bc4b7b;color:#fff;font:inherit;font-size:13px;font-weight:700;cursor:pointer;">บันทึกสินค้า</button>
+          <button type="button" class="hlg-cancel" id="hlgProductCancel" style="border:0;border-radius:10px;padding:10px 14px;background:#fceaf1;color:#a83e6a;font:inherit;font-size:13px;cursor:pointer;margin-left:8px;">ยกเลิกแก้ไข</button>
         </div>
       </form>
     </div>
     <div style="background:#fff;border:1px solid #f2d5e1;border-radius:16px;padding:18px;margin:12px 0;box-shadow:0 6px 18px #b84b7b12;">
-      <h3 style="margin:0 0 12px;color:#a83e6a">สินค้าที่เพิ่มเอง</h3>
+      <h3 style="margin:0 0 12px;color:#a83e6a">สินค้าที่เพิ่มเองทั้งหมด</h3>
       <div id="hlgProductRows"></div>
     </div>
   `;
+
   document.getElementById("hlgType").onchange = function() {
     const isBag = this.value === "bag";
     document.getElementById("hlgSizeWrap").style.display = isBag ? "" : "none";
   };
   document.getElementById("hlgProductForm").onsubmit = saveProduct;
-  document.getElementById("hlgProductCancel").onclick = renderProductsView;
+  document.getElementById("hlgProductCancel").onclick = resetProductForm;
   renderProductList();
 }
 
@@ -1146,37 +1495,46 @@ function renderProductList() {
     p.textContent = "ยังไม่มีสินค้าที่เพิ่มเอง";
     return;
   }
+
   customProducts.forEach(x => {
     const el = document.createElement("div");
     el.style.cssText = "display:flex;gap:12px;align-items:center;border-top:1px solid #f4dfeb;padding:11px 0;";
-    
+
     const img = document.createElement("img");
-    img.src = x._img || x.imageUrl || "";
-    img.alt = "";
-    img.style.cssText = "width:52px;height:52px;object-fit:cover;border-radius:9px;background:#f8edf2";
-    
+    img.src = x.image_url || x.imageUrl || x._img || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='52' height='52' viewBox='0 0 24 24'%3E%3Ctext y='18' font-size='18'%3E🛍️%3C/text%3E%3C/svg%3E";
+    img.alt = x.name;
+    img.style.cssText = "width:52px;height:52px;object-fit:cover;border-radius:9px;background:#f8edf2;border:1px solid #f2d7e4";
+
     const label = document.createElement("span");
     label.style.cssText = "flex:1;font-size:13px;";
-    
+
     const b = document.createElement("b");
     b.textContent = x.name;
-    
+    b.style.cssText = "color:#7b3c58;";
+
+    const catId = x.category_id || x.type || 'other';
+    const cat = adminCategories.find(c => c.id === catId);
+    const catName = cat ? cat.name : catId;
+
     const small = document.createElement("small");
-    small.textContent = (x.type === "bag" ? "กระเป๋า · " + x.size : "Sticker") + " · " + Number(x.price).toLocaleString() + " ฿";
-    small.style.cssText = "display:block;color:#927888";
-    
+    const subText = (catId === "bag" && x.size ? x.size + " · " : "") + catName + " · " + Number(x.price).toLocaleString() + " ฿";
+    small.textContent = subText;
+    small.style.cssText = "display:block;color:#927888;margin-top:3px";
+
     label.append(b, small);
-    
+
     const editBtn = document.createElement("button");
     editBtn.textContent = "แก้ไข";
-    editBtn.style.cssText = "border:0;border-radius:10px;padding:9px 14px;background:#fceaf1;color:#a83e6a;font:inherit;font-size:13px;cursor:pointer;";
+    editBtn.type = "button";
+    editBtn.style.cssText = "border:0;border-radius:8px;padding:7px 12px;background:#fceaf1;color:#a83e6a;font:inherit;font-size:12px;cursor:pointer;";
     editBtn.onclick = () => editProductRow(x.id);
-    
+
     const delBtn = document.createElement("button");
     delBtn.textContent = "ลบ";
-    delBtn.style.cssText = "border:0;border-radius:10px;padding:9px 14px;background:#fceaf1;color:#a83e6a;font:inherit;font-size:13px;cursor:pointer;margin-left:8px;";
+    delBtn.type = "button";
+    delBtn.style.cssText = "border:0;border-radius:8px;padding:7px 12px;background:#fff0f5;color:#c53063;font:inherit;font-size:12px;cursor:pointer;margin-left:6px;";
     delBtn.onclick = () => deleteProductRow(x.id);
-    
+
     el.append(img, label, editBtn, delBtn);
     p.append(el);
   });
@@ -1186,92 +1544,406 @@ function editProductRow(id) {
   const x = customProducts.find(r => r.id === id);
   if (!x) return;
   document.getElementById("hlgEditId").value = x.id;
-  document.getElementById("hlgType").value = x.type;
+  document.getElementById("hlgType").value = x.category_id || x.type || "bag";
   document.getElementById("hlgName").value = x.name;
-  document.getElementById("hlgSize").value = x.sizeKey || "normal";
+  document.getElementById("hlgSize").value = x.sizeKey || x.size_key || "normal";
   document.getElementById("hlgPrice").value = x.price;
-  document.getElementById("hlgImageUrl").value = x.imageUrl || "";
+  document.getElementById("hlgProdDesc").value = x.description || "";
+  document.getElementById("hlgImageUrl").value = x.image_url || x.imageUrl || "";
   document.getElementById("hlgImageFile").value = "";
-  
-  const isBag = x.type === "bag";
+
+  const isBag = (x.category_id || x.type) === "bag";
   document.getElementById("hlgSizeWrap").style.display = isBag ? "" : "none";
-  document.getElementById("hlgProductForm").scrollIntoView({behavior: "smooth", block: "start"});
+  document.getElementById("hlgProductSave").textContent = "อัปเดตสินค้า";
+  document.getElementById("hlgProductForm").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function resetProductForm() {
+  document.getElementById("hlgEditId").value = "";
+  document.getElementById("hlgName").value = "";
+  document.getElementById("hlgPrice").value = "";
+  document.getElementById("hlgProdDesc").value = "";
+  document.getElementById("hlgImageUrl").value = "";
+  document.getElementById("hlgImageFile").value = "";
+  document.getElementById("hlgProductSave").textContent = "บันทึกสินค้า";
+  const isBag = document.getElementById("hlgType").value === "bag";
+  document.getElementById("hlgSizeWrap").style.display = isBag ? "" : "none";
 }
 
 async function saveProduct(e) {
   e.preventDefault();
   const id = document.getElementById("hlgEditId").value;
-  const old = customProducts.find(x => x.id === id);
-  const type = document.getElementById("hlgType").value;
+  const category_id = document.getElementById("hlgType").value;
   const name = document.getElementById("hlgName").value.trim();
   const price = Number(document.getElementById("hlgPrice").value);
   const sizeKey = document.getElementById("hlgSize").value;
+  const description = document.getElementById("hlgProdDesc").value.trim();
   const file = document.getElementById("hlgImageFile").files[0];
-  const imageUrl = document.getElementById("hlgImageUrl").value.trim();
-  
-  if (!name || !Number.isInteger(price) || price < 1) { showToast("กรอกชื่อและราคาที่ถูกต้อง"); return; }
-  if (/[\\'"<>]/.test(name)) { showToast("ชื่อสินค้าใช้เครื่องหมายคำพูดและวงเล็บแหลมไม่ได้"); return; }
-  
-  if (file && (!/^image\/(png|jpeg|webp|gif)$/.test(file.type) || file.size > 8*1024*1024)) {
-    showToast("ใช้รูป PNG, JPEG, WebP หรือ GIF ไม่เกิน 8 MB");
-    return;
+  const imageUrlInput = document.getElementById("hlgImageUrl").value.trim();
+
+  if (!name || isNaN(price) || price < 0) { showToast("กรอกชื่อและราคาที่ถูกต้อง"); return; }
+
+  let image_url = imageUrlInput;
+  if (file) {
+    try {
+      image_url = await fileToBase64(file);
+    } catch (err) {
+      showToast("อ่านไฟล์รูปภาพไม่สำเร็จ");
+      return;
+    }
   }
-  if (imageUrl && (!/^https:\/\//i.test(imageUrl) || /[\"'<>]/.test(imageUrl))) {
-    showToast("ใส่ลิงก์รูป HTTPS ที่ถูกต้อง");
-    return;
-  }
-  if (!file && !imageUrl && !old?.imageKey) {
-    showToast("เลือกรูปหรือใส่ลิงก์รูปค่ะ");
-    return;
-  }
-  
-  const sizeMap = { normal: "Normal · 15×16\"", large: "Large · 15.5×4×16\"", easy: "Easy Bag · 10.5×5×14\"", maxi: "Maxi · 18×20\"" };
-  const next = {
-    id: id || "product-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7),
-    type,
+
+  const sizeMap = { normal: 'Normal · 15×16"', large: 'Large · 15.5×4×16"', easy: 'Easy Bag · 10.5×5×14"', maxi: 'Maxi · 18×20"' };
+  const payload = {
+    category_id,
+    type: category_id,
     name,
     price,
-    sizeKey: type === "bag" ? sizeKey : "",
-    size: type === "bag" ? sizeMap[sizeKey] : "",
-    imageUrl: file ? "" : imageUrl,
-    imageKey: file ? (old?.imageKey || "photo-" + Date.now()) : imageUrl ? "" : (old?.imageKey || "")
+    description,
+    image_url,
+    size_key: category_id === 'bag' ? sizeKey : '',
+    sizeKey: category_id === 'bag' ? sizeKey : '',
+    size: category_id === 'bag' ? sizeMap[sizeKey] : ''
   };
-  
+
   const button = document.getElementById("hlgProductSave");
   button.disabled = true;
   button.textContent = "กำลังบันทึก...";
-  
+
   try {
-    if (file) await productMedia(next.imageKey, file);
-    const updated = customProducts.filter(x => x.id !== id).map(({_img, ...x}) => x).concat(next);
-    localStorage.setItem(PRODUCT_KEY, JSON.stringify(updated));
-    if (old?.imageKey && old.imageKey !== next.imageKey) {
-      await productMedia(old.imageKey, null).catch(()=>{});
-    }
+    const url = id ? `/api/products/${encodeURIComponent(id)}` : '/api/products';
+    const method = id ? 'PUT' : 'POST';
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw Error(data.error || 'บันทึกสินค้าไม่สำเร็จ');
+
     await hydrateProducts();
+    resetProductForm();
     renderProductsView();
-    showToast("success", "บันทึกสินค้าแล้ว ♡");
+    showToast("success", id ? "อัปเดตสินค้าเรียบร้อยแล้ว ✓" : "บันทึกสินค้าแล้ว ♡");
   } catch (err) {
     console.error(err);
-    showToast("บันทึกสินค้าไม่สำเร็จ");
+    showToast("error", err.message || "บันทึกสินค้าไม่สำเร็จ");
   } finally {
     button.disabled = false;
-    button.textContent = "บันทึกสินค้า";
+    button.textContent = id ? "อัปเดตสินค้า" : "บันทึกสินค้า";
   }
 }
 
 async function deleteProductRow(id) {
   const x = customProducts.find(r => r.id === id);
-  if (!x || !confirm("ลบสินค้า " + x.name + " ใช่ไหมคะ?")) return;
+  if (!x || !confirm(`ลบสินค้า "${x.name}" ใช่ไหมคะ?`)) return;
+
   try {
-    const updated = customProducts.filter(r => r.id !== id).map(({_img, ...r}) => r);
-    localStorage.setItem(PRODUCT_KEY, JSON.stringify(updated));
-    if (x.imageKey) await productMedia(x.imageKey, null).catch(()=>{});
+    const res = await fetch(`/api/products/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      credentials: 'include'
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw Error(data.error || 'ลบไม่สำเร็จ');
+
     await hydrateProducts();
     renderProductsView();
-    showToast("success", "ลบสินค้าแล้ว");
+    showToast("success", "ลบสินค้าแล้ว ✓");
   } catch (err) {
-    showToast("error", "ลบสินค้าไม่สำเร็จ");
+    showToast("error", err.message || "ลบสินค้าไม่สำเร็จ");
+  }
+}
+
+/* ==================== 3. HOME PREVIEW CARDS MANAGER ==================== */
+function renderPreviewManager() {
+  const container = document.getElementById("previewManagerContainer");
+  if (!container) return;
+
+  const targetOptions = [
+    ['preorder', 'กระเป๋าผ้า (Pre-order)'],
+    ['wallpaper', 'Wallpaper Collection'],
+    ['sticker', 'Sticker Collection'],
+    ...adminCategories.filter(c => !['bag','sticker','wallpaper'].includes(c.id)).map(c => [c.id, 'หมวด: ' + c.name]),
+    ['cart', 'ตะกร้าของฉัน'],
+    ['tracking', 'ติดตามคิว / พัสดุ'],
+    ['home', 'หน้าหลัก'],
+    ['external', 'ลิงก์ภายนอก']
+  ].map(x => `<option value="${x[0]}">${x[1]}</option>`).join('');
+
+  container.innerHTML = `
+    <div style="background:#fff;border:1px solid #f2d5e1;border-radius:16px;padding:18px;margin:12px 0;box-shadow:0 6px 18px #b84b7b12;">
+      <h3 style="margin:0 0 8px;color:#a83e6a">การ์ดพรีวิวบนหน้าแรก (กลุ่มที่แนะนำ 💗)</h3>
+      <p style="font-size:12px;color:#866d79;margin:0 0 14px;line-height:1.6">
+        การ์ดเหล่านี้จะแสดงบนหน้าแรกของลูกค้าทันที สามารถเพิ่ม แก้ไข ย้ายลำดับ หรือเชื่อมไปยังหมวดสินค้าใดก็ได้
+      </p>
+
+      <form id="hlgPreviewForm">
+        <input type="hidden" id="hlgPvIndex" value="-1">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;">
+          <label style="display:block;font-size:13px;color:#765461;font-weight:600">
+            ชื่อการ์ดพรีวิว <span style="color:#d45a8a">*</span>
+            <input id="hlgPvName" required maxlength="70" placeholder="เช่น กระเป๋าผ้า HLG" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+          </label>
+          <label style="display:block;font-size:13px;color:#765461;font-weight:600">
+            ข้อความรอง
+            <input id="hlgPvSub" maxlength="90" placeholder="เช่น เลือกลายที่ชอบได้เลย ♡" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+          </label>
+          <label style="display:block;font-size:13px;color:#765461;font-weight:600">
+            เมื่อกดแล้วไปที่ <span style="color:#d45a8a">*</span>
+            <select id="hlgPvTarget" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+              ${targetOptions}
+            </select>
+          </label>
+          <label id="hlgPvUrlWrap" style="display:none;font-size:13px;color:#765461;font-weight:600">
+            URL ภายนอก
+            <input id="hlgPvUrl" type="url" placeholder="https://..." style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+          </label>
+          <label style="display:block;font-size:13px;color:#765461;font-weight:600">
+            อัปโหลดรูปพรีวิว
+            <input id="hlgPvFile" type="file" accept="image/*" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+          </label>
+          <label style="display:block;font-size:13px;color:#765461;font-weight:600">
+            หรือใส่ลิงก์รูป HTTPS
+            <input id="hlgPvImageUrl" type="url" placeholder="https://..." style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+          </label>
+        </div>
+        <div style="margin-top:14px;display:flex;gap:8px">
+          <button type="submit" id="hlgPvSaveBtn" style="border:0;border-radius:10px;padding:10px 18px;background:#bc4b7b;color:#fff;font:inherit;font-size:13px;font-weight:700;cursor:pointer;">
+            บันทึกการ์ดพรีวิว
+          </button>
+          <button type="button" id="hlgPvCancelBtn" style="border:0;border-radius:10px;padding:10px 14px;background:#fceaf1;color:#a83e6a;font:inherit;font-size:13px;cursor:pointer;">
+            ยกเลิก
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div style="background:#fff;border:1px solid #f2d5e1;border-radius:16px;padding:18px;margin:12px 0;box-shadow:0 6px 18px #b84b7b12;">
+      <h3 style="margin:0 0 12px;color:#a83e6a">รายการการ์ดพรีวิวปัจจุบัน</h3>
+      <div id="hlgPreviewList"></div>
+    </div>
+  `;
+
+  document.getElementById("hlgPvTarget").onchange = function() {
+    document.getElementById("hlgPvUrlWrap").style.display = this.value === "external" ? "" : "none";
+  };
+  document.getElementById("hlgPreviewForm").onsubmit = savePreviewCard;
+  document.getElementById("hlgPvCancelBtn").onclick = resetPreviewForm;
+  renderPreviewList();
+}
+
+function renderPreviewList() {
+  const container = document.getElementById("hlgPreviewList");
+  if (!container) return;
+  container.innerHTML = "";
+
+  if (!adminPreviewCards.length) {
+    container.textContent = "ยังไม่มีการ์ดพรีวิว";
+    return;
+  }
+
+  adminPreviewCards.forEach((card, idx) => {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;gap:12px;align-items:center;border-top:1px solid #f4dfeb;padding:12px 0;";
+
+    const img = document.createElement("img");
+    img.src = card.image_url || card.imageUrl || card.src || card.legacySrc || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='50' viewBox='0 0 24 24'%3E%3Ctext y='18' font-size='18'%3E💗%3C/text%3E%3C/svg%3E";
+    img.alt = card.name;
+    img.style.cssText = "width:50px;height:50px;object-fit:cover;border-radius:10px;background:#fff2f8;border:1px solid #f4dce7;";
+
+    const info = document.createElement("div");
+    info.style.cssText = "flex:1;min-width:0;";
+
+    const titleRow = document.createElement("div");
+    titleRow.style.cssText = "display:flex;align-items:center;gap:6px;";
+
+    const nameEl = document.createElement("b");
+    nameEl.textContent = card.name;
+    nameEl.style.cssText = "color:#7b3c58;font-size:14px;";
+
+    const targetBadge = document.createElement("span");
+    targetBadge.textContent = "→ " + card.target;
+    targetBadge.style.cssText = "font-size:10px;padding:2px 6px;border-radius:6px;background:#fceaf1;color:#b24775;";
+
+    titleRow.append(nameEl, targetBadge);
+
+    const subEl = document.createElement("small");
+    subEl.textContent = card.sub || "ไม่มีข้อความรอง";
+    subEl.style.cssText = "display:block;color:#927888;font-size:12px;margin-top:3px;";
+
+    info.append(titleRow, subEl);
+
+    const actions = document.createElement("div");
+    actions.style.cssText = "display:flex;gap:6px;align-items:center;";
+
+    const upBtn = document.createElement("button");
+    upBtn.textContent = "↑";
+    upBtn.type = "button";
+    upBtn.title = "เลื่อนขึ้น";
+    upBtn.style.cssText = "border:0;border-radius:8px;padding:6px 10px;background:#fceaf1;color:#a83e6a;font:inherit;font-size:12px;cursor:pointer;";
+    upBtn.onclick = () => movePreviewCard(idx, -1);
+
+    const downBtn = document.createElement("button");
+    downBtn.textContent = "↓";
+    downBtn.type = "button";
+    downBtn.title = "เลื่อนลง";
+    downBtn.style.cssText = "border:0;border-radius:8px;padding:6px 10px;background:#fceaf1;color:#a83e6a;font:inherit;font-size:12px;cursor:pointer;";
+    downBtn.onclick = () => movePreviewCard(idx, 1);
+
+    const editBtn = document.createElement("button");
+    editBtn.textContent = "แก้ไข";
+    editBtn.type = "button";
+    editBtn.style.cssText = "border:0;border-radius:8px;padding:7px 12px;background:#fceaf1;color:#a83e6a;font:inherit;font-size:12px;cursor:pointer;";
+    editBtn.onclick = () => editPreviewCard(idx);
+
+    const delBtn = document.createElement("button");
+    delBtn.textContent = "ลบ";
+    delBtn.type = "button";
+    delBtn.style.cssText = "border:0;border-radius:8px;padding:7px 12px;background:#fff0f5;color:#c53063;font:inherit;font-size:12px;cursor:pointer;";
+    delBtn.onclick = () => deletePreviewCard(idx);
+
+    actions.append(upBtn, downBtn, editBtn, delBtn);
+    row.append(img, info, actions);
+    container.append(row);
+  });
+}
+
+function editPreviewCard(idx) {
+  const card = adminPreviewCards[idx];
+  if (!card) return;
+  document.getElementById("hlgPvIndex").value = idx;
+  document.getElementById("hlgPvName").value = card.name;
+  document.getElementById("hlgPvSub").value = card.sub || "";
+  document.getElementById("hlgPvTarget").value = card.target || "preorder";
+  document.getElementById("hlgPvUrl").value = card.url || "";
+  document.getElementById("hlgPvImageUrl").value = card.image_url || card.imageUrl || card.src || "";
+  document.getElementById("hlgPvUrlWrap").style.display = card.target === "external" ? "" : "none";
+  document.getElementById("hlgPvSaveBtn").textContent = "อัปเดตการ์ดพรีวิว";
+  document.getElementById("hlgPreviewForm").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function resetPreviewForm() {
+  document.getElementById("hlgPvIndex").value = "-1";
+  document.getElementById("hlgPvName").value = "";
+  document.getElementById("hlgPvSub").value = "";
+  document.getElementById("hlgPvUrl").value = "";
+  document.getElementById("hlgPvImageUrl").value = "";
+  document.getElementById("hlgPvFile").value = "";
+  document.getElementById("hlgPvUrlWrap").style.display = "none";
+  document.getElementById("hlgPvSaveBtn").textContent = "บันทึกการ์ดพรีวิว";
+}
+
+async function savePreviewCard(e) {
+  e.preventDefault();
+  const idx = Number(document.getElementById("hlgPvIndex").value);
+  const name = document.getElementById("hlgPvName").value.trim();
+  const sub = document.getElementById("hlgPvSub").value.trim();
+  const target = document.getElementById("hlgPvTarget").value;
+  const url = document.getElementById("hlgPvUrl").value.trim();
+  const imageUrlInput = document.getElementById("hlgPvImageUrl").value.trim();
+  const file = document.getElementById("hlgPvFile").files[0];
+
+  if (!name) { showToast("กรุณากรอกชื่อการ์ดพรีวิว"); return; }
+
+  let image_url = imageUrlInput;
+  if (file) {
+    try {
+      image_url = await fileToBase64(file);
+    } catch (err) {
+      showToast("อ่านไฟล์รูปภาพไม่สำเร็จ");
+      return;
+    }
+  }
+
+  const updatedCards = adminPreviewCards.slice();
+  const cardData = {
+    name,
+    sub,
+    target,
+    url: target === 'external' ? url : '',
+    image_url: image_url || (idx >= 0 ? (updatedCards[idx].image_url || updatedCards[idx].imageUrl || '') : '')
+  };
+
+  if (idx >= 0 && idx < updatedCards.length) {
+    updatedCards[idx] = cardData;
+  } else {
+    updatedCards.push(cardData);
+  }
+
+  const btn = document.getElementById("hlgPvSaveBtn");
+  btn.disabled = true;
+  btn.textContent = "กำลังบันทึก...";
+
+  try {
+    const res = await fetch('/api/preview-cards', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ preview_cards: updatedCards })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw Error(data.error || 'บันทึกการ์ดไม่สำเร็จ');
+
+    adminPreviewCards = updatedCards;
+    localStorage.setItem(PREVIEW_KEY, JSON.stringify(adminPreviewCards));
+    resetPreviewForm();
+    renderPreviewManager();
+    showToast("success", "บันทึกการ์ดพรีวิวเรียบร้อยแล้ว ♡");
+  } catch (err) {
+    showToast("error", err.message || "บันทึกการ์ดพรีวิวไม่สำเร็จ");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = idx >= 0 ? "อัปเดตการ์ดพรีวิว" : "บันทึกการ์ดพรีวิว";
+  }
+}
+
+async function movePreviewCard(idx, delta) {
+  const targetIdx = idx + delta;
+  if (targetIdx < 0 || targetIdx >= adminPreviewCards.length) return;
+  const updated = adminPreviewCards.slice();
+  const temp = updated[idx];
+  updated[idx] = updated[targetIdx];
+  updated[targetIdx] = temp;
+
+  try {
+    const res = await fetch('/api/preview-cards', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ preview_cards: updated })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw Error(data.error || 'ย้ายลำดับไม่สำเร็จ');
+    adminPreviewCards = updated;
+    localStorage.setItem(PREVIEW_KEY, JSON.stringify(adminPreviewCards));
+    renderPreviewManager();
+  } catch (err) {
+    showToast("error", err.message || "ย้ายลำดับไม่สำเร็จ");
+  }
+}
+
+async function deletePreviewCard(idx) {
+  const card = adminPreviewCards[idx];
+  if (!card || !confirm(`ลบการ์ดพรีวิว "${card.name}" ใช่ไหมคะ?`)) return;
+
+  const updated = adminPreviewCards.filter((_, i) => i !== idx);
+  try {
+    const res = await fetch('/api/preview-cards', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ preview_cards: updated })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw Error(data.error || 'ลบไม่สำเร็จ');
+
+    adminPreviewCards = updated;
+    localStorage.setItem(PREVIEW_KEY, JSON.stringify(adminPreviewCards));
+    renderPreviewManager();
+    showToast("success", "ลบการ์ดพรีวิวแล้ว ✓");
+  } catch (err) {
+    showToast("error", err.message || "ลบการ์ดไม่สำเร็จ");
   }
 }
 
@@ -1301,7 +1973,7 @@ async function deleteProductRow(id) {
   function readCustomProducts() {
     try {
       var x = JSON.parse(localStorage.getItem('hlg_custom_products_v1') || '[]');
-      return Array.isArray(x) ? x.filter(function(y) { return y && y.id && ['bag', 'sticker'].indexOf(y.type) >= 0; }) : [];
+      return Array.isArray(x) ? x.filter(function(y) { return y && y.id; }) : [];
     } catch (e) { return []; }
   }
   function sku(x) {
@@ -1317,8 +1989,15 @@ async function deleteProductRow(id) {
       if (typeof STICKER_PATTERNS !== 'undefined') STICKER_PATTERNS.forEach(function(x) { if (x._hlgCustomId) return; a.push({ type: 'sticker', name: x.name, variant: '', price: Number(x.price) || 0, image: x.img || '' }); });
     } catch (e) {}
     readCustomProducts().forEach(function(x) {
-      if (x.type === 'bag') a.push({ type: 'bag', name: x.name, variant: x.size || '', sizeKey: x.sizeKey, price: Number(x.price) || 0, image: x.imageUrl || '' });
-      else a.push({ type: 'sticker', name: x.name, variant: '', price: Number(x.price) || 0, image: x.imageUrl || '' });
+      var catId = x.category_id || x.type || 'other';
+      if (catId === 'bag') {
+        a.push({ type: 'bag', name: x.name, variant: x.size || '', sizeKey: x.sizeKey, price: Number(x.price) || 0, image: x.image_url || x.imageUrl || '' });
+      } else if (catId === 'sticker') {
+        a.push({ type: 'sticker', name: x.name, variant: '', price: Number(x.price) || 0, image: x.image_url || x.imageUrl || '' });
+      } else {
+        var foundCat = (typeof adminCategories !== 'undefined' ? adminCategories : []).find(function(c) { return c.id === catId; });
+        a.push({ type: 'custom', categoryId: catId, productId: x.id, name: x.name, variant: (foundCat ? foundCat.name : catId), price: Number(x.price) || 0, image: x.image_url || x.imageUrl || '' });
+      }
     });
     a.push({ type: 'wallpaper', name: 'Wallpaper Special Set', variant: 'Digital Download', price: 99 });
     try { a.push.apply(a, window.hlgCollectionProducts ? window.hlgCollectionProducts() : []); } catch (e) {}
@@ -1329,6 +2008,8 @@ async function deleteProductRow(id) {
     if (key === 'bag') return '👜 กระเป๋า';
     if (key === 'sticker') return '✨ Sticker';
     if (key === 'wallpaper') return '🎨 Wallpaper';
+    var foundCat = (typeof adminCategories !== 'undefined' ? adminCategories : []).find(function(c) { return c.id === key; });
+    if (foundCat) return '🎀 ' + foundCat.name;
     return '♡ ' + ((rows[0] && rows[0].variant) || 'สินค้าอื่น ๆ');
   }
 

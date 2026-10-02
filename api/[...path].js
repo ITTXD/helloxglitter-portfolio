@@ -249,6 +249,13 @@ module.exports = async (req, res) => {
               note: 'สแกน QR พร้อมเพย์ตามยอดออเดอร์ หรือโอนเข้าบัญชีด้านล่าง',
               before: 'ตรวจสอบรายการก่อนนะคะ หลังยืนยันออเดอร์จะมีหน้าสรุปยอดพร้อม QR และช่องแนบสลิปให้ค่ะ ♡'
             },
+            categories: [],
+            custom_products: [],
+            preview_cards: [
+              { target: 'preorder', name: 'กระเป๋าผ้า HLG', sub: 'เลือกลายที่ชอบได้เลย ♡', image_url: '' },
+              { target: 'wallpaper', name: 'Wallpaper Collection', sub: 'Digital item', image_url: '' },
+              { target: 'sticker', name: 'Sticker Collection', sub: 'ดูคอลเลกชันล่าสุด', image_url: '' }
+            ],
             updated_at: null
           }
         });
@@ -305,10 +312,295 @@ module.exports = async (req, res) => {
           note: 'สแกน QR พร้อมเพย์ตามยอดออเดอร์ หรือโอนเข้าบัญชีด้านล่าง',
           before: 'ตรวจสอบรายการก่อนนะคะ หลังยืนยันออเดอร์จะมีหน้าสรุปยอดพร้อม QR และช่องแนบสลิปให้ค่ะ ♡'
         }),
+        categories: Array.isArray(body.categories) ? body.categories : (Array.isArray(existing.categories) ? existing.categories : []),
+        custom_products: Array.isArray(body.custom_products) ? body.custom_products : (Array.isArray(existing.custom_products) ? existing.custom_products : []),
+        preview_cards: Array.isArray(body.preview_cards) ? body.preview_cards : (Array.isArray(existing.preview_cards) ? existing.preview_cards : []),
         updated_at: new Date().toISOString(),
       };
       await setDoc(doc(db, 'settings', 'storefront'), settings);
       sendJson(res, 200, { success: true, settings });
+      return;
+    }
+
+    // ==================== CATEGORIES & PRODUCTS CRUD ====================
+    const BUILTIN_CATEGORIES = [
+      { id: 'bag', name: 'กระเป๋าผ้า', description: 'กระเป๋าผ้าลายน่ารัก 4 ไซส์ 46 ลาย', is_builtin: true, show_on_home: true },
+      { id: 'sticker', name: 'Sticker', description: 'สติกเกอร์ไดคัทสุดคิ้วท์', is_builtin: true, show_on_home: true },
+      { id: 'wallpaper', name: 'Wallpaper', description: 'Digital item วอลเปเปอร์มือถือ', is_builtin: true, show_on_home: true }
+    ];
+
+    // GET /api/categories — รายการหมวดหมู่ทั้งหมด (Built-in + Custom)
+    if (pathname === '/api/categories' && method === 'GET') {
+      try {
+        const d = await getDoc(doc(db, 'settings', 'storefront'));
+        const sf = d.exists() ? d.data() : {};
+        const custom = Array.isArray(sf.categories) ? sf.categories : [];
+        const all = [...BUILTIN_CATEGORIES];
+        for (const c of custom) {
+          if (!all.some(x => x.id === c.id)) all.push(c);
+        }
+        sendJson(res, 200, { success: true, categories: all });
+      } catch (err) {
+        sendJson(res, 200, { success: true, categories: BUILTIN_CATEGORIES });
+      }
+      return;
+    }
+
+    // POST /api/categories — แอดมินสร้างหมวดหมู่ใหม่
+    if (pathname === '/api/categories' && method === 'POST') {
+      if (!isAdmin(req)) { send401(res); return; }
+      const body = await readBody(req);
+      const name = String(body.name || '').trim();
+      if (!name) { sendJson(res, 400, { error: 'กรุณากรอกชื่อหมวดหมู่' }); return; }
+
+      const rawId = body.id ? String(body.id).trim().toLowerCase() : ('cat_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6));
+      const catId = rawId.replace(/[^a-z0-9_-]/gi, '_');
+
+      const newCat = {
+        id: catId,
+        name: name,
+        description: String(body.description || '').trim(),
+        cover_url: String(body.cover_url || '').trim(),
+        show_on_home: body.show_on_home !== false,
+        created_at: new Date().toISOString()
+      };
+
+      const d = await getDoc(doc(db, 'settings', 'storefront'));
+      const sf = d.exists() ? d.data() : {};
+      const categories = Array.isArray(sf.categories) ? sf.categories.slice() : [];
+      const previewCards = Array.isArray(sf.preview_cards) ? sf.preview_cards.slice() : [
+        { target: 'preorder', name: 'กระเป๋าผ้า HLG', sub: 'เลือกลายที่ชอบได้เลย ♡', image_url: '' },
+        { target: 'wallpaper', name: 'Wallpaper Collection', sub: 'Digital item', image_url: '' },
+        { target: 'sticker', name: 'Sticker Collection', sub: 'ดูคอลเลกชันล่าสุด', image_url: '' }
+      ];
+
+      const existingIdx = categories.findIndex(c => c.id === catId);
+      if (existingIdx >= 0) categories[existingIdx] = newCat;
+      else categories.push(newCat);
+
+      if (newCat.show_on_home && !previewCards.some(p => p.target === catId)) {
+        previewCards.push({
+          target: catId,
+          name: newCat.name,
+          sub: newCat.description || 'ดูสินค้าในหมวดนี้ ♡',
+          image_url: newCat.cover_url || ''
+        });
+      }
+
+      sf.categories = categories;
+      sf.preview_cards = previewCards;
+      sf.updated_at = new Date().toISOString();
+      await setDoc(doc(db, 'settings', 'storefront'), sf);
+
+      sendJson(res, 200, { success: true, category: newCat });
+      return;
+    }
+
+    // PUT /api/categories/:id — แอดมินแก้ไขหมวดหมู่
+    if (pathname.startsWith('/api/categories/') && method === 'PUT') {
+      if (!isAdmin(req)) { send401(res); return; }
+      const catId = pathname.replace('/api/categories/', '').trim();
+      const body = await readBody(req);
+
+      const d = await getDoc(doc(db, 'settings', 'storefront'));
+      const sf = d.exists() ? d.data() : {};
+      const categories = Array.isArray(sf.categories) ? sf.categories.slice() : [];
+      const previewCards = Array.isArray(sf.preview_cards) ? sf.preview_cards.slice() : [];
+
+      let cat = categories.find(c => c.id === catId);
+      if (!cat) {
+        const builtin = BUILTIN_CATEGORIES.find(b => b.id === catId);
+        if (builtin) {
+          cat = { ...builtin };
+          categories.push(cat);
+        } else {
+          sendJson(res, 404, { error: 'ไม่พบหมวดหมู่นี้' });
+          return;
+        }
+      }
+
+      if (body.name) cat.name = String(body.name).trim();
+      if (body.description !== undefined) cat.description = String(body.description).trim();
+      if (body.cover_url !== undefined) cat.cover_url = String(body.cover_url).trim();
+      if (body.show_on_home !== undefined) cat.show_on_home = body.show_on_home !== false;
+      cat.updated_at = new Date().toISOString();
+
+      const pv = previewCards.find(p => p.target === catId);
+      if (pv) {
+        if (body.name) pv.name = cat.name;
+        if (body.description !== undefined) pv.sub = cat.description;
+        if (body.cover_url) pv.image_url = cat.cover_url;
+      }
+
+      sf.categories = categories;
+      sf.preview_cards = previewCards;
+      sf.updated_at = new Date().toISOString();
+      await setDoc(doc(db, 'settings', 'storefront'), sf);
+
+      sendJson(res, 200, { success: true, category: cat });
+      return;
+    }
+
+    // DELETE /api/categories/:id — แอดมินลบหมวดหมู่
+    if (pathname.startsWith('/api/categories/') && method === 'DELETE') {
+      if (!isAdmin(req)) { send401(res); return; }
+      const catId = pathname.replace('/api/categories/', '').trim();
+      if (['bag', 'sticker', 'wallpaper'].includes(catId)) {
+        sendJson(res, 400, { error: 'ไม่สามารถลบหมวดหมู่หลักของระบบได้' });
+        return;
+      }
+
+      const d = await getDoc(doc(db, 'settings', 'storefront'));
+      const sf = d.exists() ? d.data() : {};
+      const categories = (Array.isArray(sf.categories) ? sf.categories : []).filter(c => c.id !== catId);
+      const customProducts = (Array.isArray(sf.custom_products) ? sf.custom_products : []).filter(p => p.category_id !== catId);
+      const previewCards = (Array.isArray(sf.preview_cards) ? sf.preview_cards : []).filter(p => p.target !== catId);
+
+      sf.categories = categories;
+      sf.custom_products = customProducts;
+      sf.preview_cards = previewCards;
+      sf.updated_at = new Date().toISOString();
+      await setDoc(doc(db, 'settings', 'storefront'), sf);
+
+      sendJson(res, 200, { success: true });
+      return;
+    }
+
+    // GET /api/products — รายการสินค้าที่เพิ่มเองทั้งหมด
+    if (pathname === '/api/products' && method === 'GET') {
+      try {
+        const d = await getDoc(doc(db, 'settings', 'storefront'));
+        const sf = d.exists() ? d.data() : {};
+        const products = Array.isArray(sf.custom_products) ? sf.custom_products : [];
+        sendJson(res, 200, { success: true, products });
+      } catch (err) {
+        sendJson(res, 200, { success: true, products: [] });
+      }
+      return;
+    }
+
+    // POST /api/products — แอดมินเพิ่มสินค้าใหม่
+    if (pathname === '/api/products' && method === 'POST') {
+      if (!isAdmin(req)) { send401(res); return; }
+      const body = await readBody(req);
+      const name = String(body.name || '').trim();
+      const price = Number(body.price);
+
+      if (!name || isNaN(price) || price < 0) {
+        sendJson(res, 400, { error: 'กรุณากรอกชื่อสินค้าและราคาที่ถูกต้อง' });
+        return;
+      }
+
+      const prodId = body.id ? String(body.id).trim() : ('prod_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6));
+      const newProd = {
+        id: prodId,
+        category_id: String(body.category_id || 'bag').trim(),
+        name: name,
+        price: price,
+        description: String(body.description || '').trim(),
+        image_url: String(body.image_url || '').trim(),
+        size: String(body.size || '').trim(),
+        size_key: String(body.size_key || '').trim(),
+        created_at: new Date().toISOString()
+      };
+
+      const d = await getDoc(doc(db, 'settings', 'storefront'));
+      const sf = d.exists() ? d.data() : {};
+      const customProducts = Array.isArray(sf.custom_products) ? sf.custom_products.slice() : [];
+      const existingIdx = customProducts.findIndex(p => p.id === prodId);
+      if (existingIdx >= 0) customProducts[existingIdx] = newProd;
+      else customProducts.push(newProd);
+
+      sf.custom_products = customProducts;
+      sf.updated_at = new Date().toISOString();
+      await setDoc(doc(db, 'settings', 'storefront'), sf);
+
+      sendJson(res, 200, { success: true, product: newProd });
+      return;
+    }
+
+    // PUT /api/products/:id — แอดมินแก้ไขสินค้า
+    if (pathname.startsWith('/api/products/') && method === 'PUT') {
+      if (!isAdmin(req)) { send401(res); return; }
+      const prodId = pathname.replace('/api/products/', '').trim();
+      const body = await readBody(req);
+
+      const d = await getDoc(doc(db, 'settings', 'storefront'));
+      const sf = d.exists() ? d.data() : {};
+      const customProducts = Array.isArray(sf.custom_products) ? sf.custom_products.slice() : [];
+      const prod = customProducts.find(p => p.id === prodId);
+
+      if (!prod) {
+        sendJson(res, 404, { error: 'ไม่พบสินค้านี้' });
+        return;
+      }
+
+      if (body.name) prod.name = String(body.name).trim();
+      if (body.price !== undefined && !isNaN(Number(body.price))) prod.price = Number(body.price);
+      if (body.category_id) prod.category_id = String(body.category_id).trim();
+      if (body.description !== undefined) prod.description = String(body.description).trim();
+      if (body.image_url !== undefined) prod.image_url = String(body.image_url).trim();
+      if (body.size !== undefined) prod.size = String(body.size).trim();
+      if (body.size_key !== undefined) prod.size_key = String(body.size_key).trim();
+      prod.updated_at = new Date().toISOString();
+
+      sf.custom_products = customProducts;
+      sf.updated_at = new Date().toISOString();
+      await setDoc(doc(db, 'settings', 'storefront'), sf);
+
+      sendJson(res, 200, { success: true, product: prod });
+      return;
+    }
+
+    // DELETE /api/products/:id — แอดมินลบสินค้า
+    if (pathname.startsWith('/api/products/') && method === 'DELETE') {
+      if (!isAdmin(req)) { send401(res); return; }
+      const prodId = pathname.replace('/api/products/', '').trim();
+
+      const d = await getDoc(doc(db, 'settings', 'storefront'));
+      const sf = d.exists() ? d.data() : {};
+      const customProducts = (Array.isArray(sf.custom_products) ? sf.custom_products : []).filter(p => p.id !== prodId);
+
+      sf.custom_products = customProducts;
+      sf.updated_at = new Date().toISOString();
+      await setDoc(doc(db, 'settings', 'storefront'), sf);
+
+      sendJson(res, 200, { success: true });
+      return;
+    }
+
+    // GET /api/preview-cards — ดึงการ์ดพรีวิวหน้าแรก
+    if (pathname === '/api/preview-cards' && method === 'GET') {
+      try {
+        const d = await getDoc(doc(db, 'settings', 'storefront'));
+        const sf = d.exists() ? d.data() : {};
+        const cards = (Array.isArray(sf.preview_cards) && sf.preview_cards.length > 0)
+          ? sf.preview_cards
+          : [
+            { target: 'preorder', name: 'กระเป๋าผ้า HLG', sub: 'เลือกลายที่ชอบได้เลย ♡', image_url: '' },
+            { target: 'wallpaper', name: 'Wallpaper Collection', sub: 'Digital item', image_url: '' },
+            { target: 'sticker', name: 'Sticker Collection', sub: 'ดูคอลเลกชันล่าสุด', image_url: '' }
+          ];
+        sendJson(res, 200, { success: true, preview_cards: cards });
+      } catch (err) {
+        sendJson(res, 200, { success: true, preview_cards: [] });
+      }
+      return;
+    }
+
+    // PUT /api/preview-cards — แอดมินอัปเดตการ์ดพรีวิวหน้าแรก
+    if (pathname === '/api/preview-cards' && method === 'PUT') {
+      if (!isAdmin(req)) { send401(res); return; }
+      const body = await readBody(req);
+      const cards = Array.isArray(body.preview_cards) ? body.preview_cards : [];
+
+      const d = await getDoc(doc(db, 'settings', 'storefront'));
+      const sf = d.exists() ? d.data() : {};
+      sf.preview_cards = cards;
+      sf.updated_at = new Date().toISOString();
+      await setDoc(doc(db, 'settings', 'storefront'), sf);
+
+      sendJson(res, 200, { success: true, preview_cards: cards });
       return;
     }
 
