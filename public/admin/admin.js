@@ -5,7 +5,16 @@ var currentFilter = 'all';
 var currentDateFilter = 'all';
 var currentTrackingDateFilter = 'all';
 var currentModalOrder = null;
+var currentChannelFilter = 'all';
 var deleteTargetId = null;
+
+function switchChannelFilter(channel) {
+  currentChannelFilter = channel;
+  document.querySelectorAll('.chtab').forEach(function(tab) {
+    tab.classList.toggle('active', tab.dataset.channel === channel);
+  });
+  filterOrders();
+}
 
 // Uses shared: ALL_PATTERNS, STATUS_LABELS, STATUS_ICONS, computePromoPrice(), isRemoteArea(), getShippingCost(), getPatternByName()
 
@@ -183,6 +192,14 @@ function filterOrders() {
   filteredOrders = allOrders.filter(function(o) {
     if (currentFilter !== 'all' && String(o.status) !== currentFilter) return false;
     if (!isWithinDateRange(o.created_at, currentDateFilter)) return false;
+
+    // Channel filter
+    if (currentChannelFilter === 'shopee') {
+      if (o.channel !== 'shopee' && !o.shopee_order_sn) return false;
+    } else if (currentChannelFilter === 'web') {
+      if (o.channel === 'shopee' || !!o.shopee_order_sn) return false;
+    }
+
     if (search) {
       var id = (o.id || '').toLowerCase();
       var name = (o.customer_name || '').toLowerCase();
@@ -191,7 +208,9 @@ function filterOrders() {
       var info = (o.customer_info || '').toLowerCase();
       var note = (o.note || '').toLowerCase();
       var tracking = (o.tracking_number || '').toLowerCase();
-      if (!id.includes(search) && !name.includes(search) && !phone.includes(search) && !addr.includes(search) && !info.includes(search) && !note.includes(search) && !tracking.includes(search)) return false;
+      var sn = (o.shopee_order_sn || '').toLowerCase();
+      var queue = (o.queue_no || '').toLowerCase();
+      if (!id.includes(search) && !name.includes(search) && !phone.includes(search) && !addr.includes(search) && !info.includes(search) && !note.includes(search) && !tracking.includes(search) && !sn.includes(search) && !queue.includes(search)) return false;
     }
     return true;
   });
@@ -322,8 +341,12 @@ function renderTable() {
     var custPhone = o.customer_phone || (o.customer_info || '').split('\n')[1] || '';
     var custDisplay = escapeHtml(custName) + (custPhone ? '<div style="font-size:11px;color:#807078">📞 ' + escapeHtml(custPhone) + '</div>' : '');
 
-    return '<tr class="order-row' + (o.type === 'wallpaper' ? ' order-wallpaper' : '') + '" onclick="openOrder(\'' + escapeHtmlAttr(o.id) + '\')">'
-      + '<td class="order-id">' + escapeHtml(o.id) + (o.slip_data ? ' <i class="ti ti-receipt" style="color:#30a030;font-size:11px" title="มีสลีป"></i>' : '') + (o.fast_track ? '<br><span style="color:#8c30d8;font-size:10px;font-weight:800;background:#f3e8fc;padding:2px 4px;border-radius:4px">⚡ FAST TRACK</span>' : '') + '</td>'
+    var isShopee = o.channel === 'shopee' || !!o.shopee_order_sn;
+    var shopeeBadge = isShopee ? ('<br><span style="display:inline-flex;align-items:center;gap:3px;color:#e04422;font-size:10px;font-weight:800;background:#ffebe5;padding:2px 6px;border-radius:4px;border:1px solid #ffd0c4;margin-top:2px"><i class="ti ti-brand-shopee"></i> Shopee: ' + escapeHtml(o.shopee_order_sn || '') + '</span>') : '';
+    var queueTxt = o.queue_no ? (' <span style="font-size:11px;font-weight:700;color:#c04878">(' + escapeHtml(o.queue_no) + ')</span>') : '';
+
+    return '<tr class="order-row' + (o.type === 'wallpaper' ? ' order-wallpaper' : '') + (isShopee ? ' order-shopee' : '') + '" onclick="openOrder(\'' + escapeHtmlAttr(o.id) + '\')">'
+      + '<td class="order-id">' + escapeHtml(o.id) + queueTxt + (o.slip_data ? ' <i class="ti ti-receipt" style="color:#30a030;font-size:11px" title="มีสลีป"></i>' : '') + (o.fast_track ? '<br><span style="color:#8c30d8;font-size:10px;font-weight:800;background:#f3e8fc;padding:2px 4px;border-radius:4px">⚡ FAST TRACK</span>' : '') + shopeeBadge + '</td>'
       + '<td class="order-customer">' + custDisplay + '</td>'
       + '<td class="order-patterns">' + escapeHtml(patterns) + '</td>'
       + '<td class="order-qty">' + (o.total_bags || 0) + '</td>'
@@ -403,6 +426,16 @@ function openOrder(id) {
   var cName = order.customer_name || (order.customer_info || '').split('\n')[0] || '';
   var cPhone = order.customer_phone || (order.customer_info || '').split('\n')[1] || '';
   var cAddress = order.customer_address || ((order.customer_info || '').split('\n').slice(2).join('\n')) || '';
+
+  if (order.channel === 'shopee' || order.shopee_order_sn) {
+    html += '<div class="m-section" style="background:#fff7f4;border:1px solid #ffd0c4;border-radius:12px;padding:12px 14px;margin-bottom:14px">';
+    html += '<div style="font-size:12px;font-weight:800;color:#ee4d2d;display:flex;align-items:center;gap:6px"><i class="ti ti-brand-shopee"></i> คำสั่งซื้อจาก Shopee</div>';
+    html += '<div style="font-size:13px;margin-top:6px;color:#3d241d">หมายเลขคำสั่งซื้อ Shopee: <b style="font-family:monospace;color:#d83a17">' + escapeHtml(order.shopee_order_sn || '-') + '</b></div>';
+    if (order.queue_no) {
+      html += '<div style="font-size:13px;margin-top:4px;color:#3d241d">เลขคิวในระบบ: <b style="color:#d15488">' + escapeHtml(order.queue_no) + '</b></div>';
+    }
+    html += '</div>';
+  }
 
   html += '<div class="m-section">';
   html += '<div class="m-section-title" style="display:flex;justify-content:space-between;align-items:center;">ข้อมูลลูกค้า <button type="button" style="border:1px solid #ecc9d6;background:#fff5f9;color:#c04878;border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;font-weight:700" onclick="copyCustomerInfo(\'' + escapeHtmlAttr(cName) + '\', \'' + escapeHtmlAttr(cPhone) + '\', \'' + escapeHtmlAttr(cAddress) + '\')"><i class="ti ti-copy"></i> คัดลอก</button></div>';

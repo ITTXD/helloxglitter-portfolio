@@ -995,6 +995,104 @@ module.exports = async (req, res) => {
       return;
     }
 
+    // POST /api/orders/shopee — ลูกค้าลงทะเบียนออเดอร์ Shopee (ไม่ต้อง auth)
+    if (pathname === '/api/orders/shopee' && method === 'POST') {
+      const body = await readBody(req);
+      const customer_name = (body.customer_name || '').trim();
+      const customer_phone = (body.customer_phone || '').replace(/\D/g, '');
+      const customer_address = (body.customer_address || '').trim();
+      const shopee_order_sn = (body.shopee_order_sn || '').trim();
+      const customer_note = (body.customer_note || body.note || '').trim();
+
+      if (!customer_name || !customer_phone || !customer_address || !shopee_order_sn) {
+        sendJson(res, 400, { error: 'กรุณากรอกข้อมูลให้ครบถ้วน (ชื่อ, เบอร์โทรศัพท์, ที่อยู่จัดส่ง, หมายเลขคำสั่งซื้อ Shopee)' });
+        return;
+      }
+
+      if (customer_phone.length < 9 || customer_phone.length > 10) {
+        sendJson(res, 400, { error: 'กรุณากรอกเบอร์โทรศัพท์ให้ถูกต้อง (9-10 หลัก)' });
+        return;
+      }
+
+      const snRegex = /^[A-Za-z0-9]{14,20}$/;
+      if (!snRegex.test(shopee_order_sn)) {
+        sendJson(res, 400, { error: 'หมายเลขคำสั่งซื้อ Shopee ต้องเป็นตัวอักษรภาษาอังกฤษหรือตัวเลข 14-20 หลักเท่านั้น โดยไม่มีเว้นวรรคหรืออักขระพิเศษ' });
+        return;
+      }
+
+      const ordersSnap = await getDocs(collection(db, 'orders'));
+      const allOrders = [];
+      ordersSnap.forEach(d => allOrders.push({ _docId: d.id, ...d.data() }));
+
+      const existing = allOrders.find(o => o.shopee_order_sn && o.shopee_order_sn.toUpperCase() === shopee_order_sn.toUpperCase());
+
+      if (existing) {
+        const existingPhone = (existing.customer_phone || '').replace(/\D/g, '');
+        if (existingPhone !== customer_phone) {
+          sendJson(res, 409, { error: 'หมายเลขคำสั่งซื้อ Shopee นี้ถูกลงทะเบียนไว้แล้วด้วยเบอร์โทรศัพท์อื่น หากต้องการแก้ไขข้อมูลกรุณาติดต่อแอดมินค่ะ' });
+          return;
+        }
+
+        // Same phone: allow update
+        const updateData = {
+          customer_name,
+          customer_address,
+          customer_info: `${customer_name}\n${customer_phone}\n${customer_address}`,
+          note: customer_note,
+          customer_note,
+          updated_at: new Date().toISOString(),
+        };
+        await updateDoc(doc(db, 'orders', existing._docId || existing.id), updateData);
+        const updatedOrder = { ...existing, ...updateData };
+        sendJson(res, 200, { success: true, updated: true, order: updatedOrder });
+        return;
+      }
+
+      // New Shopee order
+      let maxQueue = 0;
+      allOrders.forEach(o => {
+        const m = String(o.queue_no || '').match(/(\d+)/);
+        if (m) maxQueue = Math.max(maxQueue, parseInt(m[1], 10) || 0);
+      });
+      const queue_no = 'HLG-' + String(maxQueue + 1).padStart(3, '0');
+      const orderId = 'SHP-' + Date.now();
+
+      const order = {
+        id: orderId,
+        queue_no,
+        channel: 'shopee',
+        shopee_order_sn,
+        customer_name,
+        customer_phone,
+        customer_address,
+        customer_info: `${customer_name}\n${customer_phone}\n${customer_address}`,
+        patterns: ['Shopee: ' + shopee_order_sn],
+        pattern_qtys: null,
+        qty: 1,
+        total_bags: 1,
+        original_price: 0,
+        total_price: 0,
+        savings: 0,
+        coupon_code: null,
+        coupon_discount: 0,
+        shipping_cost: 0,
+        is_remote: false,
+        status: 1, // ยืนยันคิวแล้ว
+        note: customer_note,
+        customer_note,
+        note_status: customer_note ? 'on' : 'off',
+        tracking_number: '',
+        tracking_carrier: 'Shopee',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const docRef = await addDoc(collection(db, 'orders'), order);
+      order._docId = docRef.id;
+      sendJson(res, 201, { success: true, order });
+      return;
+    }
+
     // GET /api/stickers — อ่านรายชื่อรูปและไฟล์สติกเกอร์จากโฟลเดอร์ sticker
     if (pathname === '/api/stickers' && method === 'GET') {
       try {
@@ -1487,6 +1585,9 @@ module.exports = async (req, res) => {
       sendJson(res, 200, {
         orders: found.map(o => ({
           id: o.id,
+          queue_no: o.queue_no || '',
+          channel: o.channel || 'web',
+          shopee_order_sn: o.shopee_order_sn || '',
           type: o.type || 'bag',
           status: o.status,
           patterns: o.patterns,
@@ -1536,6 +1637,9 @@ module.exports = async (req, res) => {
       }
       sendJson(res, 200, {
         id: order.id,
+        queue_no: order.queue_no || '',
+        channel: order.channel || 'web',
+        shopee_order_sn: order.shopee_order_sn || '',
         status: order.status,
         patterns: order.patterns,
         pattern_qtys: order.pattern_qtys || null,

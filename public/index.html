@@ -5644,6 +5644,348 @@ if(document.readyState!=='loading'){
   <div class="mobile-menu-items" id="drawerMenuItems"></div>
 </aside>
 
+<style id="shopee-registration-style">
+.mmenu-item.shopee-menu-btn {
+  background: linear-gradient(135deg, #fff7f4 0%, #ffede8 100%) !important;
+  border: 1.5px solid #ffccbe !important;
+  border-radius: 14px !important;
+  margin: 8px 0 !important;
+  padding: 12px 14px !important;
+  box-shadow: 0 4px 14px rgba(238, 77, 45, 0.1) !important;
+  transition: all .15s ease !important;
+}
+.mmenu-item.shopee-menu-btn:active {
+  transform: scale(0.98) !important;
+  background: #ffe3db !important;
+}
+.mmenu-item.shopee-menu-btn .mmenu-icon {
+  background: linear-gradient(135deg, #ff6a3c, #ee4d2d) !important;
+  color: #fff !important;
+  box-shadow: 0 4px 10px rgba(238, 77, 45, 0.3) !important;
+}
+.mmenu-item.shopee-menu-btn .mmenu-label {
+  color: #d83a17 !important;
+  font-weight: 800 !important;
+  font-size: 14px !important;
+}
+.mmenu-item.shopee-menu-btn .mmenu-desc {
+  color: #b05c48 !important;
+  font-size: 11px !important;
+}
+
+/* Modal Overlay & Card */
+.shopee-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(35, 18, 25, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 10050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .22s ease, visibility .22s ease;
+  box-sizing: border-box;
+}
+.shopee-modal-overlay.show {
+  opacity: 1;
+  visibility: visible;
+}
+.shopee-modal-card {
+  width: min(100%, 460px);
+  max-height: calc(100dvh - 36px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: #ffffff;
+  border: 1.5px solid #ffccbe;
+  border-radius: 26px;
+  padding: 24px 22px;
+  box-shadow: 0 24px 75px rgba(238, 77, 45, 0.22);
+  transform: translateY(16px) scale(0.97);
+  transition: transform .22s ease;
+  box-sizing: border-box;
+}
+.shopee-modal-overlay.show .shopee-modal-card {
+  transform: translateY(0) scale(1);
+}
+.shopee-modal-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.shopee-modal-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  color: #ee4d2d;
+  background: #fff0eb;
+  padding: 4px 10px;
+  border-radius: 99px;
+  border: 1px solid #ffd3c7;
+}
+.shopee-modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: #f7ebe8;
+  color: #885b51;
+  font-size: 16px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background .15s;
+}
+.shopee-modal-close:hover {
+  background: #ffdcd3;
+  color: #d83a17;
+}
+.shopee-modal-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 12px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #ff7b52, #ee4d2d);
+  color: #fff;
+  font-size: 28px;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 8px 20px rgba(238, 77, 45, 0.28);
+}
+.shopee-modal-title {
+  text-align: center;
+  font-size: 21px;
+  font-weight: 800;
+  color: #bd3112;
+  margin-bottom: 4px;
+}
+.shopee-modal-hint {
+  text-align: center;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #8c5d51;
+  margin: 0 0 18px;
+}
+.shopee-field {
+  margin-bottom: 12px;
+  text-align: left;
+}
+.shopee-field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #5c3b33;
+  margin-bottom: 5px;
+}
+.shopee-input, .shopee-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 11px 14px;
+  border: 1.5px solid #ffccbe;
+  border-radius: 12px;
+  font-size: 14px;
+  color: #3d241d;
+  background: #fffbf9;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+  font-family: inherit;
+}
+.shopee-input:focus, .shopee-textarea:focus {
+  border-color: #ee4d2d;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(238, 77, 45, 0.15);
+}
+.shopee-field-hint {
+  display: block;
+  font-size: 11px;
+  color: #a87265;
+  margin-top: 4px;
+}
+.shopee-error-msg {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #ffebe9;
+  border: 1px solid #ffb8b2;
+  color: #d32f2f;
+  font-size: 12px;
+  line-height: 1.45;
+  margin-bottom: 14px;
+}
+.shopee-submit-btn {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 13px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #ff6334, #ee4d2d);
+  color: #fff;
+  font-size: 14.5px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(238, 77, 45, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: transform .15s, filter .15s;
+  font-family: inherit;
+}
+.shopee-submit-btn:hover {
+  filter: brightness(1.05);
+}
+.shopee-submit-btn:active {
+  transform: scale(0.98);
+}
+.shopee-success-icon {
+  width: 64px;
+  height: 64px;
+  margin: 10px auto 14px;
+  border-radius: 50%;
+  background: #eafaf1;
+  color: #159447;
+  font-size: 34px;
+  display: grid;
+  place-items: center;
+}
+.shopee-success-title {
+  text-align: center;
+  font-size: 20px;
+  font-weight: 800;
+  color: #1f5e39;
+  margin-bottom: 12px;
+}
+.shopee-queue-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: linear-gradient(135deg, #fff7f4, #ffede8);
+  border: 1.5px dashed #ffb8a5;
+  border-radius: 18px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.shopee-queue-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #8c5d51;
+  margin-bottom: 4px;
+}
+.shopee-queue-val {
+  font-size: 28px;
+  font-weight: 900;
+  color: #ee4d2d;
+  letter-spacing: .05em;
+  font-family: monospace;
+}
+.shopee-success-hint {
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #785348;
+  margin-bottom: 18px;
+}
+.shopee-track-btn {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 13px;
+  border: none;
+  border-radius: 14px;
+  background: #159447;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  box-shadow: 0 6px 18px rgba(21, 148, 71, 0.25);
+  font-family: inherit;
+}
+.shopee-close-alt-btn {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ecc6be;
+  border-radius: 12px;
+  background: #fff;
+  color: #7b4f44;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+</style>
+
+<!-- SHOPEE ORDER REGISTRATION MODAL -->
+<div class="shopee-modal-overlay" id="shopeeModal" onclick="if(event.target===this) v8CloseShopeeModal()">
+  <div class="shopee-modal-card" role="dialog" aria-modal="true" aria-labelledby="shopeeModalTitle">
+    <div class="shopee-modal-top">
+      <div class="shopee-modal-tag"><i class="ti ti-brand-shopee"></i> SHOPEE ORDER REGISTRATION</div>
+      <button class="shopee-modal-close" onclick="v8CloseShopeeModal()" aria-label="ปิด"><i class="ti ti-x"></i></button>
+    </div>
+    
+    <div id="shopeeFormView">
+      <div class="shopee-modal-icon" aria-hidden="true"><i class="ti ti-shopping-bag"></i></div>
+      <div class="shopee-modal-title" id="shopeeModalTitle">ลงทะเบียนออเดอร์ Shopee</div>
+      <p class="shopee-modal-hint">กรอกข้อมูลคำสั่งซื้อ Shopee เพื่อเชื่อมต่อเข้าคิวผลิตและเช็กพัสดุผ่านเบอร์โทรศัพท์ ♡</p>
+      
+      <form id="shopeeRegForm" onsubmit="v8SubmitShopeeRegistration(event)">
+        <div class="shopee-field">
+          <label for="shopeeCustomerName">ชื่อ-นามสกุล ผู้รับ *</label>
+          <input id="shopeeCustomerName" type="text" class="shopee-input" placeholder="เช่น คุณสมหญิง ใจดี" required autocomplete="name">
+        </div>
+        <div class="shopee-field">
+          <label for="shopeeCustomerPhone">เบอร์โทรศัพท์ (ใช้ค้นหาพัสดุ) *</label>
+          <input id="shopeeCustomerPhone" type="tel" inputmode="numeric" class="shopee-input" placeholder="เช่น 0812345678" required autocomplete="tel">
+          <small class="shopee-field-hint">ใช้เบอร์นี้ค้นหาคิวและเลขพัสดุในหน้าติดตามพัสดุ</small>
+        </div>
+        <div class="shopee-field">
+          <label for="shopeeOrderSn">หมายเลขคำสั่งซื้อ Shopee (Order SN) *</label>
+          <input id="shopeeOrderSn" type="text" class="shopee-input" placeholder="เช่น 241002ABC123456D (14-20 หลัก)" required autocomplete="off" autocapitalize="characters">
+          <small class="shopee-field-hint">ดูได้จากหน้าคำสั่งซื้อในแอป Shopee (เฉพาะตัวอักษรและตัวเลขเท่านั้น)</small>
+        </div>
+        <div class="shopee-field">
+          <label for="shopeeCustomerAddress">ที่อยู่จัดส่งพัสดุ *</label>
+          <textarea id="shopeeCustomerAddress" class="shopee-textarea" rows="3" placeholder="บ้านเลขที่, ถนน/ซอย, แขวง/ตำบล, เขต/อำเภอ, จังหวัด, รหัสไปรษณีย์" required></textarea>
+        </div>
+        <div class="shopee-field">
+          <label for="shopeeCustomerNote">หมายเหตุเพิ่มเติม / ลายสินค้าที่เลือก (ถ้ามี)</label>
+          <input id="shopeeCustomerNote" type="text" class="shopee-input" placeholder="เช่น ลายกระต่ายดาว / สั่งลายไหนไว้">
+        </div>
+        <div id="shopeeErrorMsg" class="shopee-error-msg" style="display:none"></div>
+        <button type="submit" id="shopeeSubmitBtn" class="shopee-submit-btn">
+          <i class="ti ti-check"></i> บันทึกและลงทะเบียนออเดอร์
+        </button>
+      </form>
+    </div>
+
+    <div id="shopeeSuccessView" style="display:none">
+      <div class="shopee-success-icon"><i class="ti ti-circle-check"></i></div>
+      <div class="shopee-success-title">ลงทะเบียนเรียบร้อยแล้วค่ะ!</div>
+      <div class="shopee-queue-display">
+        <span class="shopee-queue-label">หมายเลขคิวของคุณ</span>
+        <span class="shopee-queue-val" id="shopeeSuccessQueue">HLG-001</span>
+      </div>
+      <p class="shopee-success-hint">ระบบได้บันทึกออเดอร์ Shopee ของคุณเข้าสู่คิวร้านแล้ว คุณสามารถนำเบอร์โทรศัพท์ไปเช็กสถานะการผลิตและเลขพัสดุได้ทันที ♡</p>
+      <button type="button" class="shopee-track-btn" onclick="v8GoToShopeeTracking()">
+        <i class="ti ti-truck-delivery"></i> เช็กสถานะพัสดุทันที →
+      </button>
+      <button type="button" class="shopee-close-alt-btn" onclick="v8CloseShopeeModal()">
+        ปิดหน้าต่าง
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- LOGIN MODAL -->
 <div class="login-overlay" id="loginOverlay" onclick="if(event.target===this) closeLoginModal()">
   <div class="login-card" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
@@ -6754,6 +7096,7 @@ function renderDrawerMenu(){
     '<button class="mmenu-item" data-page="cart" onclick="v8OpenCart();closeMenu()"><span class="mmenu-icon"><i class="ti ti-shopping-cart"></i></span><div class="mmenu-text"><div class="mmenu-label">ตะกร้าของฉัน</div><div class="mmenu-desc">ดูสินค้าที่เลือกและชำระเงิน</div></div><i class="ti ti-chevron-right mmenu-arrow"></i></button>'+ 
     '<button class="mmenu-item" onclick="openCoupons();closeMenu()"><span class="mmenu-icon"><i class="ti ti-ticket"></i></span><div class="mmenu-text"><div class="mmenu-label">คูปองของฉัน</div><div class="mmenu-desc">'+(line?'ดูคูปองที่มีอยู่':'เข้าสู่ระบบ LINE เพื่อผูกคูปอง')+'</div></div><i class="ti ti-chevron-right mmenu-arrow"></i></button>'+ 
     '<button class="mmenu-item" data-page="tracking" onclick="showPage(\'tracking\');closeMenu()"><span class="mmenu-icon"><i class="ti ti-package"></i></span><div class="mmenu-text"><div class="mmenu-label">ติดตามคิว / พัสดุ</div><div class="mmenu-desc">กรอกเบอร์โทรเพื่อเช็กสถานะ</div></div><i class="ti ti-chevron-right mmenu-arrow"></i></button>'+ 
+    '<button class="mmenu-item shopee-menu-btn" onclick="v8OpenShopeeModal()"><span class="mmenu-icon shopee-icon"><i class="ti ti-brand-shopee"></i></span><div class="mmenu-text"><div class="mmenu-label shopee-label">🧡 ลงทะเบียนออเดอร์ Shopee</div><div class="mmenu-desc">กรอกเลขออเดอร์ Shopee เพื่อรับคิว & เช็กพัสดุ</div></div><i class="ti ti-chevron-right mmenu-arrow"></i></button>'+ 
     '<button class="mmenu-item line" onclick="openLineAccount();closeMenu()"><span class="mmenu-icon"><i class="ti ti-brand-line"></i></span><div class="mmenu-text"><div class="mmenu-label">'+(line?'บัญชี LINE':'เข้าสู่ระบบด้วย LINE')+'</div></div><i class="ti ti-chevron-right mmenu-arrow"></i></button>'+ 
     (isAdmin()?'<button class="mmenu-item admin-entry" onclick="openAdminDashboard()"><span class="mmenu-icon"><i class="ti ti-layout-dashboard"></i></span><div class="mmenu-text"><div class="mmenu-label">Admin Dashboard</div></div><span class="mmenu-pill">ADMIN</span></button><a class="mmenu-item admin-entry" href="/admin/" target="_blank"><span class="mmenu-icon"><i class="ti ti-external-link"></i></span><div class="mmenu-text"><div class="mmenu-label">Full Admin Portal ↗</div><div class="mmenu-desc">เปิดหน้าจัดการเต็มรูปแบบ</div></div></a><button class="mmenu-item danger" onclick="logoutHLG()"><span class="mmenu-icon"><i class="ti ti-logout-2"></i></span><div class="mmenu-text"><div class="mmenu-label">ออกจากระบบแอดมิน</div></div></button>':'<button class="mmenu-item admin-entry" onclick="openLoginModal()"><span class="mmenu-icon"><i class="ti ti-shield-lock"></i></span><div class="mmenu-text"><div class="mmenu-label">โหมดแอดมิน</div><div class="mmenu-desc">สลับเข้าหน้าจัดการร้าน (PIN/Password)</div></div><i class="ti ti-chevron-right mmenu-arrow"></i></button>');
 }
@@ -7264,14 +7607,158 @@ function trackSearch() {
   if(!val){resEl.innerHTML='';resEl.classList.remove('show');return}
   if(val.length<9){resEl.innerHTML='<div class="tr-not-found">กรอกเบอร์โทรให้ครบก่อนนะคะ ♡</div>';resEl.classList.add('show');return}
   var rows=getOrders().filter(function(o){return normalizePhone(o.customer_phone)===val}).sort(function(a,b){return String(b.created_at||'').localeCompare(String(a.created_at||''))});
-  if(!rows.length){resEl.innerHTML='<div class="tr-not-found"><i class="ti ti-search"></i><br>ยังไม่พบออเดอร์ของเบอร์นี้ค่ะ<br><span style="font-size:11px;font-weight:600;color:#b69aa5">ตรวจสอบว่าใช้เบอร์เดียวกับตอนสั่งซื้อนะคะ</span></div>';resEl.classList.add('show');return}
+  if(!rows.length){
+    resEl.innerHTML='<div class="tr-not-found" style="color:#ee4d2d"><i class="ti ti-loader"></i><br>กำลังค้นหาข้อมูลพัสดุ…</div>';
+    resEl.classList.add('show');
+    fetch('/api/track/phone/'+encodeURIComponent(val))
+      .then(function(r){return r.ok?r.json():null})
+      .then(function(data){
+        if(data&&Array.isArray(data.orders)&&data.orders.length){
+          resEl.innerHTML=data.orders.map(renderCustomerOrderCard).join('');
+          resEl.classList.add('show');
+        }else{
+          resEl.innerHTML='<div class="tr-not-found"><i class="ti ti-search"></i><br>ยังไม่พบออเดอร์ของเบอร์นี้ค่ะ<br><span style="font-size:11px;font-weight:600;color:#b69aa5">ตรวจสอบว่าใช้เบอร์เดียวกับตอนสั่งซื้อหรือลงทะเบียน Shopee นะคะ</span></div>';
+          resEl.classList.add('show');
+        }
+      }).catch(function(){
+        resEl.innerHTML='<div class="tr-not-found"><i class="ti ti-search"></i><br>ยังไม่พบออเดอร์ของเบอร์นี้ค่ะ<br><span style="font-size:11px;font-weight:600;color:#b69aa5">ตรวจสอบว่าใช้เบอร์เดียวกับตอนสั่งซื้อนะคะ</span></div>';
+        resEl.classList.add('show');
+      });
+    return;
+  }
   resEl.innerHTML=rows.map(renderCustomerOrderCard).join('');resEl.classList.add('show');
 }
 function renderCustomerOrderCard(o){
   var status=Math.max(0,Math.min(Number(o.status)||0,HLG_STATUSES.length-1));
   var tl=HLG_STATUSES.map(function(st,i){var cls=i<status?'done':(i===status?'current':'');return '<div class="tr-tl-step"><div class="tr-tl-dot-col"><div class="tr-tl-dot '+cls+'"></div>'+(i<HLG_STATUSES.length-1?'<div class="tr-tl-line"></div>':'')+'</div><div class="tr-tl-text"><div class="tr-tl-label">'+escHtml(st)+'</div></div></div>'}).join('');
   var patterns=Array.isArray(o.patterns)?o.patterns:[];var pq=o.pattern_qtys||{};var items=patterns.map(function(n){return '<div class="tr-detail-row"><span class="tr-detail-label">'+escHtml(n)+' × '+(pq[n]||1)+'</span></div>'}).join('');
-  return '<div class="tr-order-card"><div class="tr-order-head"><div><span class="tr-order-id">'+escHtml(o.id||'')+'</span><div class="tr-queue-badge"><i class="ti ti-ticket"></i> คิว '+escHtml(o.queue_no||'รอจัดคิว')+'</div></div><span class="tr-status-badge s'+Math.min(status,3)+'">'+escHtml(HLG_STATUSES[status])+'</span></div><div class="tr-timeline">'+tl+'</div>'+(o.admin_note?'<div class="customer-track-hint"><strong>💌 ข้อความจากร้าน:</strong> '+escHtml(o.admin_note)+'</div>':'')+'<div style="margin-top:10px;padding-top:10px;border-top:1px solid #fadadd">'+items+'<div class="tr-detail-row"><span class="tr-detail-label">ยอดรวม</span><span class="tr-detail-val" style="color:#d45a8a">'+Number(o.total_price||0).toLocaleString()+' ฿</span></div>'+(o.tracking_number?'<div class="tr-detail-row"><span class="tr-detail-label">เลขพัสดุ</span><span class="tr-detail-val">'+escHtml(o.tracking_number)+'</span></div>':'')+'</div></div>';
+  var isShopee = o.channel === 'shopee' || !!o.shopee_order_sn;
+  var channelBadge = isShopee ? '<span class="tr-shopee-badge" style="display:inline-flex;align-items:center;gap:3px;background:#ffebe5;color:#ee4d2d;border:1px solid #ffd0c4;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:800;margin-left:6px;vertical-align:middle"><i class="ti ti-brand-shopee"></i> Shopee</span>' : '';
+  var shopeeRow = (isShopee && o.shopee_order_sn) ? '<div class="tr-detail-row"><span class="tr-detail-label">เลขออเดอร์ Shopee</span><span class="tr-detail-val" style="font-family:monospace;font-weight:700;color:#ee4d2d">'+escHtml(o.shopee_order_sn)+'</span></div>' : '';
+  var carrierTxt = o.tracking_carrier ? (' (' + escHtml(o.tracking_carrier) + ')') : '';
+  return '<div class="tr-order-card '+(isShopee?'shopee-order':'')+'"><div class="tr-order-head"><div><span class="tr-order-id">'+escHtml(o.id||'')+' '+channelBadge+'</span><div class="tr-queue-badge"><i class="ti ti-ticket"></i> คิว '+escHtml(o.queue_no||'รอจัดคิว')+'</div></div><span class="tr-status-badge s'+Math.min(status,3)+'">'+escHtml(HLG_STATUSES[status])+'</span></div><div class="tr-timeline">'+tl+'</div>'+(o.admin_note?'<div class="customer-track-hint"><strong>💌 ข้อความจากร้าน:</strong> '+escHtml(o.admin_note)+'</div>':'')+shopeeRow+'<div style="margin-top:10px;padding-top:10px;border-top:1px solid #fadadd">'+items+'<div class="tr-detail-row"><span class="tr-detail-label">ยอดรวม</span><span class="tr-detail-val" style="color:#d45a8a">'+(isShopee?'ชำระผ่าน Shopee':(Number(o.total_price||0).toLocaleString()+' ฿'))+'</span></div>'+(o.tracking_number?'<div class="tr-detail-row"><span class="tr-detail-label">เลขพัสดุ'+carrierTxt+'</span><span class="tr-detail-val" style="font-weight:700;color:#15905f">'+escHtml(o.tracking_number)+'</span></div>':'')+'</div></div>';
+}
+
+/* 9.5 SHOPEE ORDER REGISTRATION HANDLERS */
+var _lastShopeePhone = '';
+function v8OpenShopeeModal() {
+  try { if (typeof closeMenu === 'function') closeMenu(); } catch (e) {}
+  var modal = document.getElementById('shopeeModal');
+  if (!modal) return;
+  var formView = document.getElementById('shopeeFormView');
+  var successView = document.getElementById('shopeeSuccessView');
+  var errorMsg = document.getElementById('shopeeErrorMsg');
+  if (formView) formView.style.display = 'block';
+  if (successView) successView.style.display = 'none';
+  if (errorMsg) { errorMsg.style.display = 'none'; errorMsg.textContent = ''; }
+  modal.classList.add('show');
+  setTimeout(function() {
+    var inp = document.getElementById('shopeeCustomerName');
+    if (inp) inp.focus();
+  }, 100);
+}
+function v8CloseShopeeModal() {
+  var modal = document.getElementById('shopeeModal');
+  if (modal) modal.classList.remove('show');
+}
+async function v8SubmitShopeeRegistration(e) {
+  if (e) e.preventDefault();
+  var name = (document.getElementById('shopeeCustomerName')?.value || '').trim();
+  var phone = normalizePhone(document.getElementById('shopeeCustomerPhone')?.value || '');
+  var sn = (document.getElementById('shopeeOrderSn')?.value || '').trim();
+  var address = (document.getElementById('shopeeCustomerAddress')?.value || '').trim();
+  var note = (document.getElementById('shopeeCustomerNote')?.value || '').trim();
+  var errorMsg = document.getElementById('shopeeErrorMsg');
+  var submitBtn = document.getElementById('shopeeSubmitBtn');
+
+  function showErr(msg) {
+    if (errorMsg) {
+      errorMsg.textContent = msg;
+      errorMsg.style.display = 'block';
+    } else {
+      alert(msg);
+    }
+  }
+
+  if (!name) return showErr('กรุณากรอกชื่อ-นามสกุลค่ะ');
+  if (!phone || phone.length < 9 || phone.length > 10) return showErr('กรุณากรอกเบอร์โทรศัพท์ 9-10 หลักให้ถูกต้องค่ะ');
+  if (!sn) return showErr('กรุณากรอกหมายเลขคำสั่งซื้อ Shopee ค่ะ');
+  if (!/^[A-Za-z0-9]{14,20}$/.test(sn)) {
+    return showErr('หมายเลขคำสั่งซื้อ Shopee ต้องเป็นตัวอักษรภาษาอังกฤษหรือตัวเลข 14-20 หลักเท่านั้นค่ะ');
+  }
+  if (!address) return showErr('กรุณากรอกที่อยู่จัดส่งพัสดุให้ครบถ้วนค่ะ');
+
+  if (errorMsg) errorMsg.style.display = 'none';
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="ti ti-loader"></i> กำลังบันทึกข้อมูล…';
+  }
+
+  try {
+    var res = await fetch('/api/orders/shopee', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customer_name: name,
+        customer_phone: phone,
+        customer_address: address,
+        shopee_order_sn: sn,
+        customer_note: note,
+      })
+    });
+    var data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'ลงทะเบียนไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+    }
+
+    _lastShopeePhone = phone;
+
+    // Sync into local order cache
+    if (data.order) {
+      try {
+        var rows = (typeof getOrders === 'function') ? getOrders() : [];
+        var idx = rows.findIndex(function(x) { return x.shopee_order_sn && x.shopee_order_sn.toUpperCase() === sn.toUpperCase(); });
+        if (idx >= 0) {
+          rows[idx] = Object.assign({}, rows[idx], data.order);
+        } else {
+          rows.unshift(data.order);
+        }
+        if (typeof saveOrders === 'function') saveOrders(rows);
+      } catch (err) {
+        console.warn('Local cache sync error:', err);
+      }
+    }
+
+    // Switch to success view
+    var formView = document.getElementById('shopeeFormView');
+    var successView = document.getElementById('shopeeSuccessView');
+    var qEl = document.getElementById('shopeeSuccessQueue');
+    if (qEl && data.order?.queue_no) qEl.textContent = data.order.queue_no;
+    if (formView) formView.style.display = 'none';
+    if (successView) successView.style.display = 'block';
+
+    if (typeof showToast === 'function') {
+      showToast(data.updated ? 'อัปเดตข้อมูลคำสั่งซื้อ Shopee เรียบร้อยแล้วค่ะ ♡' : 'ลงทะเบียนออเดอร์ Shopee เรียบร้อยแล้วค่ะ ♡');
+    }
+  } catch (err) {
+    showErr(err.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อ');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<i class="ti ti-check"></i> บันทึกและลงทะเบียนออเดอร์';
+    }
+  }
+}
+function v8GoToShopeeTracking() {
+  v8CloseShopeeModal();
+  if (typeof showPage === 'function') showPage('tracking');
+  var trInput = document.getElementById('tr-phone');
+  if (trInput && _lastShopeePhone) {
+    trInput.value = _lastShopeePhone;
+    if (typeof trackSearch === 'function') {
+      setTimeout(trackSearch, 50);
+    }
+  }
 }
 
 /* 10. WALLPAPER INTERACTION */

@@ -28,3 +28,12 @@ Global visual and operational content for the storefront stored in Firestore col
 
 ### Dual-Password Authentication (การยืนยันตัวตนแบบสองรหัส)
 The unified authentication policy permitting either the quick mobile PIN (`333999`) or the master administrative password (`helloxglitter`) to establish an official, authenticated `Admin Session` with the server.
+
+### Shopee Order (ออเดอร์จาก Shopee)
+An order originating from the Shopee platform. Registered by the customer via the mobile hamburger menu to link their external Shopee purchase with the shop's local tracking and queue management system. Defaults directly to status `1` (ยืนยันคิวแล้ว) with channel identifier `channel: 'shopee'`.
+
+### Shopee Order SN (หมายเลขคำสั่งซื้อ Shopee)
+The unique alphanumeric transaction identifier issued by Shopee (e.g. 14–20 characters alphanumeric, no Thai characters or symbols). Serves as the external reference key; protected by phone-based owner authorization if updated.
+
+### Shopee Registration (การลงทะเบียนออเดอร์ Shopee)
+The mobile-first customer registration flow accessed via the orange Shopee button in the hamburger menu. Collects customer name, delivery address, phone number, Shopee Order SN, and optional customer note, enabling unified parcel tracking via phone number on the storefront tracking page.

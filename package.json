@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node test/easyslip-verify.test.js && node test/customer-fields.test.js && node test/concurrency-lock.test.js && node test/coupon-system.test.js && node test/admin-unification.test.js && node test/admin-product-promo-migration.test.js && node test/admin-coupon-migration.test.js && node test/admin-cms-mode.test.js && node test/admin-stock-receipt-migration.test.js && node test/admin-cms-lazy-load.test.js && node test-recalc.js && node test-promo.js && node test/live-orders.test.js && node test/admin-session-clear.test.js && node test/admin-redirect.test.js && node test/promo-bar-cloud.test.js && node test/dynamic-qr-checkout.test.js && node test/categories-products-preview.test.js",
+    "test": "node test/easyslip-verify.test.js && node test/customer-fields.test.js && node test/concurrency-lock.test.js && node test/coupon-system.test.js && node test/admin-unification.test.js && node test/admin-product-promo-migration.test.js && node test/admin-coupon-migration.test.js && node test/admin-cms-mode.test.js && node test/admin-stock-receipt-migration.test.js && node test/admin-cms-lazy-load.test.js && node test-recalc.js && node test-promo.js && node test/live-orders.test.js && node test/admin-session-clear.test.js && node test/admin-redirect.test.js && node test/promo-bar-cloud.test.js && node test/dynamic-qr-checkout.test.js && node test/categories-products-preview.test.js && node test/shopee-registration.test.js",
     "test:e2e": "node test/e2e-coupon-flow.test.js"
   },
   "dependencies": {

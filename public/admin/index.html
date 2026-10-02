@@ -79,8 +79,29 @@
   .hrx-admin button { border: 1px solid #ecc2d3; background: #fff; color: #b6527b; border-radius: 12px; padding: 10px 14px; font: inherit; font-weight: 800; cursor: pointer; }
   .hrx-admin button.primary { background: #d15488; color: #fff; border-color: #d15488; }
   .hrx-admin .hrx-mini { font-size: 12px; line-height: 1.7; color: #8e6375; }
-  .hrx-admin .hrx-gif-preview { max-width: 260px; max-height: 180px; object-fit: contain; border: 1px solid #efd2dd; border-radius: 12px; margin: 10px 0; }
   .hrx-admin img[hidden] { display: none !important; }
+
+  /* Shopee Channel Filter Tabs */
+  .filter-channel-tabs { display: inline-flex; gap: 4px; margin-right: 6px; }
+  .chtab {
+    border: 1px solid #ecc2d3;
+    background: #fff;
+    color: #8c5d72;
+    border-radius: 9px;
+    padding: 6px 11px;
+    font: inherit;
+    font-size: 11.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all .15s ease;
+  }
+  .chtab:hover { background: #fff0f5; }
+  .chtab.active {
+    background: #ee4d2d;
+    border-color: #ee4d2d;
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(238, 77, 45, 0.25);
+  }
 </style>
 </head>
 <body>
@@ -165,6 +186,11 @@
       <button class="ftab" data-filter="1">ยืนยันแล้ว <span class="ftab-count">0</span></button>
       <button class="ftab" data-filter="2">กำลังผลิต <span class="ftab-count">0</span></button>
       <button class="ftab" data-filter="3">จัดส่งแล้ว <span class="ftab-count">0</span></button>
+    </div>
+    <div class="filter-channel-tabs" id="filterChannelTabs" style="display:inline-flex;gap:4px">
+      <button class="chtab active" data-channel="all" onclick="switchChannelFilter('all')">ทั้งหมด</button>
+      <button class="chtab" data-channel="web" onclick="switchChannelFilter('web')">🌐 เว็บไซต์</button>
+      <button class="chtab" data-channel="shopee" onclick="switchChannelFilter('shopee')">🧡 Shopee</button>
     </div>
     <div class="filter-date-tabs" id="filterDateTabs">
       <button class="dftab active" data-dfilter="all">ทั้งหมด</button>
