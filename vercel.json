@@ -1,5 +1,7 @@
 {
   "rewrites": [
-    { "source": "/designer", "destination": "/From_Designer/designer.html" }
+    { "source": "/designer", "destination": "/From_Designer/designer.html" },
+    { "source": "/admin", "destination": "/api/admin-logout" },
+    { "source": "/admin/", "destination": "/api/admin-logout" }
   ]
 }
