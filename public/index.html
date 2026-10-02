@@ -7581,8 +7581,12 @@ document.addEventListener('DOMContentLoaded',function(){
    return result;
  };
  function syncAdminClass(){window.hlgAdminModeSync()}
- function boot(){ensureBack();ensureLinks();removeBagMenu();syncAdminClass();updateBack()}
- document.addEventListener('DOMContentLoaded',boot); if(document.readyState!=='loading')boot();
+ function boot(){
+    // Clear admin session on every page load/refresh — admin must log in again each visit.
+    try{sessionStorage.removeItem('hlg_admin_session_v2')}catch(e){}
+    ensureBack();ensureLinks();removeBagMenu();syncAdminClass();updateBack()
+  }
+  document.addEventListener('DOMContentLoaded',boot); if(document.readyState!=='loading')boot();
  window.addEventListener('hashchange',()=>{setTimeout(()=>{removeBagMenu();updateBack();syncAdminClass()},30)});
  document.addEventListener('click',()=>setTimeout(syncAdminClass,80),{passive:true});
 })();
@@ -16049,6 +16053,7 @@ window.clearAppliedCoupon=function(){
 // ── Validate Coupon with Backend ──
 window.validateCouponCode=async function(code,category,subtotalSatang){
   const user=getLineUser();
+  const cartItems = typeof cart === 'function' ? cart() : [];
   const res=await fetch('/api/coupons/validate',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -16056,7 +16061,8 @@ window.validateCouponCode=async function(code,category,subtotalSatang){
       coupon_code:code,
       line_user_id:user?user.line_user_id:'',
       category:category||'bag',
-      subtotal_satang:subtotalSatang||0
+      subtotal_satang:subtotalSatang||0,
+      items:cartItems
     })
   });
   const data=await res.json();
