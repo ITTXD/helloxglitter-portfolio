@@ -299,7 +299,7 @@ async function handleApi(req, res) {
     return true;
   }
 
-  // GET /api/settings/storefront — ดึงการตั้งค่าหน้าร้าน (Banners, Notices, Stories, Promo Bar) สาธารณะ
+  // GET /api/settings/storefront — ดึงการตั้งค่าหน้าร้าน (Banners, Notices, Stories, Promo Bar, Payment) สาธารณะ
   if (pathname === '/api/settings/storefront' && method === 'GET') {
     const doc = await fsGetDoc('settings', 'storefront');
     const existing = doc || {};
@@ -314,6 +314,16 @@ async function handleApi(req, res) {
         color: '#f7a4c4',
         speed: 16,
         direction: 'left'
+      },
+      payment: (existing.payment && typeof existing.payment === 'object') ? existing.payment : {
+        id: '004999017222364',
+        lock: true,
+        bank: 'กสิกรไทย',
+        account: '749-2439-414',
+        holder: 'Nichakarn E.',
+        heading: 'ชำระเงิน',
+        note: 'สแกน QR พร้อมเพย์ตามยอดออเดอร์ หรือโอนเข้าบัญชีด้านล่าง',
+        before: 'ตรวจสอบรายการก่อนนะคะ หลังยืนยันออเดอร์จะมีหน้าสรุปยอดพร้อม QR และช่องแนบสลิปให้ค่ะ ♡'
       },
       updated_at: existing.updated_at || null
     };
@@ -344,6 +354,25 @@ async function handleApi(req, res) {
         color: '#f7a4c4',
         speed: 16,
         direction: 'left'
+      }),
+      payment: (body.payment && typeof body.payment === 'object') ? {
+        id: String(body.payment.id || '004999017222364').slice(0, 30),
+        lock: body.payment.lock !== false,
+        bank: String(body.payment.bank || 'กสิกรไทย').slice(0, 60),
+        account: String(body.payment.account || '749-2439-414').slice(0, 30),
+        holder: String(body.payment.holder || 'Nichakarn E.').slice(0, 100),
+        heading: String(body.payment.heading || 'ชำระเงิน').slice(0, 80),
+        note: String(body.payment.note || 'สแกน QR พร้อมเพย์ตามยอดออเดอร์ หรือโอนเข้าบัญชีด้านล่าง').slice(0, 240),
+        before: String(body.payment.before || 'ตรวจสอบรายการก่อนนะคะ หลังยืนยันออเดอร์จะมีหน้าสรุปยอดพร้อม QR และช่องแนบสลิปให้ค่ะ ♡').slice(0, 240)
+      } : (existing.payment || {
+        id: '004999017222364',
+        lock: true,
+        bank: 'กสิกรไทย',
+        account: '749-2439-414',
+        holder: 'Nichakarn E.',
+        heading: 'ชำระเงิน',
+        note: 'สแกน QR พร้อมเพย์ตามยอดออเดอร์ หรือโอนเข้าบัญชีด้านล่าง',
+        before: 'ตรวจสอบรายการก่อนนะคะ หลังยืนยันออเดอร์จะมีหน้าสรุปยอดพร้อม QR และช่องแนบสลิปให้ค่ะ ♡'
       }),
       updated_at: new Date().toISOString(),
     };

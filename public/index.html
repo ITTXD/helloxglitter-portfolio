@@ -6519,15 +6519,19 @@ async function fetchLiveOrders(){
 async function syncStorefrontSettingsToCloud(){
   if(!isAdmin()) return;
   try {
-    var promoBar = null;
+    var promoBar = null, paymentSettings = null;
     try {
       promoBar = JSON.parse(localStorage.getItem('hlg_home_ticker_settings_v2') || 'null');
+    } catch(e) {}
+    try {
+      paymentSettings = JSON.parse(localStorage.getItem('hlg_promptpay_v1') || 'null');
     } catch(e) {}
     var payload = {
       banners: typeof getPromos === 'function' ? getPromos() : [],
       notices: typeof getNotices === 'function' ? getNotices() : [],
       stories: [],
-      promo_bar: promoBar || undefined
+      promo_bar: promoBar || undefined,
+      payment: paymentSettings || undefined
     };
     await fetch('/api/settings/storefront', {
       method: 'PUT',
@@ -6562,6 +6566,13 @@ async function loadStorefrontSettingsFromCloud(){
           if(typeof window.v8RenderHomeTicker === 'function') {
             window.v8RenderHomeTicker();
           }
+        }
+        if(s.payment && typeof s.payment === 'object') {
+          var curPay = {};
+          try { curPay = JSON.parse(localStorage.getItem('hlg_promptpay_v1') || '{}'); } catch(e){}
+          var mergedPay = Object.assign({}, curPay, s.payment);
+          if(!mergedPay.id || !String(mergedPay.id).trim()) mergedPay.id = '004999017222364';
+          localStorage.setItem('hlg_promptpay_v1', JSON.stringify(mergedPay));
         }
       }
     }
@@ -13926,7 +13937,7 @@ window.hrxPostSlip=function(id,file){
   catch(e){rows[index]=before;if(error)error.textContent='ส่งยืนยันไม่สำเร็จ กรุณาลองอีกครั้งค่ะ';if(button){button.disabled=false;button.textContent='✓ ยืนยันการชำระ'}console.error('Payment confirmation failed',e)}
  };
 function renderDone(o){const root=document.getElementById('v8CartContent');if(!root)return;const design=settings(),payment=window.hlgPromptSettings?.()||{},items=o.items||[],sub=items.reduce((n,x)=>n+(Number(x.price)||0)*(Number(x.qty)||1),0),gif=/^(data:image\/gif;base64,|https?:\/\/)/i.test(design.gif)?design.gif:'';
- root.innerHTML=`<div class="hrx-done">${gif?`<img class="hrx-gif" src="${esc(gif)}" alt="ภาพขอบคุณจากร้าน">`:design.gif==='db:thankyou'?'<img class="hrx-gif" id="hrxGifMedia" alt="ภาพขอบคุณจากร้าน" hidden>':''}<div class="hrx-check">✓</div><h2>${esc(design.title)}</h2><p>${esc(design.thanks)}</p><div class="hrx-code">รหัสออเดอร์ของคุณ<b>${esc(o.id)}</b><small>${esc(orderDate(o))}</small></div><div class="hrx-box"><h3>สรุปที่สั่ง</h3>${items.map(x=>`<div class="hrx-product">${x.image?`<img src="${esc(x.image)}" alt="">`:'<span style="flex:0">🛍️</span>'}<span>${esc(x.name||'สินค้า')}${x.variant?'<br><small>'+esc(x.variant)+'</small>':''} × ${Number(x.qty)||1}</span><strong>${money((Number(x.price)||0)*(Number(x.qty)||1))}</strong></div>`).join('')}${line('ราคาสินค้า',money(sub))}${o.tier_promo?.discount?line('ส่วนลด '+o.tier_promo.name,'−'+money(o.tier_promo.discount)):''}${o.tier_promo?.gifts?line('ของแถม',o.tier_promo.gifts):''}${o.tier_promo?.freeShipping?line('โปรส่งฟรี',o.tier_promo.remoteSurcharge?'ฟรีค่าส่งปกติ · พื้นที่ห่างไกล +'+money(o.tier_promo.remoteSurcharge):'ฟรี'):''}${line('ค่าจัดส่ง',money(o.shipping_cost))}${line('ยอดรวม',money(o.total_price),true)}${line('จำนวน',qty(items)+' ชิ้น')}<p class="hrx-mini"><b>จัดส่งไปที่</b><br>${esc(o.customer_address||'').replace(/\n/g,'<br>')}<br>โทร. ${esc(o.customer_phone||'')}</p></div><div class="hrx-box hrx-payment"><h3>${esc(o.payment_heading||payment.heading||'ชำระเงิน')} · ยอด ${money(o.total_price)}</h3><p class="hrx-mini">${esc(o.payment_note||payment.note||'สแกน QR พร้อมเพย์ตามยอดออเดอร์ หรือโอนเข้าบัญชีด้านล่าง')}</p><div class="hrx-qr-frame"><div class="hrx-qr-head">THAI QR PAYMENT · PromptPay</div><img id="hlgReceiptQr" src="https://helloxglitterstore.vercel.app/images/qrcode.jpeg" onerror="handleImgError(this,'QR Code','./images/qrcode.jpeg')" alt="QR สำหรับชำระเงิน"><div id="hlgQrMessage" class="ht-qr-note"></div></div><div class="hrx-bank"><b>${esc(o.payment_bank_name||payment.bank||'กสิกรไทย')} ${esc(o.payment_bank_account||payment.account||'749-2439-414')}</b><span>ชื่อบัญชี ${esc(o.payment_bank_holder||payment.holder||'Nichakarn E.')}</span><button class="hrx-button" type="button" id="hrxCopy">คัดลอกเลขบัญชี</button></div><div class="hrx-slip-box"><h3>แนบสลิปการโอนเงิน</h3><p class="hrx-mini">${o.payment_slip?'แนบสลิปแล้ว · รอร้านตรวจสอบ':'โอนเงินแล้วแนบสลิปเพื่อให้ร้านตรวจสอบค่ะ'}</p><label class="hrx-slip-drop" for="hrxSlipInput">▤<strong>${o.payment_slip?'แตะเพื่อเปลี่ยนสลิป':'แตะเพื่อเลือกรูปสลิป'}</strong><small>JPG, PNG หรือ WEBP ไม่เกิน 5 MB</small><input id="hrxSlipInput" type="file" accept="image/png,image/jpeg,image/webp" hidden></label>${o.payment_slip?`<img class="hrx-slip-preview" src="${esc(o.payment_slip)}" alt="สลิปที่แนบแล้ว">`:''}<div id="hrxSlipError" class="hrx-error"></div></div></div><div class="hrx-actions"><button class="primary" type="button" id="hrxDownload">↓ ${o.payment_verification==='verified'&&o.payment_verified_by==='admin'&&o.payment_verified_at?'ดาวน์โหลดใบรับชำระเงิน PNG':'ดาวน์โหลดใบสรุป PNG'}</button><button type="button" id="hrxTracking">เช็กสถานะการชำระเงิน →</button></div><button class="hrx-button primary" id="hrxConfirmPayment" type="button" ${o.payment_customer_confirmed_at?'disabled':''}>${o.payment_customer_confirmed_at?'✓ ส่งยืนยันการชำระแล้ว':'✓ ยืนยันการชำระ'}</button></div>`;
+ root.innerHTML=`<div class="hrx-done">${gif?`<img class="hrx-gif" src="${esc(gif)}" alt="ภาพขอบคุณจากร้าน">`:design.gif==='db:thankyou'?'<img class="hrx-gif" id="hrxGifMedia" alt="ภาพขอบคุณจากร้าน" hidden>':''}<div class="hrx-check">✓</div><h2>${esc(design.title)}</h2><p>${esc(design.thanks)}</p><div class="hrx-code">รหัสออเดอร์ของคุณ<b>${esc(o.id)}</b><small>${esc(orderDate(o))}</small></div><div class="hrx-box"><h3>สรุปที่สั่ง</h3>${items.map(x=>`<div class="hrx-product">${x.image?`<img src="${esc(x.image)}" alt="">`:'<span style="flex:0">🛍️</span>'}<span>${esc(x.name||'สินค้า')}${x.variant?'<br><small>'+esc(x.variant)+'</small>':''} × ${Number(x.qty)||1}</span><strong>${money((Number(x.price)||0)*(Number(x.qty)||1))}</strong></div>`).join('')}${line('ราคาสินค้า',money(sub))}${o.tier_promo?.discount?line('ส่วนลด '+o.tier_promo.name,'−'+money(o.tier_promo.discount)):''}${o.tier_promo?.gifts?line('ของแถม',o.tier_promo.gifts):''}${o.tier_promo?.freeShipping?line('โปรส่งฟรี',o.tier_promo.remoteSurcharge?'ฟรีค่าส่งปกติ · พื้นที่ห่างไกล +'+money(o.tier_promo.remoteSurcharge):'ฟรี'):''}${line('ค่าจัดส่ง',money(o.shipping_cost))}${line('ยอดรวม',money(o.total_price),true)}${line('จำนวน',qty(items)+' ชิ้น')}<p class="hrx-mini"><b>จัดส่งไปที่</b><br>${esc(o.customer_address||'').replace(/\n/g,'<br>')}<br>โทร. ${esc(o.customer_phone||'')}</p></div><div class="hrx-box hrx-payment"><h3>${esc(o.payment_heading||payment.heading||'ชำระเงิน')} · ยอด ${money(o.total_price)}</h3><p class="hrx-mini">${esc(o.payment_note||payment.note||'สแกน QR พร้อมเพย์ตามยอดออเดอร์ หรือโอนเข้าบัญชีด้านล่าง')}</p><div class="hrx-qr-frame"><div class="hrx-qr-head">THAI QR PAYMENT · PromptPay</div><img id="hlgReceiptQr" class="hlg-dynamic-qr" alt="QR สำหรับชำระเงิน" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'><rect width='220' height='220' fill='%23fff'/><text x='110' y='115' text-anchor='middle' font-size='12' fill='%23c25484' font-family='sans-serif'>กำลังสร้าง QR Code...</text></svg>"><div id="hlgQrMessage" class="ht-qr-note"></div><button type="button" class="hrx-qr-save-btn" id="hrxSaveQrBtn" onclick="window.hlgSaveOrderQr?.()" style="margin:10px auto 4px;border:1.5px solid #dba4bd;background:#fff5f9;color:#b24171;border-radius:999px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px">📥 บันทึก QR Code ลงเครื่อง</button></div><div class="hrx-bank"><b>${esc(o.payment_bank_name||payment.bank||'กสิกรไทย')} ${esc(o.payment_bank_account||payment.account||'749-2439-414')}</b><span>ชื่อบัญชี ${esc(o.payment_bank_holder||payment.holder||'Nichakarn E.')}</span><button class="hrx-button" type="button" id="hrxCopy">คัดลอกเลขบัญชี</button></div><div class="hrx-slip-box"><h3>แนบสลิปการโอนเงิน</h3><p class="hrx-mini">${o.payment_slip?'แนบสลิปแล้ว · รอร้านตรวจสอบ':'โอนเงินแล้วแนบสลิปเพื่อให้ร้านตรวจสอบค่ะ'}</p><label class="hrx-slip-drop" for="hrxSlipInput">▤<strong>${o.payment_slip?'แตะเพื่อเปลี่ยนสลิป':'แตะเพื่อเลือกรูปสลิป'}</strong><small>JPG, PNG หรือ WEBP ไม่เกิน 5 MB</small><input id="hrxSlipInput" type="file" accept="image/png,image/jpeg,image/webp" hidden></label>${o.payment_slip?`<img class="hrx-slip-preview" src="${esc(o.payment_slip)}" alt="สลิปที่แนบแล้ว">`:''}<div id="hrxSlipError" class="hrx-error"></div></div></div><div class="hrx-actions"><button class="primary" type="button" id="hrxDownload">↓ ${o.payment_verification==='verified'&&o.payment_verified_by==='admin'&&o.payment_verified_at?'ดาวน์โหลดใบรับชำระเงิน PNG':'ดาวน์โหลดใบสรุป PNG'}</button><button type="button" id="hrxTracking">เช็กสถานะการชำระเงิน →</button></div><button class="hrx-button primary" id="hrxConfirmPayment" type="button" ${o.payment_customer_confirmed_at?'disabled':''}>${o.payment_customer_confirmed_at?'✓ ส่งยืนยันการชำระแล้ว':'✓ ยืนยันการชำระ'}</button></div>`;
  if(design.gif==='db:thankyou')gifSource().then(src=>{const img=root.querySelector('#hrxGifMedia');if(img&&src){img.src=src;img.hidden=false}}).catch(e=>console.error('GIF display failed',e));window.hlgRenderOrderQr?.(o);root.querySelector('#hrxDownload').onclick=()=>window.hrxDownload(o.id);root.querySelector('#hrxCopy').onclick=()=>window.hrxCopyBank(o.payment_bank_account||payment.account);root.querySelector('#hrxSlipInput').onchange=e=>window.hrxPostSlip(o.id,e.target.files[0]);root.querySelector('#hrxTracking').onclick=()=>showPage('tracking');root.querySelector('#hrxConfirmPayment').onclick=()=>window.hrxConfirmPayment(o.id);root.scrollIntoView({block:'start',behavior:'smooth'});
 }
 // NOTE: the receipt/thank-you design editor moved to /admin/ (window.hlgRenderReceipt).
@@ -13995,7 +14006,7 @@ const put=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value));show
 const KEY='hlg_badges_v1',SET='hlg_site_settings_v1',PAY='hlg_promptpay_v1',COLORS=[['#ffd5e3','#b53f6c'],['#cdebd8','#247b4c'],['#e5d5f3','#7645a2'],['#d0e3f3','#315d8b'],['#fbe6b2','#926521'],['#f5c9cf','#aa4356']];
 const catalog=()=>{let rows=[];try{if(typeof getList==='function')rows=rows.concat(getList().map(x=>({type:'bag',name:x.name,variant:x.size||'',price:Number(x.priceOrig)})))}catch(e){}try{if(typeof STICKER_PATTERNS!=='undefined')rows=rows.concat(STICKER_PATTERNS.map(x=>({type:'sticker',name:x.name,variant:'',price:Number(x.price)})))}catch(e){}rows.push({type:'wallpaper',name:'Wallpaper Special Set',variant:'Digital Download'});return rows};
 const sku=x=>JSON.stringify([x.type,x.name,x.variant||'']);
-const badges=()=>read(KEY,[]),site=()=>read(SET,{}),pay=()=>Object.assign({id:'',lock:true,bank:'กสิกรไทย',account:'749-2439-414',holder:'Nichakarn E.',heading:'ชำระเงิน',note:'สแกน QR พร้อมเพย์ตามยอดออเดอร์ หรือโอนเข้าบัญชีด้านล่าง',before:'ตรวจสอบรายการก่อนนะคะ หลังยืนยันออเดอร์จะมีหน้าสรุปยอดพร้อม QR และช่องแนบสลิปให้ค่ะ ♡'},read(PAY,{}));
+const badges=()=>read(KEY,[]),site=()=>read(SET,{}),pay=()=>{const saved=read(PAY,{}),d={id:'004999017222364',lock:true,bank:'กสิกรไทย',account:'749-2439-414',holder:'Nichakarn E.',heading:'ชำระเงิน',note:'สแกน QR พร้อมเพย์ตามยอดออเดอร์ หรือโอนเข้าบัญชีด้านล่าง',before:'ตรวจสอบรายการก่อนนะคะ หลังยืนยันออเดอร์จะมีหน้าสรุปยอดพร้อม QR และช่องแนบสลิปให้ค่ะ ♡'};const m=Object.assign({},d,saved);if(!m.id||!String(m.id).trim())m.id='004999017222364';return m};
 let editing=-1;
 function panel(id,anchor,label){const tabs=$('#page-admin .admin-tabs'),before=$(anchor);if(!tabs||!before)return null;let p=$('#adminPanel-'+id);if(!p){p=document.createElement('section');p.id='adminPanel-'+id;p.className='admin-panel';before.insertAdjacentElement('afterend',p)}if(!tabs.querySelector('[data-admin-tab="'+id+'"]')){const b=document.createElement('button');b.className='admin-tab';b.dataset.adminTab=id;b.textContent=label;b.onclick=()=>switchAdminTab(id,b);tabs.append(b)}return p}
 function ensure(){panel('badges','#adminPanel-store','🏷️ ป้าย');panel('social','#adminPanel-badges','🔗 ช่องทาง');panel('payment','#adminPanel-social','▦ พร้อมเพย์');panel('settings','#adminPanel-payment','⚙️ ตั้งค่าร้าน')}
@@ -14010,7 +14021,7 @@ function decorate(){const a=badges();const bag=typeof getList==='function'?getLi
 function renderSocial(){const p=$('#adminPanel-social');if(!p)return;p.innerHTML='<div class="ht-card"><h3>ช่องทางติดต่อ</h3><p>เพิ่มลิงก์ Facebook, Instagram, TikTok, Shopee, LINE, เว็บไซต์ และช่องทางอื่น ๆ พร้อมตั้งชื่อปุ่ม ไอคอนหน้าร้านแสดงสีตามแอป</p><button class="ht-primary" id="htOpenSocial">แก้ไขไอคอนและลิงก์</button></div>';$('#htOpenSocial').onclick=()=>window.v8OpenSocialLinkEditor?.()}
 function applySite(){const s=site(),name=s.name||'helloxglitter';document.title=(s.title||name)+' — ร้านค้า';document.querySelectorAll('.navbar-brand,.page:not([data-hlg-collection]) .hero h1').forEach(e=>{e.textContent=name});let icon=$('link[rel="icon"]');if(!icon){icon=document.createElement('link');icon.rel='icon';document.head.append(icon)}if(s.icon)icon.href=s.icon;else icon.remove()}
 function renderSettings(){const p=$('#adminPanel-settings');if(!p)return;const s=site();p.innerHTML=`<div class="ht-card"><h3>ชื่อร้านและไอคอนเว็บ</h3><p>ชื่อร้านจะขึ้นในหัวเว็บ ส่วนชื่อแท็บแสดงในเบราว์เซอร์</p><label>ชื่อหน้าร้าน<input id="htShopName" value="${esc(s.name||'helloxglitter')}" maxlength="60"></label><label>ชื่อแท็บเบราว์เซอร์<input id="htPageTitle" value="${esc(s.title||'helloxglitter — ร้านค้า')}" maxlength="90"></label><label>ไอคอนแอป (Favicon) <input id="htIconUrl" type="url" placeholder="https://.../icon.png" value="${esc(/^https:\/\//.test(s.icon||'')?s.icon:'')}"></label><div class="ht-row"><label>หรืออัปโหลด PNG / JPEG / WebP ไม่เกิน 300 KB<input id="htIconFile" type="file" accept="image/png,image/jpeg,image/webp"></label><img class="ht-icon-preview" id="htIconPreview" src="${esc(s.icon||'')}" alt="ตัวอย่างไอคอน"></div><p>ภาพไอคอนแนะนำสี่เหลี่ยมจัตุรัส 512 × 512 พิกเซล</p><button class="ht-primary" id="htSaveSite">บันทึกตั้งค่าร้าน</button></div>`;let uploaded='';$('#htIconFile').onchange=e=>{const f=e.target.files[0];if(!f)return;if(f.size>300*1024){showToast?.('ใช้รูปไม่เกิน 300 KB ค่ะ');e.target.value='';return}const r=new FileReader();r.onload=()=>{uploaded=String(r.result);$('#htIconPreview').src=uploaded};r.readAsDataURL(f)};$('#htSaveSite').onclick=()=>{const url=$('#htIconUrl').value.trim();if(url&&!/^https:\/\//i.test(url)){showToast?.('ลิงก์ไอคอนต้องเริ่มด้วย https://');return}const v={name:$('#htShopName').value.trim()||'helloxglitter',title:$('#htPageTitle').value.trim()||'helloxglitter — ร้านค้า',icon:uploaded||url};if(put(SET,v))applySite()}}
-function renderPayment(){const p=$('#adminPanel-payment');if(!p)return;const v=pay();p.innerHTML=`<div class="ht-card"><h3>พร้อมเพย์ (QR ตามยอด)</h3><p>กรอกเบอร์โทรพร้อมเพย์ 10 หลักหรือเลขบัตรประชาชน 13 หลักของร้าน เมื่อยืนยันคำสั่งซื้อ ระบบจะสร้าง QR ที่ใส่ยอดรวมของออเดอร์นั้น</p><label>หมายเลขพร้อมเพย์<input id="htPromptId" inputmode="numeric" value="${esc(v.id||'')}" placeholder="เบอร์โทรหรือเลขบัตรประชาชน"></label><label><input type="checkbox" id="htPromptLock" ${v.lock!==false?'checked':''}> ล็อกยอดเงินบน QR</label><h3>ข้อความและบัญชีที่แสดงแก่ลูกค้า</h3><label>ข้อความก่อนยืนยันออเดอร์<input id="htBefore" maxlength="240" value="${esc(v.before)}"></label><label>หัวข้อกล่องชำระเงิน<input id="htHeading" maxlength="80" value="${esc(v.heading)}"></label><label>คำอธิบายใต้ยอด<input id="htNote" maxlength="240" value="${esc(v.note)}"></label><div class="ht-row"><label>ธนาคาร<input id="htBank" maxlength="60" value="${esc(v.bank)}"></label><label>เลขบัญชี<input id="htAccount" inputmode="numeric" maxlength="25" value="${esc(v.account)}"></label></div><label>ชื่อบัญชี<input id="htHolder" maxlength="100" value="${esc(v.holder)}"></label><button class="ht-primary" id="htSavePrompt">บันทึกข้อมูลชำระเงิน</button><p>QR เป็นข้อมูลการโอนเงิน การชำระสำเร็จยังต้องตรวจสลิปจากร้าน ระบบนี้ยังไม่เชื่อมธนาคารเพื่อยืนยันยอดอัตโนมัติ</p></div>`;$('#htSavePrompt').onclick=()=>{const id=$('#htPromptId').value.replace(/\D/g,'');if(id&&![10,13].includes(id.length)){showToast?.('ใช้เบอร์ 10 หลักหรือเลขบัตร 13 หลักค่ะ');return}const account=$('#htAccount').value.trim();if(!/^[0-9 -]{8,25}$/.test(account)){showToast?.('ตรวจเลขบัญชีธนาคารอีกครั้งค่ะ');return}const data={id,lock:$('#htPromptLock').checked,before:$('#htBefore').value.trim(),heading:$('#htHeading').value.trim(),note:$('#htNote').value.trim(),bank:$('#htBank').value.trim(),account,holder:$('#htHolder').value.trim()};if(put(PAY,data))applyCopy()}}
+function renderPayment(){const p=$('#adminPanel-payment');if(!p)return;const v=pay();p.innerHTML=`<div class="ht-card"><h3>พร้อมเพย์ (QR ตามยอด)</h3><p>กรอกเบอร์โทรพร้อมเพย์ 10 หลัก เลขบัตรประชาชน 13 หลัก หรือเลขอ้างอิงบัญชีกสิกร 15 หลักของร้าน เมื่อลูกค้ายืนยันคำสั่งซื้อ ระบบจะสร้าง QR ที่ล็อกยอดรวมของออเดอร์นั้น</p><label>หมายเลขพร้อมเพย์<input id="htPromptId" inputmode="numeric" value="${esc(v.id||'')}" placeholder="เบอร์โทร 10 หลัก, บัตร ปชช. 13 หลัก หรือเลขอ้างอิง 15 หลัก"></label><label><input type="checkbox" id="htPromptLock" ${v.lock!==false?'checked':''}> ล็อกยอดเงินบน QR</label><h3>ข้อความและบัญชีที่แสดงแก่ลูกค้า</h3><label>ข้อความก่อนยืนยันออเดอร์<input id="htBefore" maxlength="240" value="${esc(v.before)}"></label><label>หัวข้อกล่องชำระเงิน<input id="htHeading" maxlength="80" value="${esc(v.heading)}"></label><label>คำอธิบายใต้ยอด<input id="htNote" maxlength="240" value="${esc(v.note)}"></label><div class="ht-row"><label>ธนาคาร<input id="htBank" maxlength="60" value="${esc(v.bank)}"></label><label>เลขบัญชี<input id="htAccount" inputmode="numeric" maxlength="25" value="${esc(v.account)}"></label></div><label>ชื่อบัญชี<input id="htHolder" maxlength="100" value="${esc(v.holder)}"></label><button class="ht-primary" id="htSavePrompt">บันทึกข้อมูลชำระเงิน</button><p>QR เป็นข้อมูลการโอนเงิน การชำระสำเร็จยังต้องตรวจสลิปจากร้าน ระบบนี้ยังไม่เชื่อมธนาคารเพื่อยืนยันยอดอัตโนมัติ</p></div>`;$('#htSavePrompt').onclick=()=>{const id=$('#htPromptId').value.replace(/\D/g,'');if(id&&![10,13,15].includes(id.length)){showToast?.('ใช้เบอร์ 10 หลัก เลขบัตร 13 หลัก หรือเลขอ้างอิง 15 หลักค่ะ');return}const account=$('#htAccount').value.trim();if(!/^[0-9 -]{8,25}$/.test(account)){showToast?.('ตรวจเลขบัญชีธนาคารอีกครั้งค่ะ');return}const data={id:id||'004999017222364',lock:$('#htPromptLock').checked,before:$('#htBefore').value.trim(),heading:$('#htHeading').value.trim(),note:$('#htNote').value.trim(),bank:$('#htBank').value.trim(),account,holder:$('#htHolder').value.trim()};if(put(PAY,data)){applyCopy();if(typeof syncStorefrontSettingsToCloud==='function')syncStorefrontSettingsToCloud()}}}}
 function applyCopy(){const el=$('.v8cf-next-step');if(el)el.textContent=pay().before}
 function render(tab){if(tab==='badges')renderBadges();if(tab==='social')renderSocial();if(tab==='payment')renderPayment();if(tab==='settings')renderSettings()}
 const oldSwitch=window.switchAdminTab;window.switchAdminTab=function(tab,btn){ensure();const result=oldSwitch?.apply(this,arguments);render(tab);return result};
@@ -15276,16 +15287,47 @@ function load(name){name=name.replace(/^\.\//,'');if(cache[name])return cache[na
 const QRCode=load('index');
 const tlv=(tag,value)=>tag+String(value.length).padStart(2,'0')+value;
 function payload(id,amount){
- const phone=id.length===10?'0066'+id.slice(1):id;
- const account=tlv(id.length===10?'01':'02',phone);
+ const s=String(id||'').replace(/\D/g,'');
+ let subTag='01',target=s;
+ if(s.length===10){subTag='01';target='0066'+s.slice(1)}
+ else if(s.length===13){subTag='02';target=s}
+ else if(s.length===15){subTag='03';target=s}
+ else{subTag='03';target='004999017222364'}
+ const account=tlv(subTag,target);
  let data='000201010212'+tlv('29',tlv('00','A000000677010111')+account)+'5303764'+'5802TH';
  if(amount!==null)data+=tlv('54',Number(amount).toFixed(2));
  data+='6304';let crc=0xffff;for(let i=0;i<data.length;i++){crc^=data.charCodeAt(i)<<8;for(let j=0;j<8;j++)crc=(crc&0x8000)?((crc<<1)^0x1021)&0xffff:(crc<<1)&0xffff}
  return data+crc.toString(16).toUpperCase().padStart(4,'0')
 }
 function image(data){const qr=new QRCode(0,1);qr.addData(data);qr.make();const n=qr.getModuleCount(),scale=5,pad=4,canvas=document.createElement('canvas');canvas.width=canvas.height=(n+pad*2)*scale;const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#000';for(let y=0;y<n;y++)for(let x=0;x<n;x++)if(qr.isDark(y,x))ctx.fillRect((x+pad)*scale,(y+pad)*scale,scale,scale);return canvas.toDataURL('image/png')}
-window.hlgRenderOrderQr=function(order){const img=document.getElementById('hlgReceiptQr'),note=document.getElementById('hlgQrMessage');if(!img)return;let cfg={};try{cfg=window.hlgPromptSettings?.()||{}}catch(e){}const id=String(order.payment_promptpay_id||cfg.id||'').replace(/\D/g,'');if(![10,13].includes(id.length)){if(note)note.textContent='ร้านยังไม่ได้ตั้งค่าพร้อมเพย์ กรุณาใช้บัญชีธนาคารด้านบน';return}
- try{const amount=(order.payment_qr_lock===false||(order.payment_qr_lock===undefined&&cfg.lock===false))?null:Number(order.total_price);if(amount!==null&&(!Number.isFinite(amount)||amount<0))throw Error('amount');img.src=image(payload(id,amount));img.classList.add('hlg-dynamic-qr');img.onerror=null;if(note)note.textContent=amount===null?'QR พร้อมเพย์ · ลูกค้ากรอกยอดเอง':'QR พร้อมเพย์ล็อกยอด '+amount.toLocaleString('th-TH')+' ฿ · ออเดอร์ '+order.id}catch(e){console.error('PromptPay QR failed',e);if(note)note.textContent='สร้าง QR ไม่สำเร็จ กรุณาโอนด้วยเลขบัญชีธนาคารด้านบน'}
+window.hlgRenderOrderQr=function(order){
+ const img=document.getElementById('hlgReceiptQr'),note=document.getElementById('hlgQrMessage');
+ if(!img)return;
+ let cfg={};try{cfg=window.hlgPromptSettings?.()||{}}catch(e){}
+ const rawId=String(order?.payment_promptpay_id||cfg.id||'004999017222364').replace(/\D/g,'');
+ const id=[10,13,15].includes(rawId.length)?rawId:'004999017222364';
+ try{
+  const amount=(order?.payment_qr_lock===false||(order?.payment_qr_lock===undefined&&cfg.lock===false))?null:Number(order?.total_price||0);
+  if(amount!==null&&(!Number.isFinite(amount)||amount<0))throw Error('amount');
+  img.src=image(payload(id,amount));
+  img.classList.add('hlg-dynamic-qr');
+  img.onerror=null;
+  if(note)note.textContent=amount===null?'QR พร้อมเพย์ · ลูกค้ากรอกยอดเอง':'QR พร้อมเพย์ล็อกยอด '+amount.toLocaleString('th-TH')+' ฿ · ออเดอร์ '+(order?.id||'');
+ }catch(e){
+  console.error('PromptPay QR failed',e);
+  if(note)note.textContent='สร้าง QR ไม่สำเร็จ กรุณาโอนด้วยเลขบัญชีธนาคารด้านบน'
+ }
+};
+window.hlgSaveOrderQr=function(){
+ const img=document.getElementById('hlgReceiptQr');
+ if(!img||!img.src||!img.src.startsWith('data:image/png'))return;
+ const a=document.createElement('a');
+ a.href=img.src;
+ a.download='ThaiQR_helloxglitter.png';
+ document.body.appendChild(a);
+ a.click();
+ a.remove();
+ showToast?.('บันทึกรูป QR Code แล้ว ♡');
 };
 window.hlgPromptPayload=payload;
 })();
@@ -15294,9 +15336,11 @@ window.hlgPromptPayload=payload;
 .v8cf-next-step{background:#fff4f8;border:1px solid #f3d4e1;border-radius:12px;padding:12px;margin:12px 0;color:#a55377;text-align:center;font-size:12px}
 .hrx-done .hrx-gif{width:min(350px,100%);max-height:260px;object-fit:contain;background:#fff;border-radius:17px}
 .hrx-done .hrx-payment{background:#fff0f6;border:1px solid #f1cbda;text-align:center}
-.hrx-done .hrx-qr-frame{background:white;border:1px solid #efb9ce;border-radius:15px;max-width:320px;margin:12px auto 18px;padding:0 0 14px;overflow:hidden}
-.hrx-done .hrx-qr-head{background:#235179;color:white;padding:12px;font-size:11px;font-weight:900;letter-spacing:.03em}
-.hrx-done .hrx-qr-frame img{width:min(230px,82%);max-width:none;margin:14px auto 4px;image-rendering:pixelated}
+.hrx-done .hrx-qr-frame{background:white;border:1.5px solid #ebb0c9;border-radius:18px;max-width:320px;margin:12px auto 18px;padding:0 0 14px;overflow:hidden;box-shadow:0 6px 20px rgba(216,92,146,0.12)}
+.hrx-done .hrx-qr-head{background:#1b446c;color:white;padding:12px 14px;font-size:12px;font-weight:900;letter-spacing:.04em;text-transform:uppercase}
+.hrx-done .hrx-qr-frame img{width:min(230px,82%);max-width:none;margin:14px auto 6px;image-rendering:pixelated;display:block;border-radius:8px}
+.hrx-done .ht-qr-note{font-size:12px;color:#9b4b73;font-weight:700;margin:6px 12px 10px;text-align:center;line-height:1.4}
+.hrx-done .hrx-qr-save-btn:hover{background:#ffeaf2!important;border-color:#c8487b!important}
 .hrx-done .hrx-bank{display:grid;justify-items:center;gap:6px;margin:18px 0;color:#a74873}
 .hrx-done .hrx-bank span{font-size:11px;color:#977989}
 .hrx-done .hrx-slip-box{border-top:1px solid #eabed1;margin:20px auto 0;padding-top:18px}
