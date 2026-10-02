@@ -5223,12 +5223,14 @@ function ensureTickerEditor(){
     localStorage.setItem(TICKER_KEY,value);
     close();
     renderTicker();
+    if(typeof syncStorefrontSettingsToCloud==='function') syncStorefrontSettingsToCloud();
     if(typeof window.showToast==='function')showToast('บันทึกข้อความวิ่งแล้ว ✓')
   };
   return modal
 }
 function openTickerEditor(){
   if(!isAdmin())return;
+  if(typeof window.v8OpenHomeTickerEditor==='function') return window.v8OpenHomeTickerEditor();
   const modal=ensureTickerEditor();
   modal.querySelector('#v8TickerInput').value=tickerText();
   modal.classList.add('show');
@@ -5539,6 +5541,17 @@ if(document.readyState!=='loading'){
   </div>
 </div>
 
+<!-- GLOBAL PROMOTION BAR (SHOWS ON EVERY PAGE) -->
+<div id="v8GlobalTickerShell" class="v8-global-ticker-shell">
+  <div id="v8HomeTicker" class="v8-home-ticker">
+    <div class="v8-home-ticker-label">PROMO</div>
+    <div class="v8-home-ticker-viewport">
+      <div id="v8HomeTickerTrack" class="v8-home-ticker-track"></div>
+    </div>
+    <button id="v8HomeTickerEdit" class="v8-home-ticker-edit" type="button" aria-label="แก้แถบโปรโมชัน">✎</button>
+  </div>
+</div>
+
 <!-- AUTO PROMOTION CAROUSEL -->
 <section class="promo-carousel-shell" id="promoCarouselShell" aria-label="โปรโมชั่น">
   <div class="promo-carousel" id="promoCarousel">
@@ -5553,13 +5566,6 @@ if(document.readyState!=='loading'){
 <!-- V4 HOME -->
 <div id="page-home" class="page active">
   <div class="v5-home">
-    <div id="v8HomeTicker" class="v8-home-ticker">
-      <div class="v8-home-ticker-label">NOTICE</div>
-      <div class="v8-home-ticker-viewport">
-        <div id="v8HomeTickerTrack" class="v8-home-ticker-track"></div>
-      </div>
-      <button id="v8HomeTickerEdit" class="v8-home-ticker-edit" type="button" aria-label="แก้ข้อความวิ่ง">✎</button>
-    </div>
     <div class="v5-banner" id="v5Banner"><div class="v5-banner-track" id="v5BannerTrack"></div><div class="v5-banner-dots" id="v5BannerDots"></div></div>
     <div class="v5-section-head"><h2>ไฮไลท์สตอรี่ ✨</h2></div>
     <div class="v5-stories"></div>
@@ -6513,10 +6519,15 @@ async function fetchLiveOrders(){
 async function syncStorefrontSettingsToCloud(){
   if(!isAdmin()) return;
   try {
+    var promoBar = null;
+    try {
+      promoBar = JSON.parse(localStorage.getItem('hlg_home_ticker_settings_v2') || 'null');
+    } catch(e) {}
     var payload = {
       banners: typeof getPromos === 'function' ? getPromos() : [],
       notices: typeof getNotices === 'function' ? getNotices() : [],
-      stories: []
+      stories: [],
+      promo_bar: promoBar || undefined
     };
     await fetch('/api/settings/storefront', {
       method: 'PUT',
@@ -6542,6 +6553,15 @@ async function loadStorefrontSettingsFromCloud(){
         if(Array.isArray(s.banners) && s.banners.length > 0) {
           localStorage.setItem(HLG_PROMOS_KEY, JSON.stringify(s.banners));
           if(typeof renderPromoCarousel === 'function') renderPromoCarousel();
+        }
+        if(s.promo_bar && typeof s.promo_bar === 'object') {
+          localStorage.setItem('hlg_home_ticker_settings_v2', JSON.stringify(s.promo_bar));
+          if(s.promo_bar.text !== undefined) {
+            localStorage.setItem('hlg_home_ticker_v1', s.promo_bar.text || '');
+          }
+          if(typeof window.v8RenderHomeTicker === 'function') {
+            window.v8RenderHomeTicker();
+          }
         }
       }
     }
@@ -11024,8 +11044,41 @@ if(document.readyState!=='loading'){
 
 
 <style id="v8-ticker-full-controls-css">
+.v8-global-ticker-shell{
+  max-width:900px;
+  margin:10px auto 4px;
+  padding:0 18px;
+  box-sizing:border-box;
+  position:relative;
+  z-index:90;
+  transition:all .2s ease;
+}
+@media(max-width:640px){
+  .v8-global-ticker-shell{
+    padding:0 10px;
+    margin:8px auto 2px;
+  }
+}
+.v8-global-ticker-shell.v8-ticker-hidden,
 #v8HomeTicker.v8-ticker-hidden{
   display:none!important;
+  margin:0!important;
+  padding:0!important;
+  height:0!important;
+  min-height:0!important;
+  border:none!important;
+}
+#v8HomeTicker.v8-ticker-admin-preview-off{
+  border:1.5px dashed #f2a8c3!important;
+  background:rgba(255,248,251,0.92)!important;
+  cursor:pointer;
+}
+#v8HomeTicker.v8-ticker-admin-preview-off .v8-home-ticker-label{
+  background:#a88c98!important;
+}
+#v8HomeTicker.v8-ticker-admin-preview-off .v8-home-ticker-copy{
+  color:#b0788e!important;
+  font-style:italic;
 }
 #v8HomeTicker{
   --ticker-rgb:247,164,196;
@@ -11122,8 +11175,8 @@ const TEXT_KEY='hlg_home_ticker_v1';
 function defaults(){
   return {
     enabled:true,
-    label:'NOTICE',
-    text:localStorage.getItem(TEXT_KEY)||'เปิดรับคิวล็อตนี้แล้ว ✨ ทดลองสินค้าและเช็คคิวรายละเอียดได้เลยค่ะ ♡',
+    label:'PROMO',
+    text:localStorage.getItem(TEXT_KEY)||'',
     color:'#f7a4c4',
     speed:16,
     direction:'left'
@@ -11153,24 +11206,56 @@ function esc(v){
 
 function apply(){
   const t=load();
+  const shell=document.getElementById('v8GlobalTickerShell');
   const root=document.getElementById('v8HomeTicker');
   const label=document.querySelector('#v8HomeTicker .v8-home-ticker-label');
   const track=document.getElementById('v8HomeTickerTrack');
   const edit=document.getElementById('v8HomeTickerEdit');
   if(!root||!track)return;
 
-  root.classList.toggle('v8-ticker-hidden',!t.enabled);
+  const adm=isAdmin();
+  const text=(t.text||'').trim();
+  const hasPromo=Boolean(t.enabled && text);
+
+  if(!hasPromo){
+    if(!adm){
+      // Customers see NOTHING (0px height, completely hidden)
+      if(shell)shell.classList.add('v8-ticker-hidden');
+      root.classList.add('v8-ticker-hidden');
+      root.classList.remove('v8-ticker-admin-preview-off');
+      if(edit)edit.style.display='none';
+      return;
+    } else {
+      // Admins see dashed placeholder with edit button so they can configure/enable it
+      if(shell)shell.classList.remove('v8-ticker-hidden');
+      root.classList.remove('v8-ticker-hidden');
+      root.classList.add('v8-ticker-admin-preview-off');
+      if(label)label.textContent='PROMO OFF';
+      track.innerHTML='<span class="v8-home-ticker-copy" style="cursor:pointer">ยังไม่มีโปรโมชัน (ลูกค้าไม่เห็นแถบนี้) · คลิก ✎ เพื่อแก้ไขและเปิดใช้งาน</span>';
+      track.style.animation='none';
+      if(edit)edit.style.display='grid';
+      root.onclick=(e)=>{ if(e.target===edit||edit.contains(e.target))return; openEditor(); };
+      return;
+    }
+  }
+
+  // Active promo
+  if(shell)shell.classList.remove('v8-ticker-hidden');
+  root.classList.remove('v8-ticker-hidden');
+  root.classList.remove('v8-ticker-admin-preview-off');
+  root.onclick=null;
+
   const rgb=hexToRgb(t.color).join(',');
   root.style.setProperty('--ticker-solid',t.color);
   root.style.setProperty('--ticker-rgb',rgb);
   root.dataset.direction=t.direction==='right'?'right':'left';
 
-  if(label)label.textContent=t.label||'NOTICE';
-  const text=t.text||'';
+  if(label)label.textContent=t.label||'PROMO';
   track.innerHTML='<span class="v8-home-ticker-copy">'+esc(text)+'</span><span class="v8-home-ticker-copy" aria-hidden="true">'+esc(text)+'</span>';
+  track.style.animation='';
   track.style.animationDuration=Math.max(6,Math.min(60,Number(t.speed)||16))+'s';
 
-  if(edit)edit.style.display=isAdmin()?'grid':'none';
+  if(edit)edit.style.display=adm?'grid':'none';
 }
 
 function ensureEditor(){
@@ -11179,25 +11264,25 @@ function ensureEditor(){
     modal=document.createElement('div');
     modal.id='v8TickerEditor';
     modal.className='';
-    document.body.appendChild(modal)
+    document.body.appendChild(modal);
   }
 
   modal.innerHTML=`
     <div class="v8-ticker-editor-card">
-      <h3>ตั้งค่าประกาศวิ่งหน้าแรก</h3>
+      <h3>ตั้งค่าแถบโปรโมชัน (แสดงทุกหน้า)</h3>
       <div class="v8-ticker-control-grid">
         <div class="full">
-          <label>ข้อความประกาศ</label>
-          <textarea id="v8TickerText"></textarea>
+          <label>ข้อความโปรโมชัน</label>
+          <textarea id="v8TickerText" placeholder="เช่น ซื้อ Sticker ครบ 300 ฿ รับคูปองกระเป๋า 100 ฿ ทันที! ♡"></textarea>
         </div>
 
         <div>
           <label>คำป้ายด้านซ้าย</label>
-          <input id="v8TickerLabel" maxlength="20" placeholder="NOTICE">
+          <input id="v8TickerLabel" maxlength="20" placeholder="PROMO">
         </div>
 
         <div>
-          <label>สี</label>
+          <label>สีแถบ</label>
           <div class="v8-ticker-color-row">
             <input id="v8TickerColor" type="color">
             <input id="v8TickerColorHex" maxlength="7" placeholder="#f7a4c4">
@@ -11205,7 +11290,7 @@ function ensureEditor(){
         </div>
 
         <div>
-          <label>ความเร็ว</label>
+          <label>ความเร็วตัววิ่ง</label>
           <select id="v8TickerSpeed">
             <option value="24">ช้า</option>
             <option value="16">ปกติ</option>
@@ -11215,7 +11300,7 @@ function ensureEditor(){
         </div>
 
         <div>
-          <label>ทิศทาง</label>
+          <label>ทิศทางตัววิ่ง</label>
           <select id="v8TickerDirection">
             <option value="left">← วิ่งไปทางซ้าย</option>
             <option value="right">วิ่งไปทางขวา →</option>
@@ -11224,7 +11309,7 @@ function ensureEditor(){
 
         <div class="full v8-ticker-toggle-row">
           <input id="v8TickerEnabled" type="checkbox">
-          <label for="v8TickerEnabled" style="margin:0">แสดงแถบประกาศวิ่งบนหน้าแรก</label>
+          <label for="v8TickerEnabled" style="margin:0">เปิดแสดงแถบโปรโมชันทุกหน้า (ถ้าปิดหรือข้อความว่าง ลูกค้าจะไม่เห็นแถบนี้)</label>
         </div>
       </div>
 
@@ -11237,7 +11322,7 @@ function ensureEditor(){
   const cfg=load();
   const q=id=>modal.querySelector(id);
   q('#v8TickerText').value=cfg.text||'';
-  q('#v8TickerLabel').value=cfg.label||'NOTICE';
+  q('#v8TickerLabel').value=cfg.label||'PROMO';
   q('#v8TickerColor').value=cfg.color||'#f7a4c4';
   q('#v8TickerColorHex').value=cfg.color||'#f7a4c4';
   q('#v8TickerSpeed').value=String(cfg.speed||16);
@@ -11258,7 +11343,7 @@ function ensureEditor(){
     if(!/^#[0-9a-fA-F]{6}$/.test(color))color=q('#v8TickerColor').value||'#f7a4c4';
     const next={
       enabled:q('#v8TickerEnabled').checked,
-      label:(q('#v8TickerLabel').value||'NOTICE').trim()||'NOTICE',
+      label:(q('#v8TickerLabel').value||'PROMO').trim()||'PROMO',
       text:(q('#v8TickerText').value||'').trim(),
       color,
       speed:Number(q('#v8TickerSpeed').value)||16,
@@ -11267,16 +11352,19 @@ function ensureEditor(){
     save(next);
     close();
     apply();
-    if(typeof window.showToast==='function')showToast('บันทึกประกาศวิ่งแล้ว ✓')
+    if(typeof syncStorefrontSettingsToCloud==='function') {
+      syncStorefrontSettingsToCloud();
+    }
+    if(typeof window.showToast==='function')showToast('บันทึกแถบโปรโมชันแล้ว ✓');
   };
-  return modal
+  return modal;
 }
 
 function openEditor(){
   if(!isAdmin())return;
   const modal=ensureEditor();
   modal.classList.add('show');
-  setTimeout(()=>modal.querySelector('#v8TickerText')?.focus(),20)
+  setTimeout(()=>modal.querySelector('#v8TickerText')?.focus(),20);
 }
 
 function bind(){
@@ -11297,8 +11385,8 @@ if(typeof oldShow==='function'){
   window.showPage=function(){
     const r=oldShow.apply(this,arguments);
     setTimeout(bind,30);
-    return r
-  }
+    return r;
+  };
 }
 
 if(document.readyState!=='loading')bind();

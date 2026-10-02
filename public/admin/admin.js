@@ -1899,7 +1899,7 @@ async function deleteProductRow(id) {
       <label>ซื้อ Sticker ครบยอด (บาท หลังหักส่วนลด ก่อนค่าส่ง)<input id="hcThreshold" type="text" inputmode="decimal" placeholder="300.90"></label>
       <label>มูลค่าคูปองส่วนลด (บาท)<input id="hcDiscount" type="text" inputmode="decimal" placeholder="100.00"></label>
       <label>วันและเวลาหมดอายุ (เวลาไทย)<input id="hcExpiry" type="datetime-local"></label>
-      <label>ใช้กับหมวดหมู่สินค้า<select id="hcCategory"><option value="bag">กระเป๋า (Bag)</option></select></label>
+      <label>ใช้กับหมวดหมู่สินค้า<select id="hcCategory"><option value="bag">กระเป๋า (Bag)</option><option value="sticker">สติกเกอร์ (Sticker)</option><option value="wallpaper">วอลเปเปอร์ (Wallpaper)</option><option value="all">ใช้ได้กับสินค้าทุกหมวดหมู่ (All)</option></select></label>
       <label>จำนวนครั้งที่ใช้ได้ต่อคูปอง<select id="hcUses"><option value="1">ใช้ได้ครั้งเดียว (Single-use)</option></select></label>
     </div>
     <div id="hcPreview" class="hlg-coupon-preview"></div>
@@ -1916,16 +1916,18 @@ async function deleteProductRow(id) {
     $('#hcThreshold').value = couponBaht(v.thresholdSatang || v.threshold_satang);
     $('#hcDiscount').value = couponBaht(v.discountSatang || v.discount_satang);
     $('#hcExpiry').value = (v.expiresAt || v.expires_at || COUPON_DEFAULTS.expiresAt).slice(0, 16);
-    $('#hcCategory').value = 'bag';
+    $('#hcCategory').value = v.redeemCategory || v.redeem_category || 'bag';
 
     var update = function() {
       var threshold = couponSatang($('#hcThreshold').value), discount = couponSatang($('#hcDiscount').value);
       var title = $('#hcTitle').value.trim() || COUPON_DEFAULTS.title;
+      var catNames = {'bag':'กระเป๋า','sticker':'สติกเกอร์','wallpaper':'วอลเปเปอร์','all':'ทุกหมวดหมู่'};
+      var catName = catNames[$('#hcCategory').value] || $('#hcCategory').value;
       $('#hcPreview').textContent = threshold === null || discount === null
         ? 'กรอกจำนวนเงินเป็นบาท ทศนิยมได้ไม่เกิน 2 ตำแหน่ง'
-        : `${title} ♡ ซื้อ Sticker ครบ ${couponBaht(threshold)} ฿ รับส่วนลด ${couponBaht(discount)} ฿ ใช้กับกระเป๋า 1 ครั้ง หมดอายุ ${$('#hcExpiry').value.replace('T', ' ')} น. (เวลาไทย)`;
+        : `${title} ♡ ซื้อ Sticker ครบ ${couponBaht(threshold)} ฿ รับส่วนลด ${couponBaht(discount)} ฿ ใช้กับ${catName} 1 ครั้ง หมดอายุ ${$('#hcExpiry').value.replace('T', ' ')} น. (เวลาไทย)`;
     };
-    ['hcTitle', 'hcThreshold', 'hcDiscount', 'hcExpiry'].forEach(function(id) { var el = $('#' + id); if (el) el.addEventListener('input', update); });
+    ['hcTitle', 'hcThreshold', 'hcDiscount', 'hcExpiry', 'hcCategory'].forEach(function(id) { var el = $('#' + id); if (el) el.addEventListener('input', update); });
     update();
 
     $('#hcSave').onclick = async function() {
@@ -1940,7 +1942,7 @@ async function deleteProductRow(id) {
         discountSatang: discountSatang,
         expiresAt: expiresAt,
         earnCategory: 'sticker',
-        redeemCategory: 'bag',
+        redeemCategory: $('#hcCategory').value,
         maxUses: 1
       };
       var saveBtn = $('#hcSave'), saveMsg = $('#hcSaveMsg');

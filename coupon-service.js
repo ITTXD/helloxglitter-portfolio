@@ -89,8 +89,8 @@ async function saveCouponCampaign(db, data) {
     threshold_amount: Number((thresholdSatang / 100).toFixed(2)),
     discount_satang: discountSatang,
     discount_amount: Number((discountSatang / 100).toFixed(2)),
-    earn_category: 'sticker',
-    redeem_category: 'bag',
+    earn_category: data.earnCategory || data.earn_category || 'sticker',
+    redeem_category: data.redeemCategory || data.redeem_category || 'bag',
     max_uses: 1,
     expires_at: expiresAt,
     active: data.active !== false,
@@ -285,22 +285,38 @@ async function validateCouponForCheckout({ db, code, lineUserId, items, subtotal
     return { valid: false, error: 'คูปองนี้หมดอายุการใช้งานแล้วค่ะ' };
   }
 
-  // Check eligible category (e.g. bag)
-  if (coupon.redeem_category === 'bag') {
-    const hasBag = Array.isArray(items) && items.some(item => {
+  // Check eligible category
+  if (coupon.redeem_category && coupon.redeem_category !== 'all') {
+    const hasCategory = Array.isArray(items) && items.some(item => {
+      let type = '';
+      let name = '';
       if (typeof item === 'string') {
-        const lower = item.toLowerCase();
-        return !lower.includes('sticker') && !lower.includes('wallpaper');
+        name = item.toLowerCase();
+      } else if (item && typeof item === 'object') {
+        type = (item.type || item.category || '').toLowerCase();
+        name = (item.name || item.title || '').toLowerCase();
       }
-      if (item && typeof item === 'object') {
-        const type = item.type || '';
-        const name = (item.name || '').toLowerCase();
+      
+      if (coupon.redeem_category === 'bag') {
         return type === 'bag' || (!type && !name.includes('sticker') && !name.includes('wallpaper'));
+      }
+      if (coupon.redeem_category === 'sticker') {
+        return type === 'sticker' || name.includes('sticker') || name.includes('สติ๊กเกอร์') || name.includes('สติกเกอร์');
+      }
+      if (coupon.redeem_category === 'wallpaper') {
+        return type === 'wallpaper' || name.includes('wallpaper') || name.includes('วอลเปเปอร์');
       }
       return false;
     });
-    if (!hasBag && items && items.length > 0) {
-      return { valid: false, error: 'คูปองนี้ใช้ได้เฉพาะสินค้าหมวดกระเป๋าผ้าเท่านั้นค่ะ' };
+
+    if (!hasCategory && items && items.length > 0) {
+      const categoryNames = {
+        'bag': 'กระเป๋าผ้า',
+        'sticker': 'สติกเกอร์',
+        'wallpaper': 'วอลเปเปอร์'
+      };
+      const catName = categoryNames[coupon.redeem_category] || coupon.redeem_category;
+      return { valid: false, error: `คูปองนี้ใช้ได้เฉพาะสินค้าหมวด${catName}เท่านั้นค่ะ` };
     }
   }
 

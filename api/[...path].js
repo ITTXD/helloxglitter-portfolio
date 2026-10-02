@@ -200,15 +200,38 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // GET /api/settings/storefront — ดึงการตั้งค่าหน้าร้าน (Banners, Notices, Stories) สาธารณะ
+    // GET /api/settings/storefront — ดึงการตั้งค่าหน้าร้าน (Banners, Notices, Stories, Promo Bar) สาธารณะ
     if (pathname === '/api/settings/storefront' && method === 'GET') {
       try {
         const d = await getDoc(doc(db, 'settings', 'storefront'));
-        const settings = d.exists() ? d.data() : { banners: [], notices: [], stories: [], updated_at: null };
+        const existing = d.exists() ? d.data() : {};
+        const settings = {
+          banners: Array.isArray(existing.banners) ? existing.banners : [],
+          notices: Array.isArray(existing.notices) ? existing.notices : [],
+          stories: Array.isArray(existing.stories) ? existing.stories : [],
+          promo_bar: (existing.promo_bar && typeof existing.promo_bar === 'object') ? existing.promo_bar : {
+            enabled: true,
+            label: 'PROMO',
+            text: '',
+            color: '#f7a4c4',
+            speed: 16,
+            direction: 'left'
+          },
+          updated_at: existing.updated_at || null
+        };
         sendJson(res, 200, { success: true, settings });
       } catch (err) {
         console.error('Error fetching storefront settings:', err);
-        sendJson(res, 200, { success: true, settings: { banners: [], notices: [], stories: [], updated_at: null } });
+        sendJson(res, 200, {
+          success: true,
+          settings: {
+            banners: [],
+            notices: [],
+            stories: [],
+            promo_bar: { enabled: true, label: 'PROMO', text: '', color: '#f7a4c4', speed: 16, direction: 'left' },
+            updated_at: null
+          }
+        });
       }
       return;
     }
@@ -217,10 +240,32 @@ module.exports = async (req, res) => {
     if (pathname === '/api/settings/storefront' && method === 'PUT') {
       if (!isAdmin(req)) { send401(res); return; }
       const body = await readBody(req);
+      let existing = {};
+      try {
+        const d = await getDoc(doc(db, 'settings', 'storefront'));
+        if (d.exists()) existing = d.data() || {};
+      } catch (e) {
+        console.warn('Failed to read existing settings before merge:', e);
+      }
       const settings = {
-        banners: Array.isArray(body.banners) ? body.banners : [],
-        notices: Array.isArray(body.notices) ? body.notices : [],
-        stories: Array.isArray(body.stories) ? body.stories : [],
+        banners: Array.isArray(body.banners) ? body.banners : (Array.isArray(existing.banners) ? existing.banners : []),
+        notices: Array.isArray(body.notices) ? body.notices : (Array.isArray(existing.notices) ? existing.notices : []),
+        stories: Array.isArray(body.stories) ? body.stories : (Array.isArray(existing.stories) ? existing.stories : []),
+        promo_bar: (body.promo_bar && typeof body.promo_bar === 'object') ? {
+          enabled: body.promo_bar.enabled !== false,
+          label: String(body.promo_bar.label || 'PROMO').slice(0, 50),
+          text: String(body.promo_bar.text || '').slice(0, 500),
+          color: String(body.promo_bar.color || '#f7a4c4').slice(0, 20),
+          speed: Math.max(6, Math.min(60, Number(body.promo_bar.speed) || 16)),
+          direction: body.promo_bar.direction === 'right' ? 'right' : 'left'
+        } : (existing.promo_bar || {
+          enabled: true,
+          label: 'PROMO',
+          text: '',
+          color: '#f7a4c4',
+          speed: 16,
+          direction: 'left'
+        }),
         updated_at: new Date().toISOString(),
       };
       await setDoc(doc(db, 'settings', 'storefront'), settings);
