@@ -1283,6 +1283,14 @@ function renderCategoryList() {
       titleRow.append(builtinBadge);
     }
 
+    const homeBadge = document.createElement("span");
+    const onHome = c.show_on_home !== false;
+    homeBadge.textContent = onHome ? "แสดงบนหน้าแรก 💗" : "ซ่อนจากหน้าแรก";
+    homeBadge.style.cssText = onHome
+      ? "font-size:10px;padding:2px 6px;border-radius:6px;background:#e8f7ee;color:#1e7e34;font-weight:700;"
+      : "font-size:10px;padding:2px 6px;border-radius:6px;background:#f1f3f5;color:#868e96;";
+    titleRow.append(homeBadge);
+
     const descEl = document.createElement("small");
     const count = customProducts.filter(p => (p.category_id || p.type) === c.id).length;
     descEl.textContent = (c.description || "ไม่มีคำอธิบาย") + " · มี " + count + " สินค้า";
@@ -1291,7 +1299,14 @@ function renderCategoryList() {
     info.append(titleRow, descEl);
 
     const actions = document.createElement("div");
-    actions.style.cssText = "display:flex;gap:6px;align-items:center;";
+    actions.style.cssText = "display:flex;gap:6px;align-items:center;flex-wrap:wrap;";
+
+    const viewBtn = document.createElement("a");
+    viewBtn.textContent = "ดูหน้าร้าน ↗";
+    viewBtn.href = "/?page=" + encodeURIComponent(c.id);
+    viewBtn.target = "_blank";
+    viewBtn.style.cssText = "text-decoration:none;border-radius:8px;padding:7px 12px;background:#f3f0ff;color:#6b21a8;font:inherit;font-size:12px;font-weight:600;display:inline-flex;align-items:center;";
+    actions.append(viewBtn);
 
     const editBtn = document.createElement("button");
     editBtn.textContent = "แก้ไข";
@@ -1375,6 +1390,30 @@ async function saveCategory(e) {
       throw Error(data.error || 'บันทึกหมวดหมู่ไม่สำเร็จ');
     }
 
+    const targetCatId = (data.category && data.category.id) || id;
+    if (targetCatId) {
+      const existingCardIdx = adminPreviewCards.findIndex(p => p.target === targetCatId);
+      if (showOnHome) {
+        if (existingCardIdx >= 0) {
+          adminPreviewCards[existingCardIdx].name = name;
+          adminPreviewCards[existingCardIdx].sub = description || adminPreviewCards[existingCardIdx].sub;
+          if (cover_url) adminPreviewCards[existingCardIdx].image_url = cover_url;
+        } else {
+          adminPreviewCards.push({
+            target: targetCatId,
+            name: name,
+            sub: description || 'ดูสินค้าในหมวดนี้ ♡',
+            image_url: cover_url || ''
+          });
+        }
+      } else {
+        if (existingCardIdx >= 0) {
+          adminPreviewCards.splice(existingCardIdx, 1);
+        }
+      }
+      localStorage.setItem(PREVIEW_KEY, JSON.stringify(adminPreviewCards));
+    }
+
     await hydrateProducts();
     resetCategoryForm();
     renderCategoryManager();
@@ -1402,6 +1441,9 @@ async function deleteCategory(id) {
     });
     const data = await res.json();
     if (!res.ok || !data.success) throw Error(data.error || 'ลบไม่สำเร็จ');
+
+    adminPreviewCards = adminPreviewCards.filter(p => p.target !== id);
+    localStorage.setItem(PREVIEW_KEY, JSON.stringify(adminPreviewCards));
 
     await hydrateProducts();
     renderCategoryManager();

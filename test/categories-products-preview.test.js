@@ -323,6 +323,39 @@ async function runTests() {
     );
   });
 
+  test('storefront load() auto-merges custom categories into home preview cards', () => {
+    assert.ok(
+      indexHtml.includes("localStorage.getItem('hlg_categories_v2')"),
+      'load() must read hlg_categories_v2 to merge custom categories'
+    );
+    assert.ok(
+      indexHtml.includes("builtinTargets"),
+      'load() must recognize builtin targets and merge custom categories'
+    );
+  });
+
+  test('storefront customer preview card click opens target category page', () => {
+    assert.ok(
+      indexHtml.includes("openCard(i)") || indexHtml.includes("window.v8GoRecommended(i)"),
+      'card.onclick must trigger openCard'
+    );
+    assert.ok(
+      indexHtml.includes("window.hlgEnsureCategoryPage(targetPage)"),
+      'openCard must call hlgEnsureCategoryPage for custom category pages'
+    );
+  });
+
+  test('admin portal category list displays home visibility badge and storefront preview link', () => {
+    assert.ok(
+      adminJs.includes("แสดงบนหน้าแรก 💗"),
+      'admin.js must display home visibility status badge'
+    );
+    assert.ok(
+      adminJs.includes("ดูหน้าร้าน ↗"),
+      'admin.js must provide direct link to preview category page on storefront'
+    );
+  });
+
   console.log(`\n========================================`);
   console.log(`  Results: ${PASSED} passed, ${FAILED} failed`);
   console.log(`========================================\n`);

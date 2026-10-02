@@ -425,11 +425,24 @@ module.exports = async (req, res) => {
       if (body.show_on_home !== undefined) cat.show_on_home = body.show_on_home !== false;
       cat.updated_at = new Date().toISOString();
 
-      const pv = previewCards.find(p => p.target === catId);
-      if (pv) {
-        if (body.name) pv.name = cat.name;
-        if (body.description !== undefined) pv.sub = cat.description;
-        if (body.cover_url) pv.image_url = cat.cover_url;
+      const pvIdx = previewCards.findIndex(p => p.target === catId);
+      if (cat.show_on_home !== false) {
+        if (pvIdx >= 0) {
+          if (body.name) previewCards[pvIdx].name = cat.name;
+          if (body.description !== undefined) previewCards[pvIdx].sub = cat.description;
+          if (body.cover_url) previewCards[pvIdx].image_url = cat.cover_url;
+        } else {
+          previewCards.push({
+            target: catId,
+            name: cat.name,
+            sub: cat.description || 'ดูสินค้าในหมวดนี้ ♡',
+            image_url: cat.cover_url || ''
+          });
+        }
+      } else {
+        if (pvIdx >= 0) {
+          previewCards.splice(pvIdx, 1);
+        }
       }
 
       sf.categories = categories;

@@ -2502,18 +2502,58 @@ function adm(){
   try{return sessionStorage.getItem('hlg_admin_session_v2')==='1'}catch(e){return false}
 }
 function load(){
+  let cards = [];
   try{
     const val = localStorage.getItem(META);
     if (val) {
       const a=JSON.parse(val);
-      if(Array.isArray(a) && a.length > 0) return a;
+      if(Array.isArray(a) && a.length > 0) cards = a;
     }
   }catch(e){}
-  return [
-    { target: 'preorder', name: 'กระเป๋าผ้า HLG', sub: 'เลือกลายที่ชอบได้เลย ♡', src: null },
-    { target: 'wallpaper', name: 'Wallpaper Collection', sub: 'Digital item', src: null },
-    { target: 'sticker', name: 'Sticker Collection', sub: 'ดูคอลเลกชันล่าสุด', src: null }
-  ];
+  if(!cards.length){
+    cards = [
+      { target: 'preorder', name: 'กระเป๋าผ้า HLG', sub: 'เลือกลายที่ชอบได้เลย ♡', src: null },
+      { target: 'wallpaper', name: 'Wallpaper Collection', sub: 'Digital item', src: null },
+      { target: 'sticker', name: 'Sticker Collection', sub: 'ดูคอลเลกชันล่าสุด', src: null }
+    ];
+  }
+  try{
+    const rawCats = localStorage.getItem('hlg_categories_v2');
+    const cats = rawCats ? JSON.parse(rawCats) : [];
+    if(Array.isArray(cats)){
+      const builtinTargets = new Set(['preorder', 'bag', 'wallpaper', 'sticker', 'cart', 'tracking', 'home', 'product', 'external']);
+      const validCatIds = new Set(cats.map(c => c && c.id));
+      cards = cards.filter(x => {
+        if(!x || !x.target) return true;
+        if(builtinTargets.has(x.target)) return true;
+        return validCatIds.has(x.target);
+      });
+      cats.forEach(c => {
+        if(!c || !c.id) return;
+        if(builtinTargets.has(c.id)) return;
+        if(c.show_on_home === false){
+          cards = cards.filter(x => x.target !== c.id);
+          return;
+        }
+        const existing = cards.find(x => x.target === c.id);
+        if(!existing){
+          cards.push({
+            target: c.id,
+            name: c.name || c.id,
+            sub: c.description || 'ดูสินค้าในหมวดนี้ ♡',
+            image_url: c.cover_url || '',
+            imageKey: '',
+            legacySrc: ''
+          });
+        }else{
+          if(!existing.name || existing.name === 'สินค้าใหม่') existing.name = c.name;
+          if(!existing.sub) existing.sub = c.description || 'ดูสินค้าในหมวดนี้ ♡';
+          if(!existing.image_url && !existing.imageKey && c.cover_url) existing.image_url = c.cover_url;
+        }
+      });
+    }
+  }catch(e){}
+  return cards;
 }
 function save(a){localStorage.setItem(META,JSON.stringify(a||[]))}
 function esc(v){return String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
@@ -2728,8 +2768,8 @@ function openCard(i){
 window.renderRecommended=renderCards;
 window.v8AddRecommended=addCard;
 window.v8EditRecommended=openEditor;
-window.v8DeleteRecommended=i=>{editIndex=i;deleteEditor()};
 window.v8GoRecommended=openCard;
+window.openProduct=openProduct;
 window.v6EditProduct=openEditor;
 window.v6AddProduct=addCard;
 
@@ -3747,18 +3787,58 @@ function isAdmin(){
   try{return sessionStorage.getItem('hlg_admin_session_v2')==='1' && !document.body.classList.contains('v8-third-person-view') && !document.body.classList.contains('v8-customer-preview-mode')}catch(e){return false}
 }
 function load(){
+  let cards = [];
   try{
     const val = localStorage.getItem(META);
     if (val) {
       const a=JSON.parse(val);
-      if(Array.isArray(a) && a.length > 0) return a;
+      if(Array.isArray(a) && a.length > 0) cards = a;
     }
   }catch(e){}
-  return [
-    { target: 'preorder', name: 'กระเป๋าผ้า HLG', sub: 'เลือกลายที่ชอบได้เลย ♡', src: null },
-    { target: 'wallpaper', name: 'Wallpaper Collection', sub: 'Digital item', src: null },
-    { target: 'sticker', name: 'Sticker Collection', sub: 'ดูคอลเลกชันล่าสุด', src: null }
-  ];
+  if(!cards.length){
+    cards = [
+      { target: 'preorder', name: 'กระเป๋าผ้า HLG', sub: 'เลือกลายที่ชอบได้เลย ♡', src: null },
+      { target: 'wallpaper', name: 'Wallpaper Collection', sub: 'Digital item', src: null },
+      { target: 'sticker', name: 'Sticker Collection', sub: 'ดูคอลเลกชันล่าสุด', src: null }
+    ];
+  }
+  try{
+    const rawCats = localStorage.getItem('hlg_categories_v2');
+    const cats = rawCats ? JSON.parse(rawCats) : [];
+    if(Array.isArray(cats)){
+      const builtinTargets = new Set(['preorder', 'bag', 'wallpaper', 'sticker', 'cart', 'tracking', 'home', 'product', 'external']);
+      const validCatIds = new Set(cats.map(c => c && c.id));
+      cards = cards.filter(x => {
+        if(!x || !x.target) return true;
+        if(builtinTargets.has(x.target)) return true;
+        return validCatIds.has(x.target);
+      });
+      cats.forEach(c => {
+        if(!c || !c.id) return;
+        if(builtinTargets.has(c.id)) return;
+        if(c.show_on_home === false){
+          cards = cards.filter(x => x.target !== c.id);
+          return;
+        }
+        const existing = cards.find(x => x.target === c.id);
+        if(!existing){
+          cards.push({
+            target: c.id,
+            name: c.name || c.id,
+            sub: c.description || 'ดูสินค้าในหมวดนี้ ♡',
+            image_url: c.cover_url || '',
+            imageKey: '',
+            legacySrc: ''
+          });
+        }else{
+          if(!existing.name || existing.name === 'สินค้าใหม่') existing.name = c.name;
+          if(!existing.sub) existing.sub = c.description || 'ดูสินค้าในหมวดนี้ ♡';
+          if(!existing.image_url && !existing.imageKey && c.cover_url) existing.image_url = c.cover_url;
+        }
+      });
+    }
+  }catch(e){}
+  return cards;
 }
 function save(a){
   localStorage.setItem(META,JSON.stringify(a||[]));
@@ -3981,8 +4061,8 @@ async function renderInline(){
             <span>${esc(x.sub)}</span>
           </div>`;
         card.onclick=()=>{
-          if(typeof window.v8GoRecommended==='function')window.v8GoRecommended(i)
-        }
+          openCard(i);
+        };
       }
       root.appendChild(card)
     }
@@ -4017,6 +4097,24 @@ function bindObserver(){
   /* Observer removed to prevent hover infinite loops */
 }
 
+function openCard(i){
+  const a=load(), x=a[i];if(!x)return;
+  if(x.target==='product'){
+    if(typeof window.openProduct==='function')return window.openProduct(i);
+    return;
+  }
+  if(x.target==='external'){
+    let u=(x.url||'').trim();if(u&&!/^https?:\/\//i.test(u))u='https://'+u;if(u)window.open(u,'_blank','noopener');return;
+  }
+  if(x.target==='cart'&&typeof v8OpenCart==='function')return v8OpenCart();
+  var targetPage = x.target || 'home';
+  if(targetPage === 'bag') targetPage = 'preorder';
+  if(typeof window.hlgEnsureCategoryPage === 'function') {
+    window.hlgEnsureCategoryPage(targetPage);
+  }
+  if(typeof showPage==='function')showPage(targetPage);
+}
+window.v8GoRecommended=openCard;
 window.v8InlinePreviewRender=renderInline;
 window.renderRecommended=renderInline;
 window.v8AddRecommended=function(){
@@ -6613,10 +6711,20 @@ async function loadStorefrontSettingsFromCloud(){
           localStorage.setItem('hlg_promptpay_v1', JSON.stringify(mergedPay));
         }
         if(Array.isArray(s.categories)) {
-          localStorage.setItem('hlg_categories_v2', JSON.stringify(s.categories));
+          const builtinCats = [
+            { id: 'bag', name: 'กระเป๋าผ้า', description: 'กระเป๋าผ้าลายน่ารัก 4 ไซส์ 46 ลาย', is_builtin: true, show_on_home: true },
+            { id: 'sticker', name: 'Sticker', description: 'สติกเกอร์ไดคัทสุดคิ้วท์', is_builtin: true, show_on_home: true },
+            { id: 'wallpaper', name: 'Wallpaper', description: 'Digital item วอลเปเปอร์มือถือ', is_builtin: true, show_on_home: true }
+          ];
+          const allCats = [...builtinCats];
+          s.categories.forEach(c => {
+            if(c && c.id && !allCats.some(x => x.id === c.id)) allCats.push(c);
+          });
+          localStorage.setItem('hlg_categories_v2', JSON.stringify(allCats));
           if(typeof window.hlgRenderCategoryPills === 'function') window.hlgRenderCategoryPills();
         }
         if(Array.isArray(s.custom_products)) {
+          localStorage.setItem('hlg_custom_products_v2', JSON.stringify(s.custom_products));
           localStorage.setItem('hlg_custom_products_v1', JSON.stringify(s.custom_products));
           if(typeof window.hlgSyncCustomProducts === 'function') window.hlgSyncCustomProducts();
         }
@@ -15609,7 +15717,8 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
 (function(){
   'use strict';
   const CAT_KEY = 'hlg_categories_v2';
-  const PROD_KEY = 'hlg_custom_products_v1';
+  const PROD_KEY = 'hlg_custom_products_v2';
+  const PROD_KEY_V1 = 'hlg_custom_products_v1';
   const CART_KEY = 'hlg_unified_cart_v1';
 
   function esc(s) {
@@ -15633,8 +15742,13 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
   function getCustomProducts() {
     try {
       const a = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
-      return Array.isArray(a) ? a.filter(function(x) { return x && x.id; }) : [];
-    } catch(e) { return []; }
+      if (Array.isArray(a) && a.length > 0) return a.filter(function(x) { return x && x.id; });
+    } catch(e) {}
+    try {
+      const v1 = JSON.parse(localStorage.getItem(PROD_KEY_V1) || '[]');
+      if (Array.isArray(v1) && v1.length > 0) return v1.filter(function(x) { return x && x.id; });
+    } catch(e) {}
+    return [];
   }
 
   window.hlgAddCustomProductToCart = function(productId) {
@@ -15789,11 +15903,63 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
     }).join('');
   };
 
+  async function fetchStorefrontDynamicData() {
+    try {
+      const [catRes, prodRes, pvRes] = await Promise.all([
+        fetch('/api/categories').catch(() => null),
+        fetch('/api/products').catch(() => null),
+        fetch('/api/preview-cards').catch(() => null)
+      ]);
+      if (catRes && catRes.ok) {
+        const d = await catRes.json();
+        if (d && Array.isArray(d.categories)) {
+          localStorage.setItem(CAT_KEY, JSON.stringify(d.categories));
+        }
+      }
+      if (prodRes && prodRes.ok) {
+        const d = await prodRes.json();
+        if (d && Array.isArray(d.products)) {
+          localStorage.setItem(PROD_KEY, JSON.stringify(d.products));
+          localStorage.setItem(PROD_KEY_V1, JSON.stringify(d.products));
+        }
+      }
+      if (pvRes && pvRes.ok) {
+        const d = await pvRes.json();
+        if (d && Array.isArray(d.preview_cards) && d.preview_cards.length > 0) {
+          localStorage.setItem('hlg_preview_cards_v2', JSON.stringify(d.preview_cards));
+        }
+      }
+      if (typeof window.v8InlinePreviewRender === 'function') window.v8InlinePreviewRender();
+      if (typeof window.hlgRenderCategoryPills === 'function') window.hlgRenderCategoryPills();
+    } catch(e) {
+      console.warn('Failed to fetch dynamic storefront data:', e);
+    }
+  }
+
+  function checkUrlCategoryParam() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const target = params.get('page') || (window.location.hash ? window.location.hash.replace(/^#/, '') : '');
+      if (target && !['home', 'cart', 'tracking', 'admin', 'preorder', 'bag', 'wallpaper', 'sticker'].includes(target)) {
+        setTimeout(function() {
+          if (typeof window.hlgEnsureCategoryPage === 'function') window.hlgEnsureCategoryPage(target);
+          if (typeof showPage === 'function') showPage(target);
+        }, 200);
+      }
+    } catch(e) {}
+  }
+
   document.addEventListener('DOMContentLoaded', function() {
     setTimeout(function() {
       if (typeof window.hlgRenderCategoryPills === 'function') window.hlgRenderCategoryPills();
+      fetchStorefrontDynamicData();
+      checkUrlCategoryParam();
     }, 150);
   });
+  if (document.readyState !== 'loading') {
+    fetchStorefrontDynamicData();
+    checkUrlCategoryParam();
+  }
 })();
 </script>
 <style id="hlg-queue-copy-style">
