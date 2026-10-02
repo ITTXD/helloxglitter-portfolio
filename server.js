@@ -1293,7 +1293,16 @@ async function handleApi(req, res) {
 function serveStatic(req, res) {
   let urlPath = req.url.split('?')[0];
   urlPath = decodeURIComponent(urlPath);
-  if (urlPath === '/admin' || urlPath === '/track' || urlPath === '/checklink') {
+  // /admin และ /admin/ → logout แล้ว redirect ไปหน้าลูกค้าเสมอ
+  if (urlPath === '/admin' || urlPath === '/admin/') {
+    res.writeHead(302, {
+      'Location': '/',
+      'Set-Cookie': 'admin_session=; Path=/; HttpOnly; Max-Age=0',
+    });
+    res.end();
+    return;
+  }
+  if (urlPath === '/track' || urlPath === '/checklink') {
     res.writeHead(301, { 'Location': urlPath + '/' });
     res.end();
     return;
