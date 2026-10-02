@@ -8,6 +8,9 @@
  * 4. Parity with api/[...path].js.
  * 5. Admin portal (public/admin/): UI components for Category Management, Dynamic Product Form, and Preview Cards.
  * 6. Storefront (public/index.html): Category page rendering, Cart integration, and Home Preview Card generation.
+ * 7. Dropdown sync: newly created categories must appear as "กดแล้วไปที่" targets in BOTH
+ *    the admin portal preview-card dropdown (adminCategories) and the storefront inline-editor
+ *    dropdown (hlg_categories_v2), including auto preview-card creation and cascade cleanup.
  */
 const assert = require('assert');
 const fs = require('fs');
@@ -223,6 +226,97 @@ async function runTests() {
     assert.strictEqual(data.settings.preview_cards[1].name, 'พวงกุญแจอะคริลิค');
   });
 
+  console.log('\n── 3.5 NEW CATEGORY → BOTH PREVIEW-CARD DROPDOWNS ──');
+
+  // Data source of the ADMIN portal dropdown: GET /api/categories → adminCategories.
+  await asyncTest('GET /api/categories includes newly created category (admin dropdown source)', async () => {
+    const req = createReq('GET', '/api/categories');
+    const res = createRes();
+    await serverHandler(req, res);
+    assert.strictEqual(res._status, 200);
+    const data = JSON.parse(res._body);
+    const created = data.categories.find(c => c.id === createdCatId);
+    assert.ok(created, 'newly created category must be returned by GET /api/categories');
+    assert.strictEqual(created.name, 'พวงกุญแจอะคริลิค (อัปเดต)');
+    assert.strictEqual(created.show_on_home, true);
+  });
+
+  // Data source of the STOREFRONT inline-editor dropdown: preview targets + hlg_categories_v2
+  // (hydrated from GET /api/categories); the card list itself comes from GET /api/preview-cards.
+  await asyncTest('GET /api/preview-cards contains card targeting the new category', async () => {
+    const req = createReq('GET', '/api/preview-cards');
+    const res = createRes();
+    await serverHandler(req, res);
+    assert.strictEqual(res._status, 200);
+    const data = JSON.parse(res._body);
+    const card = data.preview_cards.find(p => p.target === createdCatId);
+    assert.ok(card, 'preview card for the new category must exist (dropdown target source)');
+    assert.strictEqual(card.name, 'พวงกุญแจอะคริลิค');
+  });
+
+  await asyncTest('POST category with show_on_home:true auto-creates its preview card (no manual PUT needed)', async () => {
+    const req1 = createReq('POST', '/api/categories', {
+      name: 'หมวดเทสออโต้การ์ด',
+      description: 'การ์ดต้องโผล่เอง',
+      cover_url: 'https://example.com/auto.jpg',
+      show_on_home: true
+    }, ADMIN_COOKIE);
+    const res1 = createRes();
+    await serverHandler(req1, res1);
+    assert.strictEqual(res1._status, 200);
+    const autoCatId = JSON.parse(res1._body).category.id;
+
+    const req2 = createReq('GET', '/api/preview-cards');
+    const res2 = createRes();
+    await serverHandler(req2, res2);
+    const card = JSON.parse(res2._body).preview_cards.find(p => p.target === autoCatId);
+    assert.ok(card, 'auto-created card must appear in /api/preview-cards');
+    assert.strictEqual(card.name, 'หมวดเทสออโต้การ์ด');
+    assert.strictEqual(card.sub, 'การ์ดต้องโผล่เอง');
+    assert.strictEqual(card.image_url, 'https://example.com/auto.jpg');
+
+    const req3 = createReq('DELETE', `/api/categories/${autoCatId}`, null, ADMIN_COOKIE);
+    const res3 = createRes();
+    await serverHandler(req3, res3);
+    assert.strictEqual(res3._status, 200);
+
+    const req4 = createReq('GET', '/api/preview-cards');
+    const res4 = createRes();
+    await serverHandler(req4, res4);
+    const stillThere = JSON.parse(res4._body).preview_cards.some(p => p.target === autoCatId);
+    assert.strictEqual(stillThere, false, 'card must be cascade-removed when its category is deleted');
+  });
+
+  await asyncTest('POST category with show_on_home:false lists in categories but gets no home card', async () => {
+    const req1 = createReq('POST', '/api/categories', { name: 'หมวดซ่อนจากหน้าแรก', show_on_home: false }, ADMIN_COOKIE);
+    const res1 = createRes();
+    await serverHandler(req1, res1);
+    assert.strictEqual(res1._status, 200);
+    const hiddenCatId = JSON.parse(res1._body).category.id;
+
+    const req2 = createReq('GET', '/api/categories');
+    const res2 = createRes();
+    await serverHandler(req2, res2);
+    assert.ok(
+      JSON.parse(res2._body).categories.some(c => c.id === hiddenCatId),
+      'hidden category must still be selectable in the category dropdowns'
+    );
+
+    const req3 = createReq('GET', '/api/preview-cards');
+    const res3 = createRes();
+    await serverHandler(req3, res3);
+    assert.strictEqual(
+      JSON.parse(res3._body).preview_cards.some(p => p.target === hiddenCatId),
+      false,
+      'hidden category must NOT get a home preview card'
+    );
+
+    const req4 = createReq('DELETE', `/api/categories/${hiddenCatId}`, null, ADMIN_COOKIE);
+    const res4 = createRes();
+    await serverHandler(req4, res4);
+    assert.strictEqual(res4._status, 200);
+  });
+
   console.log('\n── 4. DELETION FLOW (CLEANUP) ──');
 
   await asyncTest('DELETE /api/products/:id deletes product', async () => {
@@ -353,6 +447,32 @@ async function runTests() {
     assert.ok(
       adminJs.includes("ดูหน้าร้าน ↗"),
       'admin.js must provide direct link to preview category page on storefront'
+    );
+  });
+
+  test('admin preview-card dropdown builds targets from fetched adminCategories', () => {
+    assert.ok(
+      adminJs.includes("...adminCategories.filter(c => !['bag','sticker','wallpaper'].includes(c.id)).map(c => [c.id, 'หมวด: ' + c.name])"),
+      'renderPreviewManager must include custom categories as หมวด: <name> options'
+    );
+    assert.ok(
+      /hydrateProducts\(\)\.then\(function\(\) \{[\s\S]*?renderPreviewManager\(\)/.test(adminJs),
+      'switchView(products) must hydrate categories from the API before rendering the dropdown'
+    );
+  });
+
+  test('storefront inline-editor dropdown reads hydrated custom categories', () => {
+    assert.ok(
+      indexHtml.includes("const cats = JSON.parse(localStorage.getItem('hlg_categories_v2') || '[]');"),
+      'inline editor targetOptions must read hlg_categories_v2'
+    );
+    assert.ok(
+      indexHtml.includes("localStorage.setItem(CAT_KEY, JSON.stringify(d.categories))"),
+      'fetchStorefrontDynamicData must hydrate hlg_categories_v2 from GET /api/categories'
+    );
+    assert.ok(
+      indexHtml.includes("const CAT_KEY = 'hlg_categories_v2';"),
+      'CAT_KEY must match the key the inline editor reads'
     );
   });
 
