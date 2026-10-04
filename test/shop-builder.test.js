@@ -246,6 +246,69 @@ async function runTests() {
     );
   });
 
+  console.log('\n── 3. WALLPAPER TRACKING BY EMAIL (/api/track/email/:email) ──');
+  const testWpEmail = `wp-customer-${Date.now()}@testmail.com`;
+
+  await asyncTest('GET /api/track/email/:email rejects invalid email with 400', async () => {
+    const req = createReq('GET', '/api/track/email/invalid-email-format');
+    const res = createRes();
+    await serverHandler(req, res);
+    assert.strictEqual(res._status, 400);
+    const data = JSON.parse(res._body);
+    assert.ok(data.error);
+  });
+
+  await asyncTest('POST /api/orders creates wallpaper order with customer_email and items', async () => {
+    const req = createReq('POST', '/api/orders', {
+      customer_email: testWpEmail,
+      type: 'wallpaper',
+      items: [{ name: 'Secret Garden Wallpaper', qty: 1, price: 99, type: 'wallpaper' }],
+      total_price: 99
+    });
+    const res = createRes();
+    await serverHandler(req, res);
+    assert.strictEqual(res._status, 201);
+    const data = JSON.parse(res._body);
+    assert.strictEqual(data.success, true);
+    assert.strictEqual(data.order.customer_email, testWpEmail);
+    assert.strictEqual(data.order.type, 'wallpaper');
+  });
+
+  await asyncTest('GET /api/track/email/:email finds wallpaper order by email', async () => {
+    const req = createReq('GET', `/api/track/email/${encodeURIComponent(testWpEmail)}`);
+    const res = createRes();
+    await serverHandler(req, res);
+    assert.strictEqual(res._status, 200);
+    const data = JSON.parse(res._body);
+    assert.ok(Array.isArray(data.orders));
+    assert.ok(data.orders.length > 0);
+    assert.strictEqual(data.orders[0].customer_email, testWpEmail);
+    assert.strictEqual(data.orders[0].type, 'wallpaper');
+  });
+
+  test('api/[...path].js includes GET /api/track/email/ handler parity', () => {
+    const apiPathCode = fs.readFileSync(path.join(ROOT, 'api', '[...path].js'), 'utf-8');
+    assert.ok(
+      apiPathCode.includes('/api/track/email/'),
+      'api/[...path].js must include /api/track/email/ endpoint'
+    );
+  });
+
+  test('index.html tracking supports email search and shows wallpaper download link', () => {
+    assert.ok(
+      indexHtml.includes('/api/track/email/'),
+      'Storefront must fetch /api/track/email/ for email tracking'
+    );
+    assert.ok(
+      indexHtml.includes('ดาวน์โหลด Wallpaper') || indexHtml.includes('wpcheck'),
+      'Tracking must show wallpaper download action'
+    );
+    assert.ok(
+      indexHtml.includes('isWallpaper'),
+      'Tracking card must have isWallpaper check'
+    );
+  });
+
   console.log(`\n========================================`);
   console.log(`  Results: ${PASSED} passed, ${FAILED} failed`);
   console.log(`========================================\n`);

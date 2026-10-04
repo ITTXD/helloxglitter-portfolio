@@ -263,6 +263,7 @@ function extractCustomerFields(data) {
   let phone = (data.customer_phone || '').trim();
   let address = (data.customer_address || '').trim();
   let info = (data.customer_info || '').trim();
+  const email = (data.customer_email || '').trim();
 
   if (!name && !phone && !address && info) {
     const lines = info.split('\n').map(l => l.trim()).filter(Boolean);
@@ -271,8 +272,15 @@ function extractCustomerFields(data) {
     if (!address && lines.length > 2) address = lines.slice(2).join('\n');
   }
 
-  if (name || phone || address) {
-    info = [name, phone, address].filter(Boolean).join('\n');
+  if (!name && email) {
+    name = email.split('@')[0] || 'ลูกค้า';
+  }
+  if (!address && email && (data.type === 'wallpaper' || !data.type)) {
+    address = 'Digital Download (Wallpaper)';
+  }
+
+  if (name || phone || address || email) {
+    info = [name, phone, address, email].filter(Boolean).join('\n');
   }
 
   return {
@@ -280,6 +288,7 @@ function extractCustomerFields(data) {
     customer_phone: phone,
     customer_address: address,
     customer_info: info,
+    customer_email: email,
   };
 }
 
@@ -917,7 +926,12 @@ async function handleApi(req, res) {
   if (pathname === '/api/orders' && method === 'POST') {
     const body = await readBody(req);
     const cust = extractCustomerFields(body);
-    if (!cust.customer_info || !body.patterns || body.patterns.length === 0) {
+    const patterns = (body.patterns && body.patterns.length > 0)
+      ? body.patterns
+      : (body.items && body.items.length > 0)
+        ? body.items.map(x => x.name + (x.variant ? ' (' + x.variant + ')' : ''))
+        : [];
+    if (!cust.customer_info || patterns.length === 0) {
       sendJson(res, 400, { error: 'กรุณากรอกข้อมูลให้ครบ' });
       return true;
     }
@@ -937,7 +951,7 @@ async function handleApi(req, res) {
         db,
         code: couponCode,
         lineUserId,
-        items: body.patterns || [],
+        items: patterns,
         subtotal: basePrice,
       });
       if (!valResult.valid) {
@@ -956,16 +970,20 @@ async function handleApi(req, res) {
 
     const order = {
       id: orderId,
+      queue_no: body.queue_no || (typeof getNextQueueNo === 'function' ? await getNextQueueNo() : ''),
       created_at: new Date().toISOString(),
       customer_name: cust.customer_name,
       customer_phone: cust.customer_phone,
       customer_address: cust.customer_address,
+      customer_email: (body.customer_email || cust.customer_email || '').trim(),
       customer_info: cust.customer_info,
+      type: body.type || 'bag',
+      items: body.items || [],
       line_user_id: lineUserId || null,
-      patterns: body.patterns,
+      patterns: patterns,
       pattern_qtys: body.pattern_qtys || null,
       qty: body.qty || 1,
-      total_bags: body.total_bags || (body.patterns.length * (body.qty || 1)),
+      total_bags: body.total_bags || (patterns.length * (body.qty || 1)),
       original_price: originalPrice,
       total_price: finalTotalPrice,
       savings: (body.savings || 0) + couponDiscount,
@@ -1860,6 +1878,65 @@ async function handleApi(req, res) {
         customer_address: o.customer_address || ((o.customer_info || '').split('\n').slice(2).join('\n')) || '',
         customer_info: o.customer_info || '',
         shipping_cost: o.shipping_cost != null ? o.shipping_cost : 50,
+        is_remote: o.is_remote || false,
+      })),
+    });
+    return true;
+  }
+
+  // GET /api/track/email/:email — public, search orders by email
+  if (pathname.startsWith('/api/track/email/') && method === 'GET') {
+    const rawEmail = pathname.split('/api/track/email/')[1];
+    if (!rawEmail) { send404(res); return true; }
+    const searchEmail = decodeURIComponent(rawEmail).trim().toLowerCase();
+    if (!searchEmail || !searchEmail.includes('@')) {
+      sendJson(res, 400, { error: 'กรุณาระบุ Email ที่ถูกต้อง' });
+      return true;
+    }
+    const allOrders = await fsGetDocs('orders');
+    try {
+      const stickers = await fsGetDocs('sticker_orders');
+      stickers.forEach(s => {
+        if (!allOrders.some(o => o.id === s.id)) {
+          allOrders.push(s);
+        }
+      });
+    } catch (e) {}
+    const found = allOrders.filter(o => {
+      if (o.customer_email && String(o.customer_email).toLowerCase().trim() === searchEmail) return true;
+      const combined = [o.customer_email, o.customer_info, o.recipient_info, o.customer_address].filter(Boolean).join(' ').toLowerCase();
+      if (combined.includes(searchEmail)) return true;
+      return false;
+    });
+    if (found.length === 0) {
+      sendJson(res, 404, { error: 'ไม่พบออเดอร์จาก Email นี้ค่ะ' });
+      return true;
+    }
+    sendJson(res, 200, {
+      orders: found.map(o => ({
+        id: o.id,
+        queue_no: o.queue_no || '',
+        channel: o.channel || 'web',
+        shopee_order_sn: o.shopee_order_sn || '',
+        type: o.type || 'wallpaper',
+        status: o.status,
+        patterns: o.patterns,
+        pattern_qtys: o.pattern_qtys || null,
+        items: o.items || [],
+        qty: o.qty || 1,
+        total_bags: o.total_bags || 0,
+        total_price: o.total_price,
+        created_at: o.created_at,
+        note: o.note || '',
+        admin_note: o.admin_note || o.note || '',
+        tracking_number: o.tracking_number || '',
+        tracking_carrier: o.tracking_carrier || '',
+        customer_email: o.customer_email || searchEmail,
+        customer_name: o.customer_name || (o.customer_info || '').split('\n')[0] || '',
+        customer_phone: o.customer_phone || (o.customer_info || '').split('\n')[1] || '',
+        customer_address: o.customer_address || ((o.customer_info || '').split('\n').slice(2).join('\n')) || '',
+        customer_info: o.customer_info || '',
+        shipping_cost: o.shipping_cost != null ? o.shipping_cost : 0,
         is_remote: o.is_remote || false,
       })),
     });

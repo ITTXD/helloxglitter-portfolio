@@ -6235,8 +6235,8 @@ if(document.readyState!=='loading'){
   <div class="tr-wrap">
     <div class="tr-card">
       <div class="tr-title"><i class="ti ti-search"></i> ค้นหาออเดอร์ของคุณ</div>
-      <div class="tr-sub">กรอกเบอร์โทรศัพท์ที่ใช้สั่งซื้อเพื่อดูคิวและเลข Tracking ได้เลยค่ะ</div><div class="customer-track-hint"><i class="ti ti-heart"></i> ไม่ต้องสมัครสมาชิกหรือเข้าสู่ระบบ ใช้เบอร์โทรที่กรอกตอนสั่งซื้อเท่านั้น</div>
-      <input class="tr-input" id="tr-phone" type="tel" placeholder="เบอร์โทรศัพท์ เช่น 0812345678" oninput="trackSearch()"/>
+      <div class="tr-sub">กรอกเบอร์โทรศัพท์ หรือ Email ที่ใช้สั่งซื้อเพื่อดูคิวและดาวน์โหลด Wallpaper ได้เลยค่ะ</div><div class="customer-track-hint"><i class="ti ti-heart"></i> สามารถกรอกเบอร์โทร (พัสดุ) หรือ Email (Wallpaper) เพื่อเช็คสถานะและรับลิงก์ดาวน์โหลดได้ทันทีค่ะ</div>
+      <input class="tr-input" id="tr-phone" type="text" placeholder="เบอร์โทรศัพท์ หรือ Email เช่น 0812345678 / name@gmail.com" oninput="trackSearch()"/>
       <div class="tr-result" id="tr-result"></div>
     </div>
     <div id="tr-all-orders"></div>
@@ -7612,9 +7612,12 @@ function renderThankYou(order) {
 
 /* 9. TRACKING SEARCH SIMULATION */
 function trackSearch() {
-  var val=normalizePhone((document.getElementById('tr-phone').value||''));
+  if (typeof window.trackSearch === 'function' && window.trackSearch !== trackSearch) {
+    return window.trackSearch();
+  }
+  var raw=(document.getElementById('tr-phone').value||'').trim();
   var resEl=document.getElementById('tr-result');
-  if(!val){resEl.innerHTML='';resEl.classList.remove('show');return}
+  if(!raw){resEl.innerHTML='';resEl.classList.remove('show');return}
   if(val.length<9){resEl.innerHTML='<div class="tr-not-found">กรอกเบอร์โทรให้ครบก่อนนะคะ ♡</div>';resEl.classList.add('show');return}
   var rows=getOrders().filter(function(o){return normalizePhone(o.customer_phone)===val}).sort(function(a,b){return String(b.created_at||'').localeCompare(String(a.created_at||''))});
   if(!rows.length){
@@ -10319,6 +10322,25 @@ window.v8CFconfirm=function(){
  };
  const rows=(typeof getOrders==='function'?getOrders():[]);rows.unshift(order);if(typeof saveOrders==='function')saveOrders(rows);else localStorage.setItem('hlg_orders_v2',JSON.stringify(rows));
  const ids=new Set(buy.map(x=>x._cartId)),remain=a.filter(x=>!ids.has(x._cartId));write(remain);const ns={};remain.forEach(x=>ns[x._cartId]=true);saveS(ns);slip='';
+ try{
+   fetch('/api/orders',{
+     method:'POST',
+     headers:{'Content-Type':'application/json'},
+     body:JSON.stringify({
+       id:order.id,
+       queue_no:order.queue_no,
+       customer_name:order.customer_name,
+       customer_phone:order.customer_phone,
+       customer_email:order.customer_email,
+       customer_address:order.customer_address,
+       customer_info:order.recipient_info,
+       patterns:order.items.map(x=>x.name+(x.variant?' ('+x.variant+')':'')),
+       items:order.items,
+       total_price:order.total_price,
+       type:order.type
+     })
+   }).catch(()=>{});
+ }catch(e){}
  const root=document.getElementById('v8CartContent');
  root.innerHTML=`<div class="v8cf-done"><div style="font-size:38px">♡</div><h3>รับคำสั่งซื้อแล้วค่ะ</h3><div class="v8cf-code">${esc(order.queue_no||order.id)}</div><p style="font-size:11px;color:#967684">ได้รับออเดอร์แล้วค่ะ เลขคิวนี้ใช้ติดตามสถานะได้ ร้านจะยืนยันการชำระเงินและอัปเดตขั้นตอนต่อไป ♡</p>${onlyWp ? `<button class="v8-go-cart-btn" style="background:#7c3aed;color:#fff;margin-bottom:8px" onclick="showPage('wpcheck')">📥 ไปหน้าดาวน์โหลด Wallpaper →</button>` : ''}<button class="v8-go-cart-btn" onclick="renderUnifiedCart()">กลับไปดูตะกร้า</button><button class="v8-go-cart-btn" onclick="showPage('tracking')">เช็กสถานะการชำระเงิน →</button></div>`;
 }
@@ -13249,29 +13271,50 @@ function card(o){
   const style=updateStyle();
   const isShopee = (o.channel === 'shopee') || Boolean(o.shopee_order_sn);
   const shopeeSn = String(o.shopee_order_sn || '').trim();
+  const isWallpaper = (o.type === 'wallpaper') || (o.preorder_batch === 'Digital / Wallpaper') || (Array.isArray(o.items) && o.items.length > 0 && o.items.every(x => x.type === 'wallpaper'));
+  const statusName = isWallpaper ? 'พร้อมดาวน์โหลดไฟล์ Wallpaper แล้ว ♡' : esc(st.name);
+  const displayPct = isWallpaper ? 100 : pct;
 
   return `
+    ${isWallpaper ? `
+      <div style="background:#faf5ff;border:1.5px solid #d8b4fe;color:#581c87;padding:14px 18px;border-radius:16px;margin-bottom:14px;box-shadow:0 4px 14px rgba(124,58,237,0.08);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:800;font-size:14px;display:flex;align-items:center;gap:6px"><span>✨</span> ลิงก์ดาวน์โหลด Wallpaper</div>
+          <div style="font-size:11px;color:#7e22ce;margin-top:2px">สำหรับ Email: <b>${esc(o.customer_email || 'ลูกค้า')}</b> (กดปุ่มเพื่อรับไฟล์ได้ทันทีค่ะ)</div>
+        </div>
+        <button type="button" class="v8track-btn" style="background:#7c3aed;color:#fff;font-weight:700;padding:8px 18px;border-radius:20px;font-size:12px;cursor:pointer" onclick="showPage('wpcheck');setTimeout(()=>{const el=document.getElementById('wpCheckEmail');if(el){el.value='${esc(o.customer_email||'')}';wpCheckDownload();}},80)">
+          📥 ดาวน์โหลด Wallpaper →
+        </button>
+      </div>` : ''}
     <div class="v8track-dashboard">
       <div class="v8track-card">
         <div class="v8track-label" style="display:flex;align-items:center;justify-content:space-between;gap:6px">
           <span>คิวของคุณ</span>
-          ${isShopee ? '<span class="v8track-shopee-badge" style="background:#ee4d2d;color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:99px;letter-spacing:0.5px">Shopee</span>' : ''}
+          ${isShopee ? '<span class="v8track-shopee-badge" style="background:#ee4d2d;color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:99px;letter-spacing:0.5px">Shopee</span>' : (isWallpaper ? '<span style="background:#7c3aed;color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:99px">Wallpaper</span>' : '')}
         </div>
         <div class="v8track-queue-number">${esc(ordinal)}</div>
         <div class="v8track-queue-code">${queueCode?esc(queueCode):'กำลังรอร้านจัดเลขคิว'}</div>
-        <div class="v8track-status-name">♡ ${esc(st.name)}</div>
+        <div class="v8track-status-name">♡ ${statusName}</div>
         <div class="v8track-progress">
-          <div class="v8track-progress-bar"><div class="v8track-progress-fill" style="width:${pct}%"></div></div>
-          <div class="v8track-progress-text"><span>รับออเดอร์</span><span>${pct}%</span></div>
+          <div class="v8track-progress-bar"><div class="v8track-progress-fill" style="width:${displayPct}%"></div></div>
+          <div class="v8track-progress-text"><span>${isWallpaper ? 'พร้อมดาวน์โหลด' : 'รับออเดอร์'}</span><span>${displayPct}%</span></div>
         </div>
       </div>
 
       <div class="v8track-card">
-        <div class="v8track-label">เลขพัสดุ</div>
-        ${tracking
-          ? `<div class="v8track-carrier ${carrier.cls}">จัดส่งโดย ${esc(carrier.name)}</div><div class="v8track-track-number">${esc(tracking)}</div>
-             <button type="button" class="v8track-btn" style="height:34px;margin-top:10px;padding:0 11px" data-tracking="${esc(tracking)}" onclick="v8TrackCopyTracking(this)">คัดลอกเลขแทร็ค</button>`
-          : `<div class="v8track-track-empty">ยังไม่มีเลข Tracking ค่ะ<br>เลขจะขึ้นตรงนี้หลังร้านจัดส่ง</div>`}
+        <div class="v8track-label">${isWallpaper ? 'ลิงก์ Wallpaper' : 'เลขพัสดุ'}</div>
+        ${isWallpaper
+          ? `<div class="v8track-carrier spx" style="background:#f3e8ff;color:#7c3aed;border:1px solid #d8b4fe">🎨 Digital Download</div>
+             <div style="font-size:11px;color:#7e22ce;margin:6px 0 8px">รับไฟล์ทาง Email หรือกดปุ่มด้านล่าง</div>
+             <button type="button" class="v8track-btn" style="background:#7c3aed;color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;width:100%;height:36px;border-radius:10px;font-size:12px;margin-top:6px" onclick="showPage('wpcheck');setTimeout(()=>{const el=document.getElementById('wpCheckEmail');if(el){el.value='${esc(o.customer_email||'')}';wpCheckDownload();}},80)">
+               📥 ไปหน้าดาวน์โหลด Wallpaper →
+             </button>`
+          : (tracking
+            ? `<div class="v8track-carrier ${carrier.cls}">จัดส่งโดย ${esc(carrier.name)}</div><div class="v8track-track-number">${esc(tracking)}</div>
+               <button type="button" class="v8track-btn" style="height:34px;margin-top:10px;padding:0 11px" data-tracking="${esc(tracking)}" onclick="v8TrackCopyTracking(this)">คัดลอกเลขแทร็ค</button>`
+            : `<div class="v8track-track-empty">ยังไม่มีเลข Tracking ค่ะ<br>เลขจะขึ้นตรงนี้หลังร้านจัดส่ง</div>`
+          )
+        }
       </div>
     </div>
 
@@ -13300,10 +13343,10 @@ function buildShell(){
   cardEl.innerHTML=`
     <div class="v8track-search-card">
       <div class="v8track-title"><i class="ti ti-search"></i> เช็คคิว / Tracking</div>
-      <div class="v8track-sub">กรอกเบอร์โทรศัพท์เดียวกับที่ใช้สั่งซื้อ</div>
+      <div class="v8track-sub">กรอกเบอร์โทรศัพท์ หรือ Email ที่ใช้สั่งซื้อ</div>
       <div class="v8track-input-row">
-        <input class="v8track-input" id="tr-phone" type="tel" inputmode="numeric" maxlength="14" placeholder="0812345678">
-        <button class="v8track-btn" type="button" id="v8TrackSearchBtn">เช็คคิว</button>
+        <input class="v8track-input" id="tr-phone" type="text" placeholder="เบอร์โทร หรือ Email เช่น 0812345678 / name@gmail.com">
+        <button class="v8track-btn" type="button" id="v8TrackSearchBtn">เช็คคิว / เช็คลิงก์</button>
       </div>
       <button type="button" id="v8TrackEditAnnouncementLink" onclick="v8OpenTrackingAnnouncementEditor()">📢 แก้ HLG UPDATE ในหลังบ้าน</button>
       <div class="v8track-results" id="tr-result"></div>
@@ -13313,7 +13356,11 @@ function buildShell(){
   const btn=document.getElementById('v8TrackSearchBtn');
   if(input){
     input.addEventListener('input',()=>{
-      input.value=input.value.replace(/[^\d+\-\s()]/g,'').slice(0,14);
+      if(/[a-zA-Z@]/.test(input.value)){
+        input.value=input.value.slice(0,100);
+      } else {
+        input.value=input.value.replace(/[^\d+\-\s()]/g,'').slice(0,14);
+      }
     });
     input.addEventListener('keydown',e=>{
       if(e.key==='Enter')window.trackSearch();
@@ -13353,10 +13400,73 @@ window.trackSearch=function(){
   const res=document.getElementById('tr-result');
   if(!input||!res)return;
 
-  const raw=input.value||'';
+  const raw=(input.value||'').trim();
+  const isEmail = raw.includes('@');
+
+  if(isEmail){
+    if(raw.length < 5 || !raw.includes('.')){
+      res.innerHTML='<div class="v8track-empty">กรุณากรอก Email ให้ถูกต้องครบถ้วนนะคะ ♡</div>';
+      return;
+    }
+    const searchEmail = raw.toLowerCase();
+    const matches = orderRows().filter(o => {
+      const oEmail = (o.customer_email || '').toLowerCase().trim();
+      if(oEmail && (oEmail === searchEmail || oEmail.includes(searchEmail))) return true;
+      const combined = [o.customer_info, o.recipient_info, o.customer_address].filter(Boolean).join(' ').toLowerCase();
+      if(combined.includes(searchEmail)) return true;
+      return false;
+    });
+
+    if(matches.length){
+      const active=currentActiveOrder(matches);
+      currentOrder=active;
+      res.innerHTML=active?card(active):'';
+    } else {
+      res.innerHTML='<div class="v8track-empty" style="color:#7c3aed"><i class="ti ti-loader"></i> กำลังค้นหาข้อมูลออเดอร์ Wallpaper…</div>';
+    }
+
+    // Live cloud search fallback/refresh by email
+    fetch('/api/track/email/'+encodeURIComponent(searchEmail))
+      .then(r=>r.ok?r.json():null)
+      .then(data=>{
+        if(data&&Array.isArray(data.orders)&&data.orders.length){
+          const liveOrders=data.orders;
+          const active=currentActiveOrder(liveOrders);
+          currentOrder=active;
+          res.innerHTML=active?card(active):'';
+          try{
+            const rows=orderRows();
+            let changed=false;
+            liveOrders.forEach(lo=>{
+              const idx=rows.findIndex(x=>x.id===lo.id);
+              if(idx>=0){rows[idx]=Object.assign({},rows[idx],lo);changed=true;}
+              else{rows.unshift(lo);changed=true;}
+            });
+            if(changed&&typeof window.saveOrders==='function')window.saveOrders(rows);
+          }catch(e){}
+        } else if(!matches.length){
+          currentOrder=null;
+          res.innerHTML=`<div class="v8track-empty">
+            ยังไม่พบออเดอร์จาก Email นี้ค่ะ<br>
+            <span style="font-size:11px">ลองตรวจสอบว่าเป็น Email เดียวกับที่ใช้ตอนสั่งซื้อ หรือไปที่หน้า <a href="#" onclick="showPage('wpcheck');return false;" style="color:#7c3aed;font-weight:700">เช็คลิงก์ดาวน์โหลด Wallpaper</a> ได้เลยนะคะ ♡</span>
+          </div>`;
+        }
+      })
+      .catch(()=>{
+        if(!matches.length){
+          currentOrder=null;
+          res.innerHTML=`<div class="v8track-empty">
+            ยังไม่พบออเดอร์จาก Email นี้ค่ะ<br>
+            <span style="font-size:11px">ลองตรวจสอบว่าเป็น Email เดียวกับที่ใช้ตอนสั่งซื้อนะคะ</span>
+          </div>`;
+        }
+      });
+    return;
+  }
+
   const key=phoneKey(raw);
   if(key.length<8){
-    res.innerHTML='<div class="v8track-empty">กรอกเบอร์โทรให้ครบก่อนนะคะ ♡</div>';
+    res.innerHTML='<div class="v8track-empty">กรอกเบอร์โทรหรือ Email ให้ครบก่อนนะคะ ♡</div>';
     return;
   }
 
