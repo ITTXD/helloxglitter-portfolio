@@ -2,6 +2,13 @@
 
 Branch: `feat/shop-builder`
 
+## SCOPE (อัปเดตตามที่ผู้ใช้สั่ง)
+- **แก้เฉพาะหน้า admin ที่ติดมากับเว็บ = `/admin/`** (`public/admin/index.html`, `admin.js`, `admin.css`) + API ฝั่ง `server.js`
+  ซึ่งเป็นที่ที่เพิ่มหมวดหมู่/สินค้าได้อยู่แล้ว (`admin.js` ~L1137 categories, ~L1165 products)
+- **ห้ามแก้หน้าลูกค้า** (`public/index.html`, `public/app.js`) — หน้าลูกค้าดีอยู่แล้ว
+  หน้าลูกค้าเดิมอ่าน `/api/categories` + `/api/products` อยู่แล้ว จึงต้องรักษา **รูปแบบข้อมูลเดิมให้เข้ากันได้** (เพิ่มฟิลด์ได้ ห้ามเปลี่ยน/ลบฟิลด์เดิม)
+- ข้อ P3 (UI ลูกค้า) และ P5 (Home cards/cleanup) **ตัดออกจากงานนี้** จนกว่าผู้ใช้จะสั่ง
+
 ## เป้าหมาย
 ในหน้า admin มีแท็บ **"ขายของ"** กด **＋** เพื่อสร้างร้านใหม่ (เช่น พวงกุญแจ, เสื้อ) แล้วเพิ่มสินค้าได้:
 ชื่อ, ราคา, **หลายรูป**, คำอธิบาย, ตัวเลือก (ไซส์/สี) หน้าลูกค้าต้องหน้าตาเหมือนหน้าซื้อกระเป๋า
@@ -35,9 +42,9 @@ Migration: อ่าน `settings/storefront.categories` + `custom_products` แ
 - **P0 — ทดสอบก่อน (tdd)**: เขียนเทสต์ API สำหรับ shops/products (สร้าง/แก้/ลบ/ต้องเป็นแอดมิน/validate ราคา)
 - **P1 — Backend**: collection ใหม่ + endpoints + upload รูป + migration script
 - **P2 — Admin UI**: แท็บ "ขายของ", ฟอร์มเพิ่มร้าน/สินค้า, อัปโหลดหลายรูป, preview สด
-- **P3 — Storefront UI**: template หน้าร้านเหมือนหน้ากระเป๋า, หน้าสินค้า, ใส่ตะกร้า
+- ~~**P3 — Storefront UI**: template หน้าร้านเหมือนหน้ากระเป๋า, หน้าสินค้า, ใส่ตะกร้า~~ (นอกขอบเขต)
 - **P4 — Checkout/Order**: server คำนวณราคาจาก DB, เก็บ items ใน order, แสดงใน /admin queue
-- **P5 — Home cards + cleanup**: การ์ดร้านบน Home อัตโนมัติ, ลบโค้ดตาย preview (`v8-preview-stable-system`)
+- ~~**P5 — Home cards + cleanup**: การ์ดร้านบน Home อัตโนมัติ, ลบโค้ดตาย preview (`v8-preview-stable-system`)~~ (นอกขอบเขต)
 - **P6 — Deploy**: `npm test`, preview deploy บน Vercel, ตรวจมือถือ, แล้ว promote + alias
 
 ## ความเสี่ยง
