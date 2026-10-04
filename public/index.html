@@ -17525,6 +17525,7 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
             </div>
           </div>
           <div style="display:flex;gap:8px;margin-top:auto;padding-top:8px;border-top:1px solid #fdf2f6">
+            <button type="button" onclick="hlgOpenAddProductModal('${esc(c.id)}')" style="border:1px solid #e5a8bf;border-radius:10px;background:#fff0f6;color:#b83a6f;font-weight:700;padding:8px 12px;font:inherit;font-size:12px;cursor:pointer">＋ เพิ่มสินค้า</button>
             <button type="button" onclick="${isBuiltin ? `showPage('${targetPage}')` : `hlgEnsureCategoryPage('${c.id}');showPage('${c.id}')`}" style="flex:1;border:none;border-radius:10px;background:#bc4b7b;color:#fff;font-weight:700;padding:8px 12px;font:inherit;font-size:12px;cursor:pointer">
               เปิดหน้าร้าน / จัดการสินค้า ↗
             </button>
