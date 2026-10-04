@@ -1353,6 +1353,29 @@ function renderCategoryList() {
     const actions = document.createElement("div");
     actions.style.cssText = "display:flex;gap:6px;align-items:center;flex-wrap:wrap;";
 
+    const addProdBtn = document.createElement("button");
+    addProdBtn.textContent = "＋ เพิ่มสินค้า";
+    addProdBtn.type = "button";
+    addProdBtn.style.cssText = "border:0;border-radius:8px;padding:7px 12px;background:#fff0f6;color:#b83a6f;font:inherit;font-size:12px;font-weight:700;cursor:pointer;";
+    addProdBtn.onclick = () => {
+      resetProductForm();
+      const typeSelect = document.getElementById("hlgType");
+      if (typeSelect) {
+        typeSelect.value = c.id;
+        const isBag = c.id === "bag";
+        const isWp = c.id === "wallpaper";
+        const sizeWrap = document.getElementById("hlgSizeWrap");
+        if (sizeWrap) sizeWrap.style.display = isBag ? "" : "none";
+        const dlWrap = document.getElementById("hlgDownloadWrap");
+        if (dlWrap) dlWrap.style.display = isWp ? "" : "none";
+      }
+      const pmContainer = document.getElementById("productManagerContainer");
+      if (pmContainer) pmContainer.scrollIntoView({ behavior: "smooth", block: "start" });
+      const nameInput = document.getElementById("hlgName");
+      if (nameInput) setTimeout(() => nameInput.focus(), 250);
+    };
+    actions.append(addProdBtn);
+
     const viewBtn = document.createElement("a");
     viewBtn.textContent = "ดูหน้าร้าน ↗";
     viewBtn.href = "/?page=" + encodeURIComponent(c.id);
@@ -1559,6 +1582,10 @@ function renderProductsView() {
             หรือใส่ลิงก์รูป HTTPS
             <input id="hlgImageUrl" type="url" placeholder="https://..." style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
           </label>
+          <label id="hlgDownloadWrap" style="display:none;font-size:13px;color:#765461;font-weight:600">
+            ลิงก์ดาวน์โหลด (สำหรับ Wallpaper / Digital File) 🔗
+            <input id="hlgDownloadUrl" type="url" placeholder="เช่น https://drive.google.com/..." style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+          </label>
         </div>
         <p style="font-size:12px;color:#866d79;margin-top:8px">รูปและข้อมูลสินค้าจะบันทึกขึ้นฐานข้อมูลออนไลน์ ทุกเครื่องและลูกค้าจะเห็นพร้อมกันทันที</p>
         <div style="margin-top:12px">
@@ -1575,7 +1602,9 @@ function renderProductsView() {
 
   document.getElementById("hlgType").onchange = function() {
     const isBag = this.value === "bag";
+    const isWp = this.value === "wallpaper";
     document.getElementById("hlgSizeWrap").style.display = isBag ? "" : "none";
+    document.getElementById("hlgDownloadWrap").style.display = isWp ? "" : "none";
   };
   document.getElementById("hlgProductForm").onsubmit = saveProduct;
   document.getElementById("hlgProductCancel").onclick = resetProductForm;
@@ -1614,7 +1643,8 @@ function renderProductList() {
     const catName = cat ? cat.name : catId;
 
     const small = document.createElement("small");
-    const subText = (catId === "bag" && x.size ? x.size + " · " : "") + catName + " · " + Number(x.price).toLocaleString() + " ฿";
+    const dlBadge = (x.download_url || x.download_link) ? " · 🔗 มีลิงก์โหลด" : "";
+    const subText = (catId === "bag" && x.size ? x.size + " · " : "") + catName + " · " + Number(x.price).toLocaleString() + " ฿" + dlBadge;
     small.textContent = subText;
     small.style.cssText = "display:block;color:#927888;margin-top:3px";
 
@@ -1650,7 +1680,13 @@ function editProductRow(id) {
   document.getElementById("hlgImageFile").value = "";
 
   const isBag = (x.category_id || x.type) === "bag";
+  const isWp = (x.category_id || x.type) === "wallpaper";
   document.getElementById("hlgSizeWrap").style.display = isBag ? "" : "none";
+  const dlWrap = document.getElementById("hlgDownloadWrap");
+  if (dlWrap) dlWrap.style.display = isWp ? "" : "none";
+  const dlInput = document.getElementById("hlgDownloadUrl");
+  if (dlInput) dlInput.value = x.download_url || x.download_link || "";
+
   document.getElementById("hlgProductSave").textContent = "อัปเดตสินค้า";
   document.getElementById("hlgProductForm").scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -1662,6 +1698,10 @@ function resetProductForm() {
   document.getElementById("hlgProdDesc").value = "";
   document.getElementById("hlgImageUrl").value = "";
   document.getElementById("hlgImageFile").value = "";
+  const dlInput = document.getElementById("hlgDownloadUrl");
+  if (dlInput) dlInput.value = "";
+  const dlWrap = document.getElementById("hlgDownloadWrap");
+  if (dlWrap) dlWrap.style.display = "none";
   document.getElementById("hlgProductSave").textContent = "บันทึกสินค้า";
   const isBag = document.getElementById("hlgType").value === "bag";
   document.getElementById("hlgSizeWrap").style.display = isBag ? "" : "none";
@@ -1677,6 +1717,7 @@ async function saveProduct(e) {
   const description = document.getElementById("hlgProdDesc").value.trim();
   const file = document.getElementById("hlgImageFile").files[0];
   const imageUrlInput = document.getElementById("hlgImageUrl").value.trim();
+  const downloadUrlInput = document.getElementById("hlgDownloadUrl") ? document.getElementById("hlgDownloadUrl").value.trim() : "";
 
   if (!name || isNaN(price) || price < 0) { showToast("กรอกชื่อและราคาที่ถูกต้อง"); return; }
 
@@ -1698,6 +1739,8 @@ async function saveProduct(e) {
     price,
     description,
     image_url,
+    download_url: downloadUrlInput,
+    download_link: downloadUrlInput,
     size_key: category_id === 'bag' ? sizeKey : '',
     sizeKey: category_id === 'bag' ? sizeKey : '',
     size: category_id === 'bag' ? sizeMap[sizeKey] : ''

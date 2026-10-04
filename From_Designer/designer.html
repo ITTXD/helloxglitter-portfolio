@@ -13880,26 +13880,34 @@ window.v8CFconfirm=function(){
  const error=document.getElementById('v8cfErr');
  function fail(t){if(error){error.textContent=t;error.classList.add('show');error.scrollIntoView({block:'center',behavior:'smooth'})}}
  if(!items.length)return fail('กรุณาเลือกสินค้าอย่างน้อย 1 รายการค่ะ');
- if(phone.length<9)return fail('กรุณาใส่เบอร์โทรให้ครบค่ะ');
- if(!address)return fail('กรุณาใส่ชื่อผู้รับและที่อยู่จัดส่งค่ะ');
- if(items.some(x=>x.type!=='wallpaper')&&!/(^|\D)\d{5}(?!\d)/.test(address))return fail('กรุณาใส่รหัสไปรษณีย์ 5 หลักค่ะ');
- if(items.some(x=>x.type==='wallpaper'||x.requiresEmail)&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return fail('กรุณาใส่ Email สำหรับรับไฟล์ค่ะ');
+ const onlyWp=items.length>0&&items.every(x=>x.type==='wallpaper');
+ if(onlyWp){
+  if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return fail('กรุณาใส่ Email สำหรับรับไฟล์ Wallpaper ให้ถูกต้องค่ะ');
+ }else{
+  if(phone.length<9)return fail('กรุณาใส่เบอร์โทรให้ครบค่ะ');
+  if(!address)return fail('กรุณาใส่ชื่อผู้รับและที่อยู่จัดส่งค่ะ');
+  if(items.some(x=>x.type!=='wallpaper')&&!/(^|\D)\d{5}(?!\d)/.test(address))return fail('กรุณาใส่รหัสไปรษณีย์ 5 หลักค่ะ');
+  if(items.some(x=>x.type==='wallpaper'||x.requiresEmail)&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return fail('กรุณาใส่ Email สำหรับรับไฟล์ค่ะ');
+ }
 
  const tier=window.hlgTierQuote?.(items,address),shipping=tier?.shipping||quote(items),sub=items.reduce((n,x)=>n+(Number(x.price)||0)*(Number(x.qty)||1),0);
  const appliedCpn=window.getAppliedCoupon?.();
  const cpnDiscount=(appliedCpn&&items.some(x=>x.type==='bag'))?appliedCpn.discountBaht:0;
  const grandTotal=Math.max(0,(tier?.subtotal??sub)-cpnDiscount)+Number(shipping.total||0);
- if(shipping.pending)return fail('กรุณากรอกที่อยู่เพื่อคำนวณค่าส่งค่ะ');
+ if(!onlyWp&&shipping.pending)return fail('กรุณากรอกที่อยู่เพื่อคำนวณค่าส่งค่ะ');
  error?.classList.remove('show');
  document.getElementById('hrxConfirm')?.remove();
  const modal=document.createElement('div');modal.id='hrxConfirm';modal.className='hrx-overlay';modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-label','ตรวจสอบคำสั่งซื้อ');
- modal.innerHTML=`<div class="hrx-dialog"><h2>ตรวจสอบคำสั่งซื้อ ♡</h2>${line('รายการที่เลือก',items.length+' รายการ')}${items.map(x=>line((x.name||'สินค้า')+(x.variant?' ('+x.variant+')':'')+' × '+(Number(x.qty)||1),money((Number(x.price)||0)*(Number(x.qty)||1)))).join('')}${line('จำนวนทั้งหมด',qty(items)+' ชิ้น')}${line('ราคาสินค้า',money(sub))}${tier?.discount?line('ส่วนลด '+tier.name,'−'+money(tier.discount)):''}${cpnDiscount?line('ส่วนลดคูปอง '+appliedCpn.code,'−'+money(cpnDiscount)):''}${tier?.gifts?line('ของแถม',tier.gifts):''}${tier?.freeShipping?line('โปรส่งฟรี',shipping.remote&&shipping.total?'ฟรีค่าส่งปกติ · พื้นที่ห่างไกล +'+money(shipping.total):'ฟรี'):''}${line('ค่าจัดส่ง',money(shipping.total))}${line('ยอดรวม',money(grandTotal),true)}<div class="hrx-address"><b>ข้อมูลจัดส่ง</b><br>${esc(address)}<br>โทร. ${esc(phone)}${email?'<br>Email: '+esc(email):''}</div><div class="hrx-actions"><button type="button" id="hrxCancel">กลับไปแก้ไข</button><button type="button" class="primary" id="hrxSubmit">ตกลง ✓</button></div></div>`;
+ const addrBlock=onlyWp
+  ?`<div class="hrx-address"><b>ข้อมูลจัดส่ง (Digital Download)</b><br>Email: ${esc(email)}</div>`
+  :`<div class="hrx-address"><b>ข้อมูลจัดส่ง</b><br>${esc(address)}<br>โทร. ${esc(phone)}${email?'<br>Email: '+esc(email):''}</div>`;
+ modal.innerHTML=`<div class="hrx-dialog"><h2>ตรวจสอบคำสั่งซื้อ ♡</h2>${line('รายการที่เลือก',items.length+' รายการ')}${items.map(x=>line((x.name||'สินค้า')+(x.variant?' ('+x.variant+')':'')+' × '+(Number(x.qty)||1),money((Number(x.price)||0)*(Number(x.qty)||1)))).join('')}${line('จำนวนทั้งหมด',qty(items)+' ชิ้น')}${line('ราคาสินค้า',money(sub))}${tier?.discount?line('ส่วนลด '+tier.name,'−'+money(tier.discount)):''}${cpnDiscount?line('ส่วนลดคูปอง '+appliedCpn.code,'−'+money(cpnDiscount)):''}${tier?.gifts?line('ของแถม',tier.gifts):''}${tier?.freeShipping?line('โปรส่งฟรี',shipping.remote&&shipping.total?'ฟรีค่าส่งปกติ · พื้นที่ห่างไกล +'+money(shipping.total):'ฟรี'):''}${line('ค่าจัดส่ง',money(shipping.total))}${line('ยอดรวม',money(grandTotal),true)}${addrBlock}<div class="hrx-actions"><button type="button" id="hrxCancel">กลับไปแก้ไข</button><button type="button" class="primary" id="hrxSubmit">ตกลง ✓</button></div></div>`;
  document.body.appendChild(modal);document.body.style.overflow='hidden';
  const close=()=>{modal.remove();document.body.style.overflow=''};
  modal.onclick=e=>{if(e.target===modal)close()};modal.querySelector('#hrxCancel').onclick=close;
  modal.querySelector('#hrxSubmit').onclick=async()=>{
   const current=selected(),nowTier=window.hlgTierQuote?.(current,addr()),now=nowTier?.shipping||quote(current),nowSub=current.reduce((n,x)=>n+(Number(x.price)||0)*(Number(x.qty||1)),0);
-  if(JSON.stringify(current)!==JSON.stringify(items)||addr()!==address||JSON.stringify(nowTier?.snapshot||null)!==JSON.stringify(tier?.snapshot||null)||(nowTier?.subtotal??nowSub)+Number(now.total||0)!==(tier?.subtotal??sub)+Number(shipping.total||0)){close();fail('รายการหรือยอดเปลี่ยนไป กรุณาตรวจสอบอีกครั้งค่ะ');return}
+  if(JSON.stringify(current)!==JSON.stringify(items)||(!onlyWp&&addr()!==address)||JSON.stringify(nowTier?.snapshot||null)!==JSON.stringify(tier?.snapshot||null)||(nowTier?.subtotal??nowSub)+Number(now.total||0)!==(tier?.subtotal??sub)+Number(shipping.total||0)){close();fail('รายการหรือยอดเปลี่ยนไป กรุณาตรวจสอบอีกครั้งค่ะ');return}
   const button=modal.querySelector('#hrxSubmit');button.disabled=true;button.textContent='กำลังบันทึก…';
   let failure=null;
   try{if(window.hlgOrderStore?.active)await window.hlgOrderStore.readyPromise}catch(e){failure=e}
@@ -13921,7 +13929,7 @@ window.v8CFconfirm=function(){
     window.clearAppliedCoupon?.();
   }
   close();
-  if(order&&!writeFailure){try{renderDone(order)}catch(e){console.error('Order view failed',e);fail('บันทึกออเดอร์แล้ว แต่แสดงหน้าออเดอร์ไม่สำเร็จ กรุณาเช็กสถานะด้วยเบอร์โทรค่ะ')}return}
+  if(order&&!writeFailure){try{renderDone(order)}catch(e){console.error('Order view failed',e);fail(onlyWp?'บันทึกออเดอร์แล้ว แต่แสดงหน้าออเดอร์ไม่สำเร็จ กรุณาเช็กสถานะด้วย Email ค่ะ':'บันทึกออเดอร์แล้ว แต่แสดงหน้าออเดอร์ไม่สำเร็จ กรุณาเช็กสถานะด้วยเบอร์โทรค่ะ')}return}
   if(failure){try{localStorage.setItem(CART,JSON.stringify(cartBefore));localStorage.setItem(SEL,JSON.stringify(selectionBefore));if(typeof window.v8UpdateCartFloat==='function')v8UpdateCartFloat()}catch(e){console.error('Cart restore failed',e)}}
   if(failure?.name==='QuotaExceededError'||/quota|storage/i.test(String(failure?.message||'')))fail('พื้นที่เก็บข้อมูลของเบราว์เซอร์เต็ม บันทึกออเดอร์ไม่สำเร็จ กรุณาติดต่อร้านก่อนลองใหม่ค่ะ');
   else fail('บันทึกออเดอร์ไม่สำเร็จ กรุณาลองอีกครั้ง หากยังมีปัญหาโปรดติดต่อร้านค่ะ');

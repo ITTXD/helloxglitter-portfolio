@@ -22,6 +22,7 @@ process.env.VERCEL = '1';
 process.env.FIREBASE_PROJECT_ID = ''; // local in-memory fallback
 process.env.ADMIN_PASSWORD = 'helloxglitter';
 process.env.SESSION_SECRET = 'test-secret-shop-builder-8888';
+process.env.ALLOW_MOCK_SLIP = 'true'; // allow mock slip for wallpaper order integration test
 
 const serverHandler = require('../server');
 const ROOT = path.join(__dirname, '..');
@@ -124,6 +125,26 @@ async function runTests() {
     testProdId = data.product.id;
   });
 
+  let testWpProdId = null;
+  await asyncTest('POST /api/products creates wallpaper product with download_url', async () => {
+    const req = createReq('POST', '/api/products', {
+      category_id: 'wallpaper',
+      name: 'Wallpaper Rose Set',
+      price: 99,
+      description: 'วอลเปเปอร์มือถือลายกุหลาบ',
+      image_url: 'data:image/jpeg;base64,mockwallpaper',
+      download_url: 'https://drive.google.com/drive/folders/test-rose-set'
+    }, ADMIN_COOKIE);
+    const res = createRes();
+    await serverHandler(req, res);
+    assert.strictEqual(res._status, 200);
+    const data = JSON.parse(res._body);
+    assert.strictEqual(data.success, true);
+    assert.ok(data.product.id);
+    assert.strictEqual(data.product.download_url, 'https://drive.google.com/drive/folders/test-rose-set');
+    testWpProdId = data.product.id;
+  });
+
   await asyncTest('GET /api/products returns newly created product', async () => {
     const req = createReq('GET', '/api/products');
     const res = createRes();
@@ -148,6 +169,18 @@ async function runTests() {
     assert.strictEqual(data.success, true);
     assert.strictEqual(data.product.price, 59);
     assert.strictEqual(data.product.name, 'ปากกาเจล Glitter Pastel 0.5 (แพ็คพิเศษ)');
+  });
+
+  await asyncTest('PUT /api/products/:id updates download_url on wallpaper product', async () => {
+    const req = createReq('PUT', `/api/products/${testWpProdId}`, {
+      download_url: 'https://drive.google.com/drive/folders/test-rose-set-v2'
+    }, ADMIN_COOKIE);
+    const res = createRes();
+    await serverHandler(req, res);
+    assert.strictEqual(res._status, 200);
+    const data = JSON.parse(res._body);
+    assert.strictEqual(data.success, true);
+    assert.strictEqual(data.product.download_url, 'https://drive.google.com/drive/folders/test-rose-set-v2');
   });
 
   await asyncTest('POST /api/categories rejects unauthenticated request with 401', async () => {
@@ -243,6 +276,10 @@ async function runTests() {
     assert.ok(
       indexHtml.includes('Digital Download (Wallpaper)'),
       'Wallpaper checkout must designate digital download address'
+    );
+    assert.ok(
+      indexHtml.includes("const onlyWp=items.length>0&&items.every(x=>x.type==='wallpaper')"),
+      'Receipt experience modal wrapper must detect wallpaper-only orders'
     );
   });
 
@@ -349,6 +386,69 @@ async function runTests() {
     assert.ok(
       indexHtml.includes("function wpChangeQty(name, delta)") && indexHtml.includes("v8SyncWallpaperToCart()"),
       'wpChangeQty must automatically sync wallpaper quantity to cart'
+    );
+  });
+
+  test('wallpaper gallery renders dynamically with admin bar, download-link modal field, and wired showPage', () => {
+    assert.ok(
+      indexHtml.includes('function renderWallpaperGallery()'),
+      'renderWallpaperGallery must exist'
+    );
+    assert.ok(
+      indexHtml.includes("page === 'wallpaper' && typeof window.renderWallpaperGallery === 'function'"),
+      'showPage(wallpaper) must call renderWallpaperGallery'
+    );
+    assert.ok(
+      indexHtml.includes('id="wpAdminBar"'),
+      '#wpAdminBar must exist on wallpaper page for admin quick-add'
+    );
+    assert.ok(
+      indexHtml.includes('hlgProdModalDownload'),
+      'Storefront product modal must have download link input'
+    );
+    assert.ok(
+      indexHtml.includes("querySelectorAll('#wallpaperGallery .wp-card.picked')"),
+      'Cart sync must collect every picked wallpaper card (multi-product support)'
+    );
+    assert.ok(
+      indexHtml.includes('window.getCustomProducts = getCustomProducts') && indexHtml.includes('window.isAdminUser = isAdminUser'),
+      'getCustomProducts/isAdminUser must be exposed globally for gallery renderer'
+    );
+  });
+
+  console.log('\n── 4. WALLPAPER ORDER → DOWNLOAD LINKS INTEGRATION ──');
+  const wpOrderEmail = `wp-dl-${Date.now()}@testmail.com`;
+
+  await asyncTest('POST /api/wallpaper/order stores download_links from custom product', async () => {
+    const req = createReq('POST', '/api/wallpaper/order', {
+      email: wpOrderEmail,
+      customer_info: wpOrderEmail,
+      patterns: ['Wallpaper Rose Set'],
+      total_price: 99,
+      slip_data: 'data:image/png;base64,mockslip'
+    });
+    const res = createRes();
+    await serverHandler(req, res);
+    assert.strictEqual(res._status, 201);
+    const data = JSON.parse(res._body);
+    assert.strictEqual(data.success, true);
+    assert.ok(Array.isArray(data.order.download_links) && data.order.download_links.length > 0, 'download_links must be captured');
+    assert.strictEqual(data.order.download_links[0].url, 'https://drive.google.com/drive/folders/test-rose-set-v2');
+    assert.strictEqual(data.order.download_link, 'https://drive.google.com/drive/folders/test-rose-set-v2');
+  });
+
+  await asyncTest('POST /api/wallpaper/check returns product download_links for confirmed email', async () => {
+    const req = createReq('POST', '/api/wallpaper/check', { email: wpOrderEmail });
+    const res = createRes();
+    await serverHandler(req, res);
+    assert.strictEqual(res._status, 200);
+    const data = JSON.parse(res._body);
+    assert.strictEqual(data.found, true);
+    assert.strictEqual(data.confirmed, true);
+    assert.ok(Array.isArray(data.download_links), 'check must return download_links array');
+    assert.ok(
+      data.download_links.some(l => l.url === 'https://drive.google.com/drive/folders/test-rose-set-v2'),
+      'check must include the purchased product download link'
     );
   });
 

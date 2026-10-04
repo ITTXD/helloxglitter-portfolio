@@ -6347,6 +6347,12 @@ if(document.readyState!=='loading'){
   </div>
 
   <div class="sec">
+    <div id="wpAdminBar" style="display:none;margin-bottom:14px;align-items:center;justify-content:space-between;background:#fff0f6;border:1px dashed #f2a4c2;border-radius:14px;padding:10px 14px">
+      <span style="font-size:13px;color:#94345d;font-weight:700">🎨 จัดการ Wallpaper (Admin)</span>
+      <button type="button" onclick="hlgOpenAddProductModal('wallpaper')" style="border:none;background:#bc4b7b;color:#fff;border-radius:10px;padding:7px 14px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 3px 8px rgba(188,75,123,.2)">
+        ＋ เพิ่ม Wallpaper ใหม่
+      </button>
+    </div>
     <div class="sec-title"><i class="ti ti-photo"></i> Wallpaper <span style="font-size:12px;color:#b8a0d0;font-weight:400">— เลือกจำนวนได้</span></div>
     <div class="gallery" id="wallpaperGallery">
       <div class="gcard wp-card" id="wpCard" onclick="wpTogglePattern('Wallpaper')">
@@ -7539,6 +7545,7 @@ function showPage(page) {
   window.scrollTo(0, 0);
 
   if (page === 'sticker') stickerBuildGallery();
+  if (page === 'wallpaper' && typeof window.renderWallpaperGallery === 'function') window.renderWallpaperGallery();
   if (page === 'admin') { if (!isAdmin()) { showPage('preorder'); openLoginModal(); return; } renderAdminOrders(); renderNoticeEditor(); renderPromoEditor(); }
   if (page === 'tracking') setTimeout(function(){ var x=document.getElementById('tr-phone'); if(x) x.focus(); },80);
 }
@@ -7841,37 +7848,160 @@ function v8GoToShopeeTracking() {
 }
 
 /* 10. WALLPAPER INTERACTION */
+function renderWallpaperGallery() {
+  var gallery = document.getElementById('wallpaperGallery');
+  if (!gallery) return;
+  var adminBar = document.getElementById('wpAdminBar');
+  var isAdm = (typeof isAdminUser === 'function' && isAdminUser());
+  if (adminBar) adminBar.style.display = isAdm ? 'flex' : 'none';
+
+  var customProds = (typeof getCustomProducts === 'function' ? getCustomProducts() : []);
+  var wpProds = customProds.filter(function(p) {
+    return p && (p.category_id === 'wallpaper' || p.type === 'wallpaper');
+  });
+
+  if (wpProds.length === 0) {
+    wpProds = [{
+      id: 'default-wallpaper',
+      name: 'Wallpaper Special Set',
+      size: 'Digital Download',
+      price: 99,
+      image_url: 'https://helloxglitterstore.vercel.app/images/wallphone.png',
+      download_url: 'https://drive.google.com/drive/folders/1xhovSRun2q6O4g7S_wDKwuHuETZVk10-?usp=sharing'
+    }];
+  }
+
+  var cartItems = [];
+  try {
+    var raw = localStorage.getItem('hlg_unified_cart_v1');
+    if (raw) cartItems = JSON.parse(raw);
+  } catch(e) {}
+
+  var html = '';
+  wpProds.forEach(function(p) {
+    var inCart = cartItems.find(function(c) {
+      return c && c.type === 'wallpaper' && (c.id === p.id || c.name === p.name);
+    });
+    var pickedQty = inCart ? Number(inCart.qty || 1) : (window.wpPicked ? Number(window.wpPicked[p.id] || window.wpPicked[p.name] || 0) : 0);
+    var isPicked = (pickedQty > 0);
+    var displayQty = isPicked ? pickedQty : 1;
+    if (isPicked && window.wpPicked) {
+      window.wpPicked[p.id] = displayQty;
+      window.wpPicked[p.name] = displayQty;
+    }
+
+    var img = p.image_url || p.imageUrl || 'https://helloxglitterstore.vercel.app/images/wallphone.png';
+    var name = p.name || 'Wallpaper';
+    var price = Number(p.price || 99);
+    var sizeLabel = p.size || 'Digital Download';
+    var pId = String(p.id);
+
+    html += `
+      <div class="gcard wp-card ${isPicked ? 'picked' : ''}" id="wpCard-${esc(pId)}" data-wp-id="${esc(pId)}" onclick="wpTogglePattern('${esc(pId)}')">
+        <img class="gimg wp-card-img" src="${esc(img)}" onerror="handleImgError(this, '${esc(name)}', './images/wallphone.png')" alt="${esc(name)}"/>
+        <div class="gzoom wp-zoom" onclick="event.stopPropagation();openImgLightbox('${esc(img)}')" title="ซูมดูรูปขนาดใหญ่"><i class="ti ti-zoom-in"></i></div>
+        ${isAdm ? `
+          <div class="wp-card-admin-bar" style="position:absolute;top:8px;left:8px;z-index:10;display:flex;gap:4px" onclick="event.stopPropagation()">
+            <button type="button" onclick="hlgOpenAddProductModal('wallpaper', '${esc(pId)}')" style="border:none;background:rgba(255,255,255,.94);color:#a83e6a;font-size:11px;font-weight:700;padding:4px 8px;border-radius:6px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.15)" title="แก้ไข">✎ แก้ไข</button>
+            ${pId !== 'default-wallpaper' ? `<button type="button" onclick="hlgDeleteProduct('${esc(pId)}', 'wallpaper')" style="border:none;background:rgba(255,255,255,.94);color:#c53063;font-size:11px;font-weight:700;padding:4px 8px;border-radius:6px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.15)" title="ลบ">🗑️</button>` : ''}
+          </div>
+        ` : ''}
+        <div class="glabel wp-card-info">
+          <div class="gname wp-card-name">${esc(name)}</div>
+          <div class="gsize">${esc(sizeLabel)}</div>
+          <div class="gprice wp-card-price">${price.toLocaleString()} ฿</div>
+        </div>
+        <div class="gcheck wp-card-check" id="wpCardCheck-${esc(pId)}"><i class="ti ti-check"></i></div>
+        <div class="gqty wp-card-qty" id="wpCardQty-${esc(pId)}" onclick="event.stopPropagation()">
+          <button class="gqbtn" onclick="event.stopPropagation();wpChangeQty('${esc(pId)}',-1)">−</button>
+          <span class="gqnum" id="wpCardQtyNum-${esc(pId)}">${displayQty}</span>
+          <button class="gqbtn" onclick="event.stopPropagation();wpChangeQty('${esc(pId)}',1)">+</button>
+        </div>
+      </div>
+    `;
+  });
+
+  gallery.innerHTML = html;
+  wpUpdateSummary();
+}
+window.renderWallpaperGallery = renderWallpaperGallery;
+
 function wpTogglePattern(name) {
-  var card = document.getElementById('wpCard');
+  var card = document.getElementById('wpCard-' + name) ||
+             document.querySelector('[data-wp-id="' + name + '"]') ||
+             document.getElementById('wpCard');
+  if (!card) return;
   card.classList.toggle('picked');
+  var isPicked = card.classList.contains('picked');
+  var pId = card.getAttribute('data-wp-id') || name || 'Wallpaper';
+  var pName = card.querySelector('.wp-card-name')?.textContent?.trim() || name || 'Wallpaper';
+
+  if (!window.wpPicked) window.wpPicked = {};
+  if (isPicked) {
+    var qNum = parseInt(card.querySelector('.gqnum')?.textContent, 10) || 1;
+    window.wpPicked[pId] = qNum;
+    window.wpPicked[pName] = qNum;
+    window.wpPicked['Wallpaper'] = qNum;
+    if (window.showToast) showToast('เพิ่ม Wallpaper ลงในตะกร้าแล้ว ♡');
+    if (window.v8RainbowCelebrate) v8RainbowCelebrate('เพิ่มลงตะกร้าแล้ว 🌈');
+  } else {
+    delete window.wpPicked[pId];
+    delete window.wpPicked[pName];
+    if (pId === 'default-wallpaper' || pName === 'Wallpaper' || pName === 'Wallpaper Special Set') {
+      delete window.wpPicked['Wallpaper'];
+      delete window.wpPicked['Wallpaper Special Set'];
+    }
+    if (window.showToast) showToast('นำ Wallpaper ออกจากตะกร้าแล้ว');
+  }
   wpUpdateSummary();
   if (typeof v8SyncWallpaperToCart === 'function') {
     v8SyncWallpaperToCart();
   }
-  if (card.classList.contains('picked')) {
-    if (window.showToast) showToast('เพิ่ม Wallpaper ลงในตะกร้าแล้ว ♡');
-    if (window.v8RainbowCelebrate) v8RainbowCelebrate('เพิ่มลงตะกร้าแล้ว 🌈');
-  } else {
-    if (window.showToast) showToast('นำ Wallpaper ออกจากตะกร้าแล้ว');
-  }
 }
 function wpChangeQty(name, delta) {
-  var q = (wpPicked[name] || 1) + delta;
+  var card = document.getElementById('wpCard-' + name) ||
+             document.querySelector('[data-wp-id="' + name + '"]') ||
+             document.getElementById('wpCard');
+  if (!card) return;
+  var pId = card.getAttribute('data-wp-id') || name || 'Wallpaper';
+  var pName = card.querySelector('.wp-card-name')?.textContent?.trim() || name || 'Wallpaper';
+  if (!window.wpPicked) window.wpPicked = {};
+  var cur = parseInt(card.querySelector('.gqnum')?.textContent, 10) || window.wpPicked[pId] || window.wpPicked[pName] || 1;
+  var q = cur + delta;
   if (q < 1) q = 1;
-  wpPicked[name] = q;
-  document.getElementById('wpCardQtyNum').textContent = q;
+  window.wpPicked[pId] = q;
+  window.wpPicked[pName] = q;
+  window.wpPicked['Wallpaper'] = q;
+  var qEl = card.querySelector('.gqnum') || document.getElementById('wpCardQtyNum');
+  if (qEl) qEl.textContent = q;
   wpUpdateSummary();
   if (typeof v8SyncWallpaperToCart === 'function') {
     v8SyncWallpaperToCart();
   }
 }
 function wpUpdateSummary() {
-  var q = wpPicked['Wallpaper'] || 1;
   var sum = document.getElementById('wpSumItems');
-  sum.innerHTML = '<div class="sum-row"><span>Wallpaper Special Set × ' + q + '</span><span>' + (q * 99) + ' ฿</span></div>'
+  if (!sum) return;
+  var pickedCards = document.querySelectorAll('#wallpaperGallery .wp-card.picked');
+  if (pickedCards.length === 0) {
+    sum.innerHTML = '<div class="sum-empty">เลือกลายเพื่อดูยอดรวมค่ะ</div>';
+    return;
+  }
+  var totalBaht = 0;
+  var itemsHtml = '';
+  pickedCards.forEach(function(card) {
+    var name = card.querySelector('.wp-card-name')?.textContent?.trim() || 'Wallpaper';
+    var q = parseInt(card.querySelector('.gqnum')?.textContent, 10) || 1;
+    var priceText = card.querySelector('.wp-card-price')?.textContent?.replace(/[^\d]/g, '') || '99';
+    var price = parseInt(priceText, 10) || 99;
+    var lineTotal = q * price;
+    totalBaht += lineTotal;
+    itemsHtml += '<div class="sum-row"><span>' + esc(name) + ' × ' + q + '</span><span>' + lineTotal.toLocaleString() + ' ฿</span></div>';
+  });
+  sum.innerHTML = itemsHtml
     + '<hr class="sum-divider">'
     + '<div class="sum-total"><span>ค่าจัดส่ง</span><span>ฟรี (Digital)</span></div>'
-    + '<div class="sum-total" style="color:#7c3aed;font-size:16px;margin-top:6px"><span>ยอดรวม</span><span>' + (q * 99) + ' ฿</span></div>';
+    + '<div class="sum-total" style="color:#7c3aed;font-size:16px;margin-top:6px"><span>ยอดรวม</span><span>' + totalBaht.toLocaleString() + ' ฿</span></div>';
 }
 function copyBank(btn) {
   navigator.clipboard.writeText('7492439414');
@@ -7906,22 +8036,87 @@ function wpDoSubmit() {
   document.getElementById('wpSuccessBox').classList.remove('hidden');
   document.getElementById('wpSuccessBox').classList.add('show');
 }
-function wpCheckDownload() {
+async function wpCheckDownload() {
   var email = document.getElementById('wpCheckEmail').value.trim();
   var res = document.getElementById('wpCheckResult');
   var err = document.getElementById('wpCheckErr');
+  var btn = document.getElementById('wpCheckBtn');
   if (!email || !email.includes('@')) {
     err.style.display = 'block';
     err.textContent = 'กรุณากรอก E-mail ให้ถูกต้อง';
     return;
   }
   err.style.display = 'none';
-  res.style.display = 'block';
-  res.innerHTML = '<div style="background:#f0fff0;border:1.5px solid #b0e0b0;color:#208020;padding:16px;border-radius:12px;text-align:center;">'
-    + '<div style="font-size:24px;margin-bottom:6px">📥</div>'
-    + '<div style="font-weight:800;font-size:15px;margin-bottom:8px">พบไฟล์วอลเปเปอร์พร้อมดาวน์โหลด!</div>'
-    + '<a href="#" onclick="alert(\'จำลองการดาวน์โหลดไฟล์สำเร็จ\');return false;" style="display:inline-block;background:#7c3aed;color:#fff;padding:10px 24px;border-radius:20px;text-decoration:none;font-weight:700;">ดาวน์โหลดเซ็ต Wallpaper (ZIP)</a>'
-    + '</div>';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader"></i> กำลังตรวจสอบ...';
+  }
+
+  try {
+    var response = await fetch('/api/wallpaper/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email })
+    });
+    var data = await response.json();
+    res.style.display = 'block';
+
+    if (data.confirmed && (data.download_links || data.download_link)) {
+      var links = data.download_links || [];
+      if (links.length === 0 && data.download_link) {
+        links = [{ name: 'Wallpaper Special Set', url: data.download_link }];
+      }
+      var linksHtml = links.map(function(item) {
+        return `
+          <div style="background:#fff;border:1px solid #bce6bc;border-radius:14px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;box-shadow:0 2px 8px rgba(0,0,0,0.04);margin-top:8px">
+            <div style="font-weight:700;color:#1e5e1e;font-size:14px">🎨 ${esc(item.name || 'Wallpaper')}</div>
+            <a href="${esc(item.url)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#7c3aed,#6b21a8);color:#fff;padding:8px 18px;border-radius:20px;text-decoration:none;font-weight:700;font-size:13px;box-shadow:0 3px 10px rgba(124,58,237,.25)">
+              <i class="ti ti-download"></i> ดาวน์โหลด Wallpaper
+            </a>
+          </div>
+        `;
+      }).join('');
+
+      res.innerHTML = `
+        <div style="background:#f0fff0;border:1.5px solid #b0e0b0;color:#208020;padding:18px;border-radius:18px;text-align:center;box-sizing:border-box">
+          <div style="font-size:28px;margin-bottom:6px">🎉</div>
+          <div style="font-weight:800;font-size:16px;margin-bottom:4px">${esc(data.message || 'พบไฟล์วอลเปเปอร์พร้อมดาวน์โหลด!')}</div>
+          <div style="font-size:12px;color:#2d7a2d;margin-bottom:12px">คลิกปุ่มด้านล่างเพื่อเปิดหรือบันทึกไฟล์ได้เลยค่ะ ♡</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            ${linksHtml}
+          </div>
+        </div>
+      `;
+    } else if (data.found && !data.confirmed) {
+      res.innerHTML = `
+        <div style="background:#fff9e6;border:1.5px solid #ffe08a;color:#8a6800;padding:18px;border-radius:18px;text-align:center;">
+          <div style="font-size:28px;margin-bottom:6px">⏳</div>
+          <div style="font-weight:800;font-size:15px;margin-bottom:4px">พบออเดอร์แล้วค่ะ</div>
+          <div style="font-size:13px">${esc(data.message || 'อยู่ระหว่างการยืนยันยอดเงิน กรุณารอสักครู่นะคะ 💝')}</div>
+        </div>
+      `;
+    } else {
+      res.innerHTML = `
+        <div style="background:#fff0f3;border:1.5px solid #ffccd5;color:#c92a2a;padding:18px;border-radius:18px;text-align:center;">
+          <div style="font-size:28px;margin-bottom:6px">❌</div>
+          <div style="font-weight:800;font-size:15px;margin-bottom:4px">ไม่พบข้อมูล</div>
+          <div style="font-size:13px">${esc(data.message || data.error || 'ไม่พบออเดอร์ Wallpaper สำหรับอีเมลนี้ค่ะ')}</div>
+        </div>
+      `;
+    }
+  } catch(err) {
+    res.style.display = 'block';
+    res.innerHTML = `
+      <div style="background:#fff0f3;border:1.5px solid #ffccd5;color:#c92a2a;padding:16px;border-radius:16px;text-align:center;">
+        เกิดข้อผิดพลาดในการตรวจสอบ: ${esc(err.message || 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ')}
+      </div>
+    `;
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ti ti-search"></i> เช็คลิงก์ดาวน์โหลด';
+    }
+  }
 }
 
 /* 11. MUSIC CONTROLS */
@@ -8164,7 +8359,7 @@ window.handleLogin=async function(e){
   closeLoginModal();
   renderDrawerMenu();
   showPage('home');
-  setTimeout(()=>{v6RenderHome();v6ApplyMode();if(window.v5RenderBanner)v5RenderBanner();showToast('เข้าสู่ระบบแอดมินแล้ว ♡')},30);
+  setTimeout(()=>{v6RenderHome();v6ApplyMode();if(window.v5RenderBanner)v5RenderBanner();if(typeof window.renderWallpaperGallery==='function')try{window.renderWallpaperGallery()}catch(e){};showToast('เข้าสู่ระบบแอดมินแล้ว ♡')},30);
   return false;
 };
 const oldLogout=window.logoutHLG;
@@ -8192,6 +8387,7 @@ window.logoutHLG=function(){
   if(typeof v6ApplyMode==='function')v6ApplyMode();
   if(typeof v6RenderHome==='function')v6RenderHome();
   if(typeof v5RenderBanner==='function')v5RenderBanner();
+  if(typeof window.renderWallpaperGallery==='function')try{window.renderWallpaperGallery()}catch(e){}
   showPage('home');
   showToast('ออกจาก Admin แล้ว');
 };
@@ -8938,7 +9134,7 @@ document.addEventListener('DOMContentLoaded',function(){
      customer_email:email,
      customer_address:'',
      customer_note:note,
-     items:a.map(x=>({name:x.name,variant:x.variant||'',qty:Number(x.qty||1),price:Number(x.price||0),image:x.image||'',type:x.type||''})),
+     items:a.map(x=>({id:x.id||'',name:x.name,variant:x.variant||'',qty:Number(x.qty||1),price:Number(x.price||0),image:x.image||'',type:x.type||'',download_url:x.download_url||''})),
      total_bags:a.filter(x=>x.type==='bag').reduce((n,x)=>n+Number(x.qty||0),0),
      total_price:finalTotal,
      coupon_code:appliedCpn?appliedCpn.code:'',
@@ -9362,12 +9558,17 @@ document.addEventListener('DOMContentLoaded',function(){
 
  window.v8SyncWallpaperToCart=function(){
    const a=getCart().filter(x=>x.type!=='wallpaper');
-   const card=document.getElementById('wpCard');
-   if(card?.classList.contains('picked')){
-     const q=Number((window.wpPicked||{}).Wallpaper||1);
+   document.querySelectorAll('#wallpaperGallery .wp-card.picked').forEach(function(card){
+     const pid=card.getAttribute('data-wp-id')||'';
+     const name=(card.querySelector('.wp-card-name')?.textContent||'').trim()||'Wallpaper';
+     const q=parseInt(card.querySelector('.gqnum')?.textContent,10)||1;
+     const priceTxt=(card.querySelector('.wp-card-price')?.textContent||'').replace(/[^\d]/g,'');
+     const price=parseInt(priceTxt,10)||99;
      const img=card.querySelector('img')?.src||'';
-     a.push({type:'wallpaper',name:'Wallpaper Special Set',variant:'Digital Download',qty:q,price:99,image:img,requiresEmail:true})
-   }
+     let dl='';
+     try{const p=(window.getCustomProducts?getCustomProducts():[]).find(p=>String(p.id)===String(pid)||p.name===name);if(p)dl=p.download_url||p.download_link||''}catch(e){}
+     a.push({type:'wallpaper',id:pid,name:name,variant:'Digital Download',qty:q,price:price,image:img,download_url:dl,requiresEmail:true})
+   });
    setCart(a)
  }
 
@@ -9964,26 +10165,33 @@ document.addEventListener('click',function(e){
 /* Keep Wallpaper deterministic as well. */
 function syncWallpaper(){
   const keep=readCart().filter(x=>x.type!=='wallpaper');
-  const card=document.getElementById('wpCard');
-  if(card?.classList.contains('picked')){
-    const q=(typeof wpPicked!=='undefined' && wpPicked)?Number(wpPicked.Wallpaper||1):1;
+  document.querySelectorAll('#wallpaperGallery .wp-card.picked').forEach(function(card){
+    const pid=card.getAttribute('data-wp-id')||'';
+    const name=(card.querySelector('.wp-card-name')?.textContent||'').trim()||'Wallpaper';
+    const q=parseInt(card.querySelector('.gqnum')?.textContent,10)||1;
+    const priceTxt=(card.querySelector('.wp-card-price')?.textContent||'').replace(/[^\d]/g,'');
+    const price=parseInt(priceTxt,10)||99;
     const img=card.querySelector('img')?.src||'';
+    let dl='';
+    try{const p=(window.getCustomProducts?getCustomProducts():[]).find(p=>String(p.id)===String(pid)||p.name===name);if(p)dl=p.download_url||p.download_link||''}catch(e){}
     keep.push({
       type:'wallpaper',
-      name:'Wallpaper Special Set',
+      id:pid,
+      name:name,
       variant:'Digital Download',
       qty:q,
-      price:99,
+      price:price,
       image:img,
+      download_url:dl,
       requiresEmail:true
     });
-  }
+  });
   writeCart(keep);
 }
 window.v8SyncWallpaperToCart=syncWallpaper;
 
 document.addEventListener('click',function(e){
-  if(e.target.closest('#page-wallpaper #wpCard')) setTimeout(syncWallpaper,0);
+  if(e.target.closest('#page-wallpaper .wp-card')) setTimeout(syncWallpaper,0);
 },true);
 
 /* Opening the cart now ONLY opens the dedicated cart page and renders stored cart items. */
@@ -13358,9 +13566,9 @@ function card(o){
           <div style="font-weight:800;font-size:14px;display:flex;align-items:center;gap:6px"><span>✨</span> ลิงก์ดาวน์โหลด Wallpaper</div>
           <div style="font-size:11px;color:#7e22ce;margin-top:2px">สำหรับ Email: <b>${esc(o.customer_email || 'ลูกค้า')}</b> (กดปุ่มเพื่อรับไฟล์ได้ทันทีค่ะ)</div>
         </div>
-        <button type="button" class="v8track-btn" style="background:#7c3aed;color:#fff;font-weight:700;padding:8px 18px;border-radius:20px;font-size:12px;cursor:pointer" onclick="showPage('wpcheck');setTimeout(()=>{const el=document.getElementById('wpCheckEmail');if(el){el.value='${esc(o.customer_email||'')}';wpCheckDownload();}},80)">
+        ${(Array.isArray(o.download_links)&&o.download_links.length>0)?o.download_links.map(l=>`<a href="${esc(l.url||'')}" target="_blank" rel="noopener noreferrer" class="v8track-btn" style="background:#7c3aed;color:#fff;font-weight:700;padding:8px 18px;border-radius:20px;font-size:12px;text-decoration:none;display:inline-flex;align-items:center;gap:6px">📥 ${esc(l.name||'Wallpaper')}</a>`).join(''):`<button type="button" class="v8track-btn" style="background:#7c3aed;color:#fff;font-weight:700;padding:8px 18px;border-radius:20px;font-size:12px;cursor:pointer" onclick="showPage('wpcheck');setTimeout(()=>{const el=document.getElementById('wpCheckEmail');if(el){el.value='${esc(o.customer_email||'')}';wpCheckDownload();}},80)">
           📥 ดาวน์โหลด Wallpaper →
-        </button>
+        </button>`}
       </div>` : ''}
     <div class="v8track-dashboard">
       <div class="v8track-card">
@@ -14832,26 +15040,34 @@ window.v8CFconfirm=function(){
  const error=document.getElementById('v8cfErr');
  function fail(t){if(error){error.textContent=t;error.classList.add('show');error.scrollIntoView({block:'center',behavior:'smooth'})}}
  if(!items.length)return fail('กรุณาเลือกสินค้าอย่างน้อย 1 รายการค่ะ');
- if(phone.length<9)return fail('กรุณาใส่เบอร์โทรให้ครบค่ะ');
- if(!address)return fail('กรุณาใส่ชื่อผู้รับและที่อยู่จัดส่งค่ะ');
- if(items.some(x=>x.type!=='wallpaper')&&!/(^|\D)\d{5}(?!\d)/.test(address))return fail('กรุณาใส่รหัสไปรษณีย์ 5 หลักค่ะ');
- if(items.some(x=>x.type==='wallpaper'||x.requiresEmail)&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return fail('กรุณาใส่ Email สำหรับรับไฟล์ค่ะ');
+ const onlyWp=items.length>0&&items.every(x=>x.type==='wallpaper');
+ if(onlyWp){
+  if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return fail('กรุณาใส่ Email สำหรับรับไฟล์ Wallpaper ให้ถูกต้องค่ะ');
+ }else{
+  if(phone.length<9)return fail('กรุณาใส่เบอร์โทรให้ครบค่ะ');
+  if(!address)return fail('กรุณาใส่ชื่อผู้รับและที่อยู่จัดส่งค่ะ');
+  if(items.some(x=>x.type!=='wallpaper')&&!/(^|\D)\d{5}(?!\d)/.test(address))return fail('กรุณาใส่รหัสไปรษณีย์ 5 หลักค่ะ');
+  if(items.some(x=>x.type==='wallpaper'||x.requiresEmail)&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return fail('กรุณาใส่ Email สำหรับรับไฟล์ค่ะ');
+ }
 
  const tier=window.hlgTierQuote?.(items,address),shipping=tier?.shipping||quote(items),sub=items.reduce((n,x)=>n+(Number(x.price)||0)*(Number(x.qty)||1),0);
  const appliedCpn=window.getAppliedCoupon?.();
  const cpnDiscount=(appliedCpn&&items.some(x=>x.type==='bag'))?appliedCpn.discountBaht:0;
  const grandTotal=Math.max(0,(tier?.subtotal??sub)-cpnDiscount)+Number(shipping.total||0);
- if(shipping.pending)return fail('กรุณากรอกที่อยู่เพื่อคำนวณค่าส่งค่ะ');
+ if(!onlyWp&&shipping.pending)return fail('กรุณากรอกที่อยู่เพื่อคำนวณค่าส่งค่ะ');
  error?.classList.remove('show');
  document.getElementById('hrxConfirm')?.remove();
  const modal=document.createElement('div');modal.id='hrxConfirm';modal.className='hrx-overlay';modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-label','ตรวจสอบคำสั่งซื้อ');
- modal.innerHTML=`<div class="hrx-dialog"><h2>ตรวจสอบคำสั่งซื้อ ♡</h2>${line('รายการที่เลือก',items.length+' รายการ')}${items.map(x=>line((x.name||'สินค้า')+(x.variant?' ('+x.variant+')':'')+' × '+(Number(x.qty)||1),money((Number(x.price)||0)*(Number(x.qty)||1)))).join('')}${line('จำนวนทั้งหมด',qty(items)+' ชิ้น')}${line('ราคาสินค้า',money(sub))}${tier?.discount?line('ส่วนลด '+tier.name,'−'+money(tier.discount)):''}${cpnDiscount?line('ส่วนลดคูปอง '+appliedCpn.code,'−'+money(cpnDiscount)):''}${tier?.gifts?line('ของแถม',tier.gifts):''}${tier?.freeShipping?line('โปรส่งฟรี',shipping.remote&&shipping.total?'ฟรีค่าส่งปกติ · พื้นที่ห่างไกล +'+money(shipping.total):'ฟรี'):''}${line('ค่าจัดส่ง',money(shipping.total))}${line('ยอดรวม',money(grandTotal),true)}<div class="hrx-address"><b>ข้อมูลจัดส่ง</b><br>${esc(address)}<br>โทร. ${esc(phone)}${email?'<br>Email: '+esc(email):''}</div><div class="hrx-actions"><button type="button" id="hrxCancel">กลับไปแก้ไข</button><button type="button" class="primary" id="hrxSubmit">ตกลง ✓</button></div></div>`;
+ const addrBlock=onlyWp
+  ?`<div class="hrx-address"><b>ข้อมูลจัดส่ง (Digital Download)</b><br>Email: ${esc(email)}</div>`
+  :`<div class="hrx-address"><b>ข้อมูลจัดส่ง</b><br>${esc(address)}<br>โทร. ${esc(phone)}${email?'<br>Email: '+esc(email):''}</div>`;
+ modal.innerHTML=`<div class="hrx-dialog"><h2>ตรวจสอบคำสั่งซื้อ ♡</h2>${line('รายการที่เลือก',items.length+' รายการ')}${items.map(x=>line((x.name||'สินค้า')+(x.variant?' ('+x.variant+')':'')+' × '+(Number(x.qty)||1),money((Number(x.price)||0)*(Number(x.qty)||1)))).join('')}${line('จำนวนทั้งหมด',qty(items)+' ชิ้น')}${line('ราคาสินค้า',money(sub))}${tier?.discount?line('ส่วนลด '+tier.name,'−'+money(tier.discount)):''}${cpnDiscount?line('ส่วนลดคูปอง '+appliedCpn.code,'−'+money(cpnDiscount)):''}${tier?.gifts?line('ของแถม',tier.gifts):''}${tier?.freeShipping?line('โปรส่งฟรี',shipping.remote&&shipping.total?'ฟรีค่าส่งปกติ · พื้นที่ห่างไกล +'+money(shipping.total):'ฟรี'):''}${line('ค่าจัดส่ง',money(shipping.total))}${line('ยอดรวม',money(grandTotal),true)}${addrBlock}<div class="hrx-actions"><button type="button" id="hrxCancel">กลับไปแก้ไข</button><button type="button" class="primary" id="hrxSubmit">ตกลง ✓</button></div></div>`;
  document.body.appendChild(modal);document.body.style.overflow='hidden';
  const close=()=>{modal.remove();document.body.style.overflow=''};
  modal.onclick=e=>{if(e.target===modal)close()};modal.querySelector('#hrxCancel').onclick=close;
  modal.querySelector('#hrxSubmit').onclick=async()=>{
   const current=selected(),nowTier=window.hlgTierQuote?.(current,addr()),now=nowTier?.shipping||quote(current),nowSub=current.reduce((n,x)=>n+(Number(x.price)||0)*(Number(x.qty||1)),0);
-  if(JSON.stringify(current)!==JSON.stringify(items)||addr()!==address||JSON.stringify(nowTier?.snapshot||null)!==JSON.stringify(tier?.snapshot||null)||(nowTier?.subtotal??nowSub)+Number(now.total||0)!==(tier?.subtotal??sub)+Number(shipping.total||0)){close();fail('รายการหรือยอดเปลี่ยนไป กรุณาตรวจสอบอีกครั้งค่ะ');return}
+  if(JSON.stringify(current)!==JSON.stringify(items)||(!onlyWp&&addr()!==address)||JSON.stringify(nowTier?.snapshot||null)!==JSON.stringify(tier?.snapshot||null)||(nowTier?.subtotal??nowSub)+Number(now.total||0)!==(tier?.subtotal??sub)+Number(shipping.total||0)){close();fail('รายการหรือยอดเปลี่ยนไป กรุณาตรวจสอบอีกครั้งค่ะ');return}
   const button=modal.querySelector('#hrxSubmit');button.disabled=true;button.textContent='กำลังบันทึก…';
   let failure=null;
   try{if(window.hlgOrderStore?.active)await window.hlgOrderStore.readyPromise}catch(e){failure=e}
@@ -14873,7 +15089,7 @@ window.v8CFconfirm=function(){
     window.clearAppliedCoupon?.();
   }
   close();
-  if(order&&!writeFailure){try{renderDone(order)}catch(e){console.error('Order view failed',e);fail('บันทึกออเดอร์แล้ว แต่แสดงหน้าออเดอร์ไม่สำเร็จ กรุณาเช็กสถานะด้วยเบอร์โทรค่ะ')}return}
+  if(order&&!writeFailure){try{renderDone(order)}catch(e){console.error('Order view failed',e);fail(onlyWp?'บันทึกออเดอร์แล้ว แต่แสดงหน้าออเดอร์ไม่สำเร็จ กรุณาเช็กสถานะด้วย Email ค่ะ':'บันทึกออเดอร์แล้ว แต่แสดงหน้าออเดอร์ไม่สำเร็จ กรุณาเช็กสถานะด้วยเบอร์โทรค่ะ')}return}
   if(failure){try{localStorage.setItem(CART,JSON.stringify(cartBefore));localStorage.setItem(SEL,JSON.stringify(selectionBefore));if(typeof window.v8UpdateCartFloat==='function')v8UpdateCartFloat()}catch(e){console.error('Cart restore failed',e)}}
   if(failure?.name==='QuotaExceededError'||/quota|storage/i.test(String(failure?.message||'')))fail('พื้นที่เก็บข้อมูลของเบราว์เซอร์เต็ม บันทึกออเดอร์ไม่สำเร็จ กรุณาติดต่อร้านก่อนลองใหม่ค่ะ');
   else fail('บันทึกออเดอร์ไม่สำเร็จ กรุณาลองอีกครั้ง หากยังมีปัญหาโปรดติดต่อร้านค่ะ');
@@ -15022,6 +15238,8 @@ window.hrxConfirmPayment=async function(id){
          queue_no:o.queue_no||'',
          customer_name:custName,
          customer_phone:custPhone,
+         customer_email:o.customer_email||o.email||'',
+         email:o.customer_email||o.email||'',
          customer_address:custAddr,
          customer_info:custInfo,
          customer_note:o.customer_note||o.note||'',
@@ -15074,7 +15292,7 @@ window.hrxConfirmPayment=async function(id){
 };
 
 function renderDone(o){const root=document.getElementById('v8CartContent');if(!root)return;const design=settings(),payment=window.hlgPromptSettings?.()||{},items=o.items||[],sub=items.reduce((n,x)=>n+(Number(x.price)||0)*(Number(x.qty)||1),0),gif=/^(data:image\/gif;base64,|https?:\/\/)/i.test(design.gif)?design.gif:'';
- root.innerHTML=`<div class="hrx-done">${gif?`<img class="hrx-gif" src="${esc(gif)}" alt="ภาพขอบคุณจากร้าน">`:design.gif==='db:thankyou'?'<img class="hrx-gif" id="hrxGifMedia" alt="ภาพขอบคุณจากร้าน" hidden>':''}<div class="hrx-check">✓</div><h2>${esc(design.title)}</h2><p>${esc(design.thanks)}</p><div class="hrx-code">รหัสออเดอร์ของคุณ<b>${esc(o.id)}</b>${o.queue_no?`<span class="hrx-q-badge" style="background:#eafaf1;color:#15803d;border:1px solid #86efac;padding:3px 10px;border-radius:8px;font-size:13px;font-weight:900;margin-left:8px;display:inline-block">คิว ${esc(o.queue_no)}</span>`:''}<small>${esc(orderDate(o))}</small></div><div class="hrx-box"><h3>สรุปที่สั่ง</h3>${items.map(x=>`<div class="hrx-product">${x.image?`<img src="${esc(x.image)}" alt="">`:'<span style="flex:0">🛍️</span>'}<span>${esc(x.name||'สินค้า')}${x.variant?'<br><small>'+esc(x.variant)+'</small>':''} × ${Number(x.qty)||1}</span><strong>${money((Number(x.price)||0)*(Number(x.qty)||1))}</strong></div>`).join('')}${line('ราคาสินค้า',money(sub))}${o.tier_promo?.discount?line('ส่วนลด '+o.tier_promo.name,'−'+money(o.tier_promo.discount)):''}${o.tier_promo?.gifts?line('ของแถม',o.tier_promo.gifts):''}${o.tier_promo?.freeShipping?line('โปรส่งฟรี',o.tier_promo.remoteSurcharge?'ฟรีค่าส่งปกติ · พื้นที่ห่างไกล +'+money(o.tier_promo.remoteSurcharge):'ฟรี'):''}${line('ค่าจัดส่ง',money(o.shipping_cost))}${line('ยอดรวม',money(o.total_price),true)}${line('จำนวน',qty(items)+' ชิ้น')}<p class="hrx-mini"><b>จัดส่งไปที่</b><br>${esc(o.customer_address||'').replace(/\n/g,'<br>')}<br>โทร. ${esc(o.customer_phone||'')}</p></div><div class="hrx-box hrx-payment"><h3>${esc(o.payment_heading||payment.heading||'ชำระเงิน')} · ยอด ${money(o.total_price)}</h3><p class="hrx-mini">${esc(o.payment_note||payment.note||'สแกน QR พร้อมเพย์ตามยอดออเดอร์ หรือโอนเข้าบัญชีด้านล่าง')}</p><div class="hrx-qr-frame"><div class="hrx-qr-head">THAI QR PAYMENT · PromptPay</div><img id="hlgReceiptQr" class="hlg-dynamic-qr" alt="QR สำหรับชำระเงิน" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'><rect width='220' height='220' fill='%23fff'/><text x='110' y='115' text-anchor='middle' font-size='12' fill='%23c25484' font-family='sans-serif'>กำลังสร้าง QR Code...</text></svg>"><div id="hlgQrMessage" class="ht-qr-note"></div><button type="button" class="hrx-qr-save-btn" id="hrxSaveQrBtn" onclick="window.hlgSaveOrderQr?.()" style="margin:10px auto 4px;border:1.5px solid #dba4bd;background:#fff5f9;color:#b24171;border-radius:999px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px">📥 บันทึก QR Code ลงเครื่อง</button></div><div class="hrx-bank"><b>${esc(o.payment_bank_name||payment.bank||'กสิกรไทย')} ${esc(o.payment_bank_account||payment.account||'749-2439-414')}</b><span>ชื่อบัญชี ${esc(o.payment_bank_holder||payment.holder||'Nichakarn E.')}</span><button class="hrx-button" type="button" id="hrxCopy">คัดลอกเลขบัญชี</button></div><div class="hrx-slip-box"><h3>แนบสลิปการโอนเงิน</h3><p class="hrx-mini">${o.slip_verified?'สลิปผ่านการตรวจสอบแล้ว ✓':(o.payment_slip?'แนบสลิปแล้ว · กรุณากดตรวจสอบสลิปค่ะ':'โอนเงินแล้วแนบสลิปเพื่อให้ระบบตรวจสอบค่ะ')}</p><label class="hrx-slip-drop" for="hrxSlipInput">▤<strong>${o.payment_slip?'แตะเพื่อเปลี่ยนสลิป':'แตะเพื่อเลือกรูปสลิป'}</strong><small>JPG, PNG หรือ WEBP ไม่เกิน 5 MB</small><input id="hrxSlipInput" type="file" accept="image/png,image/jpeg,image/webp" hidden></label>${o.payment_slip?`<img class="hrx-slip-preview" src="${esc(o.payment_slip)}" alt="สลิปที่แนบแล้ว">`:''}${o.payment_slip?(o.slip_verified?`<div class="hrx-slip-success" style="background:#eafaf1;border:1.5px solid #22c55e;color:#15803d;padding:12px 14px;border-radius:12px;margin-top:12px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px"><span style="font-size:18px">✓</span><div><div>สลิปผ่านการตรวจสอบแล้ว ยอด ${money(o.slip_amount||o.total_price)}</div>${o.slip_sender_name?`<small style="font-size:11px;font-weight:500;color:#166534">ผู้โอน: ${esc(o.slip_sender_name)}${o.slip_bank?' ('+esc(o.slip_bank)+')':''}</small>`:''}</div></div><button type="button" class="hrx-verify-btn" id="hrxVerifySlipBtn" style="background:#16a34a;color:#fff;border:none;border-radius:12px;padding:11px 16px;font-size:13px;font-weight:800;cursor:pointer;width:100%;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:6px">✓ สลิปถูกต้องแล้ว (แตะเพื่อตรวจใหม่)</button>`:`<button type="button" class="hrx-verify-btn" id="hrxVerifySlipBtn" style="background:#16a34a;color:#fff;border:none;border-radius:12px;padding:12px 18px;font-size:14px;font-weight:800;cursor:pointer;width:100%;margin-top:12px;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 14px rgba(22,163,74,0.35);transition:all 0.2s">🔍 ตรวจสอบสลิปโอนเงิน</button><div style="font-size:11px;color:#6b7280;margin-top:6px;text-align:center">กดปุ่มสีเขียวเพื่อเช็กสลิป เมื่อผ่านแล้วจึงจะกดยืนยันการชำระได้ค่ะ</div>`):`<button type="button" class="hrx-verify-btn" id="hrxVerifySlipBtn" disabled style="background:#86efac;color:#fff;border:none;border-radius:12px;padding:12px 18px;font-size:14px;font-weight:800;cursor:not-allowed;width:100%;margin-top:12px;display:flex;align-items:center;justify-content:center;gap:8px;opacity:0.6">🔍 ตรวจสอบสลิปโอนเงิน</button><div style="font-size:11px;color:#9ca3af;margin-top:6px;text-align:center">กรุณาแนบรูปสลิปก่อนจึงจะกดตรวจสอบสลิปได้ค่ะ</div>`}<div id="hrxSlipError" class="hrx-error" style="color:#dc2626;background:#fef2f2;border:1px solid #fecaca;padding:10px 12px;border-radius:10px;margin-top:10px;font-size:12px;font-weight:700;display:none"></div></div></div><div class="hrx-actions"><button class="primary" type="button" id="hrxDownload">↓ ${o.payment_verification==='verified'&&o.payment_verified_by==='admin'&&o.payment_verified_at?'ดาวน์โหลดใบรับชำระเงิน PNG':'ดาวน์โหลดใบสรุป PNG'}</button><button type="button" id="hrxTracking">เช็กสถานะการชำระเงิน →</button></div><button class="hrx-button primary" id="hrxConfirmPayment" type="button" ${(!o.slip_verified||o.payment_customer_confirmed_at)?'disabled':''} style="${(!o.slip_verified&&!o.payment_customer_confirmed_at)?'opacity:0.55;cursor:not-allowed;':''}">${o.payment_customer_confirmed_at?`✓ บันทึกยืนยันคิวแล้ว (${o.queue_no||o.id})`:(o.slip_verified?'✓ ยืนยันการชำระ':'✓ ยืนยันการชำระ (กรุณากดตรวจสลิปก่อน)')}</button></div>`;
+ root.innerHTML=`<div class="hrx-done">${gif?`<img class="hrx-gif" src="${esc(gif)}" alt="ภาพขอบคุณจากร้าน">`:design.gif==='db:thankyou'?'<img class="hrx-gif" id="hrxGifMedia" alt="ภาพขอบคุณจากร้าน" hidden>':''}<div class="hrx-check">✓</div><h2>${esc(design.title)}</h2><p>${esc(design.thanks)}</p><div class="hrx-code">รหัสออเดอร์ของคุณ<b>${esc(o.id)}</b>${o.queue_no?`<span class="hrx-q-badge" style="background:#eafaf1;color:#15803d;border:1px solid #86efac;padding:3px 10px;border-radius:8px;font-size:13px;font-weight:900;margin-left:8px;display:inline-block">คิว ${esc(o.queue_no)}</span>`:''}<small>${esc(orderDate(o))}</small></div><div class="hrx-box"><h3>สรุปที่สั่ง</h3>${items.map(x=>`<div class="hrx-product">${x.image?`<img src="${esc(x.image)}" alt="">`:'<span style="flex:0">🛍️</span>'}<span>${esc(x.name||'สินค้า')}${x.variant?'<br><small>'+esc(x.variant)+'</small>':''} × ${Number(x.qty)||1}</span><strong>${money((Number(x.price)||0)*(Number(x.qty)||1))}</strong></div>`).join('')}${line('ราคาสินค้า',money(sub))}${o.tier_promo?.discount?line('ส่วนลด '+o.tier_promo.name,'−'+money(o.tier_promo.discount)):''}${o.tier_promo?.gifts?line('ของแถม',o.tier_promo.gifts):''}${o.tier_promo?.freeShipping?line('โปรส่งฟรี',o.tier_promo.remoteSurcharge?'ฟรีค่าส่งปกติ · พื้นที่ห่างไกล +'+money(o.tier_promo.remoteSurcharge):'ฟรี'):''}${line('ค่าจัดส่ง',money(o.shipping_cost))}${line('ยอดรวม',money(o.total_price),true)}${line('จำนวน',qty(items)+' ชิ้น')}<p class="hrx-mini"><b>จัดส่งไปที่</b><br>${esc(o.customer_address||'').replace(/\n/g,'<br>')}${o.customer_email?`<br>Email: ${esc(o.customer_email)}`:''}${o.customer_phone&&o.customer_phone!=='-'?`<br>โทร. ${esc(o.customer_phone)}`:''}</p></div><div class="hrx-box hrx-payment"><h3>${esc(o.payment_heading||payment.heading||'ชำระเงิน')} · ยอด ${money(o.total_price)}</h3><p class="hrx-mini">${esc(o.payment_note||payment.note||'สแกน QR พร้อมเพย์ตามยอดออเดอร์ หรือโอนเข้าบัญชีด้านล่าง')}</p><div class="hrx-qr-frame"><div class="hrx-qr-head">THAI QR PAYMENT · PromptPay</div><img id="hlgReceiptQr" class="hlg-dynamic-qr" alt="QR สำหรับชำระเงิน" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'><rect width='220' height='220' fill='%23fff'/><text x='110' y='115' text-anchor='middle' font-size='12' fill='%23c25484' font-family='sans-serif'>กำลังสร้าง QR Code...</text></svg>"><div id="hlgQrMessage" class="ht-qr-note"></div><button type="button" class="hrx-qr-save-btn" id="hrxSaveQrBtn" onclick="window.hlgSaveOrderQr?.()" style="margin:10px auto 4px;border:1.5px solid #dba4bd;background:#fff5f9;color:#b24171;border-radius:999px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px">📥 บันทึก QR Code ลงเครื่อง</button></div><div class="hrx-bank"><b>${esc(o.payment_bank_name||payment.bank||'กสิกรไทย')} ${esc(o.payment_bank_account||payment.account||'749-2439-414')}</b><span>ชื่อบัญชี ${esc(o.payment_bank_holder||payment.holder||'Nichakarn E.')}</span><button class="hrx-button" type="button" id="hrxCopy">คัดลอกเลขบัญชี</button></div><div class="hrx-slip-box"><h3>แนบสลิปการโอนเงิน</h3><p class="hrx-mini">${o.slip_verified?'สลิปผ่านการตรวจสอบแล้ว ✓':(o.payment_slip?'แนบสลิปแล้ว · กรุณากดตรวจสอบสลิปค่ะ':'โอนเงินแล้วแนบสลิปเพื่อให้ระบบตรวจสอบค่ะ')}</p><label class="hrx-slip-drop" for="hrxSlipInput">▤<strong>${o.payment_slip?'แตะเพื่อเปลี่ยนสลิป':'แตะเพื่อเลือกรูปสลิป'}</strong><small>JPG, PNG หรือ WEBP ไม่เกิน 5 MB</small><input id="hrxSlipInput" type="file" accept="image/png,image/jpeg,image/webp" hidden></label>${o.payment_slip?`<img class="hrx-slip-preview" src="${esc(o.payment_slip)}" alt="สลิปที่แนบแล้ว">`:''}${o.payment_slip?(o.slip_verified?`<div class="hrx-slip-success" style="background:#eafaf1;border:1.5px solid #22c55e;color:#15803d;padding:12px 14px;border-radius:12px;margin-top:12px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px"><span style="font-size:18px">✓</span><div><div>สลิปผ่านการตรวจสอบแล้ว ยอด ${money(o.slip_amount||o.total_price)}</div>${o.slip_sender_name?`<small style="font-size:11px;font-weight:500;color:#166534">ผู้โอน: ${esc(o.slip_sender_name)}${o.slip_bank?' ('+esc(o.slip_bank)+')':''}</small>`:''}</div></div><button type="button" class="hrx-verify-btn" id="hrxVerifySlipBtn" style="background:#16a34a;color:#fff;border:none;border-radius:12px;padding:11px 16px;font-size:13px;font-weight:800;cursor:pointer;width:100%;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:6px">✓ สลิปถูกต้องแล้ว (แตะเพื่อตรวจใหม่)</button>`:`<button type="button" class="hrx-verify-btn" id="hrxVerifySlipBtn" style="background:#16a34a;color:#fff;border:none;border-radius:12px;padding:12px 18px;font-size:14px;font-weight:800;cursor:pointer;width:100%;margin-top:12px;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 14px rgba(22,163,74,0.35);transition:all 0.2s">🔍 ตรวจสอบสลิปโอนเงิน</button><div style="font-size:11px;color:#6b7280;margin-top:6px;text-align:center">กดปุ่มสีเขียวเพื่อเช็กสลิป เมื่อผ่านแล้วจึงจะกดยืนยันการชำระได้ค่ะ</div>`):`<button type="button" class="hrx-verify-btn" id="hrxVerifySlipBtn" disabled style="background:#86efac;color:#fff;border:none;border-radius:12px;padding:12px 18px;font-size:14px;font-weight:800;cursor:not-allowed;width:100%;margin-top:12px;display:flex;align-items:center;justify-content:center;gap:8px;opacity:0.6">🔍 ตรวจสอบสลิปโอนเงิน</button><div style="font-size:11px;color:#9ca3af;margin-top:6px;text-align:center">กรุณาแนบรูปสลิปก่อนจึงจะกดตรวจสอบสลิปได้ค่ะ</div>`}<div id="hrxSlipError" class="hrx-error" style="color:#dc2626;background:#fef2f2;border:1px solid #fecaca;padding:10px 12px;border-radius:10px;margin-top:10px;font-size:12px;font-weight:700;display:none"></div></div></div><div class="hrx-actions"><button class="primary" type="button" id="hrxDownload">↓ ${o.payment_verification==='verified'&&o.payment_verified_by==='admin'&&o.payment_verified_at?'ดาวน์โหลดใบรับชำระเงิน PNG':'ดาวน์โหลดใบสรุป PNG'}</button>${o.items?.every(x=>x.type==='wallpaper')?`<button type="button" id="hrxWpBtn" style="background:#7c3aed;color:#fff;border-color:#7c3aed" onclick="showPage('wpcheck')">📥 ไปหน้าดาวน์โหลด Wallpaper →</button>`:''}<button type="button" id="hrxTracking">เช็กสถานะการชำระเงิน →</button></div><button class="hrx-button primary" id="hrxConfirmPayment" type="button" ${(!o.slip_verified||o.payment_customer_confirmed_at)?'disabled':''} style="${(!o.slip_verified&&!o.payment_customer_confirmed_at)?'opacity:0.55;cursor:not-allowed;':''}">${o.payment_customer_confirmed_at?`✓ บันทึกยืนยันคิวแล้ว (${o.queue_no||o.id})`:(o.slip_verified?'✓ ยืนยันการชำระ':'✓ ยืนยันการชำระ (กรุณากดตรวจสลิปก่อน)')}</button></div>`;
  if(design.gif==='db:thankyou')gifSource().then(src=>{const img=root.querySelector('#hrxGifMedia');if(img&&src){img.src=src;img.hidden=false}}).catch(e=>console.error('GIF display failed',e));window.hlgRenderOrderQr?.(o);root.querySelector('#hrxDownload').onclick=()=>window.hrxDownload(o.id);root.querySelector('#hrxCopy').onclick=()=>window.hrxCopyBank(o.payment_bank_account||payment.account);root.querySelector('#hrxSlipInput').onchange=e=>window.hrxPostSlip(o.id,e.target.files[0]);const verifySlipBtn=root.querySelector('#hrxVerifySlipBtn');if(verifySlipBtn&&!verifySlipBtn.disabled){verifySlipBtn.onclick=()=>window.hrxVerifySlip(o.id);}root.querySelector('#hrxTracking').onclick=()=>showPage('tracking');root.querySelector('#hrxConfirmPayment').onclick=()=>window.hrxConfirmPayment(o.id);root.scrollIntoView({block:'start',behavior:'smooth'});
 }
 // NOTE: the receipt/thank-you design editor moved to /admin/ (window.hlgRenderReceipt).
@@ -15164,7 +15382,7 @@ function decorate(){const a=badges();const bag=typeof getList==='function'?getLi
 function renderSocial(){const p=$('#adminPanel-social');if(!p)return;p.innerHTML='<div class="ht-card"><h3>ช่องทางติดต่อ</h3><p>เพิ่มลิงก์ Facebook, Instagram, TikTok, Shopee, LINE, เว็บไซต์ และช่องทางอื่น ๆ พร้อมตั้งชื่อปุ่ม ไอคอนหน้าร้านแสดงสีตามแอป</p><button class="ht-primary" id="htOpenSocial">แก้ไขไอคอนและลิงก์</button></div>';$('#htOpenSocial').onclick=()=>window.v8OpenSocialLinkEditor?.()}
 function applySite(){const s=site(),name=s.name||'helloxglitter';document.title=(s.title||name)+' — ร้านค้า';document.querySelectorAll('.navbar-brand,.page:not([data-hlg-collection]) .hero h1').forEach(e=>{e.textContent=name});let icon=$('link[rel="icon"]');if(!icon){icon=document.createElement('link');icon.rel='icon';document.head.append(icon)}if(s.icon)icon.href=s.icon;else icon.remove()}
 function renderSettings(){const p=$('#adminPanel-settings');if(!p)return;const s=site();p.innerHTML=`<div class="ht-card"><h3>ชื่อร้านและไอคอนเว็บ</h3><p>ชื่อร้านจะขึ้นในหัวเว็บ ส่วนชื่อแท็บแสดงในเบราว์เซอร์</p><label>ชื่อหน้าร้าน<input id="htShopName" value="${esc(s.name||'helloxglitter')}" maxlength="60"></label><label>ชื่อแท็บเบราว์เซอร์<input id="htPageTitle" value="${esc(s.title||'helloxglitter — ร้านค้า')}" maxlength="90"></label><label>ไอคอนแอป (Favicon) <input id="htIconUrl" type="url" placeholder="https://.../icon.png" value="${esc(/^https:\/\//.test(s.icon||'')?s.icon:'')}"></label><div class="ht-row"><label>หรืออัปโหลด PNG / JPEG / WebP ไม่เกิน 300 KB<input id="htIconFile" type="file" accept="image/png,image/jpeg,image/webp"></label><img class="ht-icon-preview" id="htIconPreview" src="${esc(s.icon||'')}" alt="ตัวอย่างไอคอน"></div><p>ภาพไอคอนแนะนำสี่เหลี่ยมจัตุรัส 512 × 512 พิกเซล</p><button class="ht-primary" id="htSaveSite">บันทึกตั้งค่าร้าน</button></div>`;let uploaded='';$('#htIconFile').onchange=e=>{const f=e.target.files[0];if(!f)return;if(f.size>300*1024){showToast?.('ใช้รูปไม่เกิน 300 KB ค่ะ');e.target.value='';return}const r=new FileReader();r.onload=()=>{uploaded=String(r.result);$('#htIconPreview').src=uploaded};r.readAsDataURL(f)};$('#htSaveSite').onclick=()=>{const url=$('#htIconUrl').value.trim();if(url&&!/^https:\/\//i.test(url)){showToast?.('ลิงก์ไอคอนต้องเริ่มด้วย https://');return}const v={name:$('#htShopName').value.trim()||'helloxglitter',title:$('#htPageTitle').value.trim()||'helloxglitter — ร้านค้า',icon:uploaded||url};if(put(SET,v))applySite()}}
-function renderPayment(){const p=$('#adminPanel-payment');if(!p)return;const v=pay();p.innerHTML=`<div class="ht-card"><h3>พร้อมเพย์ (QR ตามยอด)</h3><p>กรอกเบอร์โทรพร้อมเพย์ 10 หลัก เลขบัตรประชาชน 13 หลัก หรือเลขอ้างอิงบัญชีกสิกร 15 หลักของร้าน เมื่อลูกค้ายืนยันคำสั่งซื้อ ระบบจะสร้าง QR ที่ล็อกยอดรวมของออเดอร์นั้น</p><label>หมายเลขพร้อมเพย์<input id="htPromptId" inputmode="numeric" value="${esc(v.id||'')}" placeholder="เบอร์โทร 10 หลัก, บัตร ปชช. 13 หลัก หรือเลขอ้างอิง 15 หลัก"></label><label><input type="checkbox" id="htPromptLock" ${v.lock!==false?'checked':''}> ล็อกยอดเงินบน QR</label><h3>ข้อความและบัญชีที่แสดงแก่ลูกค้า</h3><label>ข้อความก่อนยืนยันออเดอร์<input id="htBefore" maxlength="240" value="${esc(v.before)}"></label><label>หัวข้อกล่องชำระเงิน<input id="htHeading" maxlength="80" value="${esc(v.heading)}"></label><label>คำอธิบายใต้ยอด<input id="htNote" maxlength="240" value="${esc(v.note)}"></label><div class="ht-row"><label>ธนาคาร<input id="htBank" maxlength="60" value="${esc(v.bank)}"></label><label>เลขบัญชี<input id="htAccount" inputmode="numeric" maxlength="25" value="${esc(v.account)}"></label></div><label>ชื่อบัญชี<input id="htHolder" maxlength="100" value="${esc(v.holder)}"></label><button class="ht-primary" id="htSavePrompt">บันทึกข้อมูลชำระเงิน</button><p>QR เป็นข้อมูลการโอนเงิน การชำระสำเร็จยังต้องตรวจสลิปจากร้าน ระบบนี้ยังไม่เชื่อมธนาคารเพื่อยืนยันยอดอัตโนมัติ</p></div>`;$('#htSavePrompt').onclick=()=>{const id=$('#htPromptId').value.replace(/\D/g,'');if(id&&![10,13,15].includes(id.length)){showToast?.('ใช้เบอร์ 10 หลัก เลขบัตร 13 หลัก หรือเลขอ้างอิง 15 หลักค่ะ');return}const account=$('#htAccount').value.trim();if(!/^[0-9 -]{8,25}$/.test(account)){showToast?.('ตรวจเลขบัญชีธนาคารอีกครั้งค่ะ');return}const data={id:id||'004999017222364',lock:$('#htPromptLock').checked,before:$('#htBefore').value.trim(),heading:$('#htHeading').value.trim(),note:$('#htNote').value.trim(),bank:$('#htBank').value.trim(),account,holder:$('#htHolder').value.trim()};if(put(PAY,data)){applyCopy();if(typeof syncStorefrontSettingsToCloud==='function')syncStorefrontSettingsToCloud()}}}}
+function renderPayment(){const p=$('#adminPanel-payment');if(!p)return;const v=pay();p.innerHTML=`<div class="ht-card"><h3>พร้อมเพย์ (QR ตามยอด)</h3><p>กรอกเบอร์โทรพร้อมเพย์ 10 หลัก เลขบัตรประชาชน 13 หลัก หรือเลขอ้างอิงบัญชีกสิกร 15 หลักของร้าน เมื่อลูกค้ายืนยันคำสั่งซื้อ ระบบจะสร้าง QR ที่ล็อกยอดรวมของออเดอร์นั้น</p><label>หมายเลขพร้อมเพย์<input id="htPromptId" inputmode="numeric" value="${esc(v.id||'')}" placeholder="เบอร์โทร 10 หลัก, บัตร ปชช. 13 หลัก หรือเลขอ้างอิง 15 หลัก"></label><label><input type="checkbox" id="htPromptLock" ${v.lock!==false?'checked':''}> ล็อกยอดเงินบน QR</label><h3>ข้อความและบัญชีที่แสดงแก่ลูกค้า</h3><label>ข้อความก่อนยืนยันออเดอร์<input id="htBefore" maxlength="240" value="${esc(v.before)}"></label><label>หัวข้อกล่องชำระเงิน<input id="htHeading" maxlength="80" value="${esc(v.heading)}"></label><label>คำอธิบายใต้ยอด<input id="htNote" maxlength="240" value="${esc(v.note)}"></label><div class="ht-row"><label>ธนาคาร<input id="htBank" maxlength="60" value="${esc(v.bank)}"></label><label>เลขบัญชี<input id="htAccount" inputmode="numeric" maxlength="25" value="${esc(v.account)}"></label></div><label>ชื่อบัญชี<input id="htHolder" maxlength="100" value="${esc(v.holder)}"></label><button class="ht-primary" id="htSavePrompt">บันทึกข้อมูลชำระเงิน</button><p>QR เป็นข้อมูลการโอนเงิน การชำระสำเร็จยังต้องตรวจสลิปจากร้าน ระบบนี้ยังไม่เชื่อมธนาคารเพื่อยืนยันยอดอัตโนมัติ</p></div>`;$('#htSavePrompt').onclick=()=>{const id=$('#htPromptId').value.replace(/\D/g,'');if(id&&![10,13,15].includes(id.length)){showToast?.('ใช้เบอร์ 10 หลัก เลขบัตร 13 หลัก หรือเลขอ้างอิง 15 หลักค่ะ');return}const account=$('#htAccount').value.trim();if(!/^[0-9 -]{8,25}$/.test(account)){showToast?.('ตรวจเลขบัญชีธนาคารอีกครั้งค่ะ');return}const data={id:id||'004999017222364',lock:$('#htPromptLock').checked,before:$('#htBefore').value.trim(),heading:$('#htHeading').value.trim(),note:$('#htNote').value.trim(),bank:$('#htBank').value.trim(),account,holder:$('#htHolder').value.trim()};if(put(PAY,data)){applyCopy();if(typeof syncStorefrontSettingsToCloud==='function')syncStorefrontSettingsToCloud()}}}
 function applyCopy(){const el=$('.v8cf-next-step');if(el)el.textContent=pay().before}
 function render(tab){if(tab==='badges')renderBadges();if(tab==='social')renderSocial();if(tab==='payment')renderPayment();if(tab==='settings')renderSettings()}
 const oldSwitch=window.switchAdminTab;window.switchAdminTab=function(tab,btn){ensure();const result=oldSwitch?.apply(this,arguments);render(tab);return result};
@@ -16688,7 +16906,7 @@ function read(){try{const x=JSON.parse(localStorage.getItem(KEY)||'[]');return A
 function openDB(){return new Promise((resolve,reject)=>{if(!window.indexedDB){reject(Error('เบราว์เซอร์นี้ไม่รองรับพื้นที่เก็บรูป'));return}const q=indexedDB.open(DB,1);q.onupgradeneeded=()=>{if(!q.result.objectStoreNames.contains(STORE))q.result.createObjectStore(STORE)};q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error||Error('เปิดพื้นที่รูปไม่สำเร็จ'))})}
 async function media(key,blob){const db=await openDB();try{return await new Promise((resolve,reject)=>{const t=db.transaction(STORE,blob===undefined?'readonly':'readwrite'),q=blob===undefined?t.objectStore(STORE).get(key):blob===null?t.objectStore(STORE).delete(key):t.objectStore(STORE).put(blob,key);q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error||Error('บันทึกรูปไม่สำเร็จ'))})}finally{db.close()}}
 async function hydrate(){for(const u of urls)URL.revokeObjectURL(u);urls=[];rows=read();await Promise.all(rows.map(async x=>{x._img=x.image_url||x.imageUrl||'';if(x.imageKey){try{const blob=await media(x.imageKey);if(blob){x._img=URL.createObjectURL(blob);urls.push(x._img)}}catch(e){console.warn('Product image unavailable',e)}}}));sync()}
-function sync(){if(typeof ALL_PATTERNS==='undefined'||typeof STICKER_PATTERNS==='undefined')return;ALL_PATTERNS=ALL_PATTERNS.filter(x=>!x._hlgCustomId);STICKER_PATTERNS=STICKER_PATTERNS.filter(x=>!x._hlgCustomId);for(const x of rows){const img=x._img||x.image_url||x.imageUrl||'';const catId=x.category_id||x.type||'bag';if(catId==='bag')ALL_PATTERNS.push({name:x.name,size:x.size,sizeKey:x.sizeKey,priceOrig:Number(x.price),img,localImg:'',_hlgCustomId:x.id});else if(catId==='sticker')STICKER_PATTERNS.push({name:x.name,price:Number(x.price),img,localImg:'',_hlgCustomId:x.id})}try{const key='hlg_unified_cart_v1',cart=JSON.parse(localStorage.getItem(key)||'[]');if(Array.isArray(cart)){let changed=false;for(const item of cart){const product=rows.find(x=>x.name===item.name&&(x.category_id===item.categoryId||x.type===item.type));if(product&&item.image!==product._img){item.image=product._img||product.image_url||product.imageUrl||'';changed=true}}if(changed)localStorage.setItem(key,JSON.stringify(cart))}}catch(e){console.warn('Cart image refresh',e)}const sellingSticker=rows.some(x=>(x.category_id==='sticker'||x.type==='sticker'));const coming=$('#page-sticker .sticker-coming-soon-card');if(coming)coming.hidden=sellingSticker;const tag=$('#page-sticker .hero-tag'),sub=$('#page-sticker .hero-sub');if(tag)tag.textContent=sellingSticker?'✨ Sticker จากร้าน ⭐':'✨ ลายสติกเกอร์ตัวอย่าง (Coming Soon) ⭐';if(sub)sub.textContent=sellingSticker?'เลือก Sticker ที่ชอบ แล้วกดใส่ตะกร้าได้เลยค่ะ 💖':'สติกเกอร์แผงละ 69 บาท · เปิดให้ชมลายตัวอย่างก่อนเปิดรับออเดอร์เร็วๆ นี้นะคะ 💖';if(typeof buildGallery==='function')buildGallery();if(typeof stickerBuildGallery==='function')stickerBuildGallery();decorateSticker();if(typeof v8UpdateCartFloat==='function')v8UpdateCartFloat();if($('#page-cart')?.classList.contains('active')&&typeof renderUnifiedCart==='function')renderUnifiedCart()}
+function sync(){if(typeof ALL_PATTERNS==='undefined'||typeof STICKER_PATTERNS==='undefined')return;ALL_PATTERNS=ALL_PATTERNS.filter(x=>!x._hlgCustomId);STICKER_PATTERNS=STICKER_PATTERNS.filter(x=>!x._hlgCustomId);for(const x of rows){const img=x._img||x.image_url||x.imageUrl||'';const catId=x.category_id||x.type||'bag';if(catId==='bag')ALL_PATTERNS.push({name:x.name,size:x.size,sizeKey:x.sizeKey,priceOrig:Number(x.price),img,localImg:'',_hlgCustomId:x.id});else if(catId==='sticker')STICKER_PATTERNS.push({name:x.name,price:Number(x.price),img,localImg:'',_hlgCustomId:x.id})}try{const key='hlg_unified_cart_v1',cart=JSON.parse(localStorage.getItem(key)||'[]');if(Array.isArray(cart)){let changed=false;for(const item of cart){const product=rows.find(x=>x.name===item.name&&(x.category_id===item.categoryId||x.type===item.type));if(product&&item.image!==product._img){item.image=product._img||product.image_url||product.imageUrl||'';changed=true}}if(changed)localStorage.setItem(key,JSON.stringify(cart))}}catch(e){console.warn('Cart image refresh',e)}const sellingSticker=rows.some(x=>(x.category_id==='sticker'||x.type==='sticker'));const coming=$('#page-sticker .sticker-coming-soon-card');if(coming)coming.hidden=sellingSticker;const tag=$('#page-sticker .hero-tag'),sub=$('#page-sticker .hero-sub');if(tag)tag.textContent=sellingSticker?'✨ Sticker จากร้าน ⭐':'✨ ลายสติกเกอร์ตัวอย่าง (Coming Soon) ⭐';if(sub)sub.textContent=sellingSticker?'เลือก Sticker ที่ชอบ แล้วกดใส่ตะกร้าได้เลยค่ะ 💖':'สติกเกอร์แผงละ 69 บาท · เปิดให้ชมลายตัวอย่างก่อนเปิดรับออเดอร์เร็วๆ นี้นะคะ 💖';if(typeof buildGallery==='function')buildGallery();if(typeof stickerBuildGallery==='function')stickerBuildGallery();decorateSticker();if(typeof window.renderWallpaperGallery==='function')try{window.renderWallpaperGallery()}catch(e){};if(typeof v8UpdateCartFloat==='function')v8UpdateCartFloat();if($('#page-cart')?.classList.contains('active')&&typeof renderUnifiedCart==='function')renderUnifiedCart()}
 function decorateSticker(){document.querySelectorAll('#stickerGallery .gcard').forEach((card,i)=>{const x=typeof STICKER_PATTERNS!=='undefined'?STICKER_PATTERNS[i]:null;if(!x?._hlgCustomId)return;const label=card.querySelector('.glabel');if(!label||label.querySelector('.hlg-sticker-buy'))return;const button=document.createElement('button');button.className='hlg-sticker-buy';button.type='button';button.textContent='＋ ใส่ตะกร้า';button.onclick=e=>{e.stopPropagation();const key='hlg_unified_cart_v1';let cart=[];try{cart=JSON.parse(localStorage.getItem(key)||'[]');if(!Array.isArray(cart))cart=[]}catch(e){}const old=cart.find(c=>c.type==='sticker'&&c.name===x.name);if(old)old.qty=Number(old.qty||1)+1;else cart.push({type:'sticker',name:x.name,variant:'',qty:1,price:Number(x.price),image:x.img,requiresEmail:false});try{localStorage.setItem(key,JSON.stringify(cart));if(typeof v8UpdateCartFloat==='function')v8UpdateCartFloat();message('เพิ่ม Sticker ลงตะกร้าแล้ว ♡')}catch(err){message('ตะกร้าเต็ม กรุณาลองใหม่')}};label.append(button)})}
 const oldSticker=window.stickerBuildGallery;window.stickerBuildGallery=function(){const r=oldSticker?.apply(this,arguments);decorateSticker();return r};
 window.hlgSyncCustomProducts=hydrate;
@@ -16735,6 +16953,7 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
     } catch(e) {}
     return [];
   }
+  window.getCustomProducts = getCustomProducts;
 
   window.hlgAddCustomProductToCart = function(productId) {
     const prods = getCustomProducts();
@@ -16789,6 +17008,7 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
         !document.body.classList.contains('v8-customer-preview-mode');
     } catch(e) { return false; }
   }
+  window.isAdminUser = isAdminUser;
 
   function compressImage(file, maxDimension, quality) {
     maxDimension = maxDimension || 1000;
@@ -16853,6 +17073,12 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
           <div style="margin-bottom:12px">
             <label style="display:block;font-size:12px;font-weight:700;color:#613e50;margin-bottom:5px">คำอธิบายสินค้า</label>
             <textarea id="hlgProdModalDesc" rows="2" placeholder="เช่น หมึกเจลสีพาสเทล เขียนลื่น กันน้ำ นำเข้าพิเศษ" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #e8c7d5;border-radius:12px;font:inherit;font-size:13px"></textarea>
+          </div>
+
+          <div id="hlgProdModalDlWrap" style="display:none;margin-bottom:12px">
+            <label style="display:block;font-size:12px;font-weight:700;color:#613e50;margin-bottom:5px">ลิงก์ดาวน์โหลด (Wallpaper / Digital File) 🔗</label>
+            <input id="hlgProdModalDownload" type="url" placeholder="เช่น https://drive.google.com/..." style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #e8c7d5;border-radius:12px;font:inherit;font-size:13px">
+            <div style="font-size:11px;color:#967684;margin-top:5px">ลูกค้าที่ชำระเงินแล้วจะได้ลิงก์นี้ที่หน้าเช็คดาวน์โหลดค่ะ</div>
           </div>
 
           <div style="margin-bottom:18px">
@@ -16973,6 +17199,10 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
     pm.querySelector('#hlgProdModalCatId').value = categoryId || '';
     pm.querySelector('#hlgProdModalProdId').value = editProductId || '';
     pm.querySelector('#hlgProdModalFile').value = '';
+    var dlWrap = pm.querySelector('#hlgProdModalDlWrap');
+    var dlInput = pm.querySelector('#hlgProdModalDownload');
+    var isWp = (categoryId === 'wallpaper');
+    if (dlWrap) dlWrap.style.display = isWp ? 'block' : 'none';
 
     if (editProductId) {
       var prods = getCustomProducts();
@@ -16985,6 +17215,7 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
         var img = p.image_url || p.imageUrl || '';
         pm.querySelector('#hlgProdModalImgData').value = img;
         pm.querySelector('#hlgProdModalImgPrev').innerHTML = img ? `<img src="${esc(img)}" style="width:100%;height:100%;object-fit:cover">` : '<span style="font-size:26px">📷</span>';
+        if (dlInput) dlInput.value = p.download_url || p.download_link || '';
       }
     } else {
       pm.querySelector('#hlgProdModalTitle').textContent = '＋ เพิ่มสินค้าใหม่';
@@ -16993,6 +17224,7 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
       pm.querySelector('#hlgProdModalDesc').value = '';
       pm.querySelector('#hlgProdModalImgData').value = '';
       pm.querySelector('#hlgProdModalImgPrev').innerHTML = '<span style="font-size:26px">📷</span>';
+      if (dlInput) dlInput.value = '';
     }
     pm.style.display = 'flex';
   };
@@ -17001,7 +17233,11 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
 
   window.hlgCloseProductModal = function() {
     var pm = document.getElementById('hlgProductModal');
-    if (pm) pm.style.display = 'none';
+    if (pm) {
+      pm.style.display = 'none';
+      var dlWrap = pm.querySelector('#hlgProdModalDlWrap');
+      if (dlWrap) dlWrap.style.display = 'none';
+    }
   };
 
   async function hlgAdminFetch(url, options) {
@@ -17061,6 +17297,7 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
     var price = Number(priceStr);
     var desc = (pm.querySelector('#hlgProdModalDesc').value || '').trim();
     var img = pm.querySelector('#hlgProdModalImgData').value || '';
+    var dlVal = pm.querySelector('#hlgProdModalDownload') ? (pm.querySelector('#hlgProdModalDownload').value || '').trim() : '';
 
     if (!name) { alert('กรุณากรอกชื่อสินค้าค่ะ'); return; }
     if (isNaN(price) || price < 0 || priceStr === '') { alert('กรุณากรอกราคาเป็นตัวเลขที่ถูกต้องค่ะ'); return; }
@@ -17075,7 +17312,9 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
         name: name,
         price: price,
         description: desc,
-        image_url: img
+        image_url: img,
+        download_url: dlVal,
+        download_link: dlVal
       };
       var res = await hlgAdminFetch(url, {
         method: method,

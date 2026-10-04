@@ -649,6 +649,7 @@ async function handleApi(req, res) {
       price: price,
       description: String(body.description || '').trim(),
       image_url: String(body.image_url || '').trim(),
+      download_url: String(body.download_url || body.download_link || '').trim(),
       size: String(body.size || '').trim(),
       size_key: String(body.size_key || '').trim(),
       created_at: new Date().toISOString()
@@ -688,6 +689,7 @@ async function handleApi(req, res) {
     if (body.category_id) prod.category_id = String(body.category_id).trim();
     if (body.description !== undefined) prod.description = String(body.description).trim();
     if (body.image_url !== undefined) prod.image_url = String(body.image_url).trim();
+    if (body.download_url !== undefined || body.download_link !== undefined) prod.download_url = String(body.download_url || body.download_link || '').trim();
     if (body.size !== undefined) prod.size = String(body.size).trim();
     if (body.size_key !== undefined) prod.size_key = String(body.size_key).trim();
     prod.updated_at = new Date().toISOString();
@@ -1140,12 +1142,31 @@ async function handleApi(req, res) {
     const patterns = body.patterns || ['Wallpaper'];
     const patternQtys = body.pattern_qtys || null;
     const totalBags = body.total_bags || 1;
+
+    let downloadLinks = [];
+    const defaultWpLink = 'https://drive.google.com/drive/folders/1xhovSRun2q6O4g7S_wDKwuHuETZVk10-?usp=sharing';
+    try {
+      const sf = await fsGetDoc('settings', 'storefront');
+      const customProducts = (sf && Array.isArray(sf.custom_products)) ? sf.custom_products : [];
+      patterns.forEach(pName => {
+        const cp = customProducts.find(p => p.name === pName || p.id === pName);
+        if (cp && cp.download_url) {
+          downloadLinks.push({ name: cp.name, url: cp.download_url });
+        }
+      });
+    } catch (e) {}
+    if (downloadLinks.length === 0 && (body.download_url || body.download_link)) {
+      downloadLinks.push({ name: patterns[0] || 'Wallpaper', url: body.download_url || body.download_link });
+    }
+    const primaryWpLink = downloadLinks.length > 0 ? downloadLinks[0].url : (body.download_link || defaultWpLink);
+
     const order = {
       id: orderId,
       created_at: new Date().toISOString(),
       type: 'wallpaper',
       customer_info: body.email || '',
       email: body.email || '',
+      customer_email: body.email || '',
       patterns: patterns,
       pattern_qtys: patternQtys,
       qty: 1,
@@ -1164,7 +1185,8 @@ async function handleApi(req, res) {
       slip_sender_name: verifyResult.senderName || '',
       slip_receiver_name: verifyResult.receiverName || '',
       slip_amount: verifyResult.amount != null ? verifyResult.amount : null,
-      download_link: null,
+      download_link: primaryWpLink,
+      download_links: downloadLinks.length > 0 ? downloadLinks : [{ name: patterns[0] || 'Wallpaper', url: primaryWpLink }],
       tracking_number: '',
       tracking_carrier: '',
     };
@@ -1194,23 +1216,72 @@ async function handleApi(req, res) {
     }
     const orders = await fsGetDocs('orders', 'created_at');
     const found = orders.filter(function(o) {
-      if (o.type !== 'wallpaper') return false;
-      var stored = (o.email || '').trim().toLowerCase();
+      const isWp = o.type === 'wallpaper' || (Array.isArray(o.items) && o.items.some(x => x.type === 'wallpaper' || x.category_id === 'wallpaper'));
+      if (!isWp) return false;
+      const stored = (o.email || o.customer_email || (o.customer_info && o.customer_info.includes('@') ? (o.customer_info.match(/[^\s@]+@[^\s@]+\.[^\s@]+/)?.[0] || '') : '') || '').trim().toLowerCase();
       return stored === email;
     });
     if (found.length === 0) {
-      sendJson(res, 200, { found: false, message: 'ไม่พบออเดอร์ Wallpaper สำหรับเบอร์นี้ค่ะ กรุณาตรวจสอบอีกครั้งนะคะ' });
+      sendJson(res, 200, { found: false, message: 'ไม่พบออเดอร์ Wallpaper สำหรับอีเมลนี้ค่ะ กรุณาตรวจสอบอีกครั้งนะคะ' });
       return true;
     }
     const confirmed = found.filter(function(o) { return o.status >= 1; });
     if (confirmed.length > 0) {
+      let customProducts = [];
+      try {
+        const sf = await fsGetDoc('settings', 'storefront');
+        if (sf && Array.isArray(sf.custom_products)) customProducts = sf.custom_products;
+      } catch (e) {}
+
+      const allLinks = [];
+      const defaultUrl = 'https://drive.google.com/drive/folders/1xhovSRun2q6O4g7S_wDKwuHuETZVk10-?usp=sharing';
+
+      confirmed.forEach(o => {
+        if (Array.isArray(o.download_links) && o.download_links.length > 0) {
+          o.download_links.forEach(l => {
+            if (l && l.url && !allLinks.some(x => x.url === l.url)) allLinks.push(l);
+          });
+        }
+        if (Array.isArray(o.items)) {
+          o.items.forEach(it => {
+            if (it.type === 'wallpaper' || it.category_id === 'wallpaper' || it.download_url) {
+              let url = it.download_url;
+              if (!url) {
+                const cp = customProducts.find(p => p.id === it.id || p.name === it.name);
+                if (cp && cp.download_url) url = cp.download_url;
+              }
+              if (!url && (it.name || '').includes('Wallpaper')) url = defaultUrl;
+              if (url && !allLinks.some(x => x.url === url)) {
+                allLinks.push({ name: it.name || 'Wallpaper', url: url });
+              }
+            }
+          });
+        }
+        if (o.download_link && !allLinks.some(x => x.url === o.download_link)) {
+          allLinks.push({ name: 'Wallpaper Special Set', url: o.download_link });
+        }
+        if (Array.isArray(o.patterns)) {
+          o.patterns.forEach(pat => {
+            const cp = customProducts.find(p => p.name === pat || p.id === pat);
+            if (cp && cp.download_url && !allLinks.some(x => x.url === cp.download_url)) {
+              allLinks.push({ name: cp.name, url: cp.download_url });
+            }
+          });
+        }
+      });
+
+      if (allLinks.length === 0) {
+        allLinks.push({ name: 'Wallpaper Special Set', url: defaultUrl });
+      }
+
       sendJson(res, 200, {
         found: true,
-      confirmed: true,
-      download_link: confirmed[0].download_link || 'https://drive.google.com/drive/folders/1xhovSRun2q6O4g7S_wDKwuHuETZVk10-?usp=sharing',
-      order_id: confirmed[0].id,
-      message: 'ยืนยันเรียบร้อยแล้วค่ะ! 🎉',
-    });
+        confirmed: true,
+        download_link: allLinks[0].url,
+        download_links: allLinks,
+        order_id: confirmed[0].id,
+        message: 'ยืนยันเรียบร้อยแล้วค่ะ! 🎉',
+      });
       return true;
     }
     sendJson(res, 200, {
@@ -1619,12 +1690,38 @@ async function handleApi(req, res) {
       || patterns.length
       || 1;
 
+    let customProducts = [];
+    try {
+      const sf = await fsGetDoc('settings', 'storefront');
+      if (sf && Array.isArray(sf.custom_products)) customProducts = sf.custom_products;
+    } catch (e) {}
+
+    const downloadLinks = [];
+    const defaultUrl = 'https://drive.google.com/drive/folders/1xhovSRun2q6O4g7S_wDKwuHuETZVk10-?usp=sharing';
+    if (Array.isArray(orderData.items)) {
+      orderData.items.forEach(it => {
+        if (it.type === 'wallpaper' || it.category_id === 'wallpaper' || it.download_url) {
+          let dUrl = it.download_url;
+          if (!dUrl) {
+            const cp = customProducts.find(p => p.id === it.id || p.name === it.name);
+            if (cp && cp.download_url) dUrl = cp.download_url;
+          }
+          if (!dUrl && (it.name || '').includes('Wallpaper')) dUrl = defaultUrl;
+          if (dUrl && !downloadLinks.some(x => x.url === dUrl)) {
+            downloadLinks.push({ name: it.name || 'Wallpaper', url: dUrl });
+          }
+        }
+      });
+    }
+
     const order = {
       id: orderId,
       queue_no,
       created_at: orderData.created_at || new Date().toISOString(),
       customer_name: cust.customer_name,
       customer_phone: cust.customer_phone,
+      customer_email: orderData.customer_email || orderData.email || cust.customer_email || '',
+      email: orderData.email || orderData.customer_email || cust.customer_email || '',
       customer_address: cust.customer_address,
       customer_info: cust.customer_info,
       line_user_id: lineUserId || null,
@@ -1655,6 +1752,8 @@ async function handleApi(req, res) {
       slip_receiver_name: verifyResult.receiverName || '',
       slip_amount: verifyResult.amount != null ? verifyResult.amount : null,
       slip_date: verifyResult.date || '',
+      download_links: downloadLinks.length > 0 ? downloadLinks : (orderData.download_links || null),
+      download_link: downloadLinks.length > 0 ? downloadLinks[0].url : (orderData.download_link || null),
       tracking_number: '',
       tracking_carrier: '',
     };
@@ -1936,6 +2035,8 @@ async function handleApi(req, res) {
         customer_phone: o.customer_phone || (o.customer_info || '').split('\n')[1] || '',
         customer_address: o.customer_address || ((o.customer_info || '').split('\n').slice(2).join('\n')) || '',
         customer_info: o.customer_info || '',
+        download_link: o.download_link || null,
+        download_links: o.download_links || null,
         shipping_cost: o.shipping_cost != null ? o.shipping_cost : 0,
         is_remote: o.is_remote || false,
       })),
@@ -1978,6 +2079,8 @@ async function handleApi(req, res) {
       note: order.note || '',
       tracking_number: order.tracking_number || '',
       tracking_carrier: order.tracking_carrier || '',
+      download_link: order.download_link || null,
+      download_links: order.download_links || null,
     });
     return true;
   }

@@ -1662,8 +1662,15 @@ function wpCheckDownload() {
       btn.disabled = false;
       btn.innerHTML = '<i class="ti ti-search"></i> เช็คลิงก์ดาวน์โหลด';
       result.style.display = 'block';
-      if (data.confirmed && data.download_link) {
-        result.innerHTML = '<div class="wp-check-ok"><div class="wp-check-msg">' + escHtml(data.message) + '</div><a class="wp-check-link" href="' + escHtml(data.download_link) + '" target="_blank"><i class="ti ti-download"></i> ดาวน์โหลด Wallpaper</a></div>';
+      if (data.confirmed && (data.download_links || data.download_link)) {
+        var links = data.download_links || [];
+        if (links.length === 0 && data.download_link) {
+          links = [{ name: 'Wallpaper', url: data.download_link }];
+        }
+        var linksHtml = links.map(function(item) {
+          return '<div style="margin-top:8px;padding:8px 12px;background:#fff;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><b style="color:#208020;font-size:13px">' + escHtml(item.name || 'Wallpaper') + '</b><a class="wp-check-link" style="margin:0;padding:6px 14px;font-size:12px" href="' + escHtml(item.url) + '" target="_blank"><i class="ti ti-download"></i> ดาวน์โหลด</a></div>';
+        }).join('');
+        result.innerHTML = '<div class="wp-check-ok"><div class="wp-check-msg">' + escHtml(data.message) + '</div><div style="margin-top:10px">' + linksHtml + '</div></div>';
       } else if (data.confirmed && !data.download_link) {
         result.innerHTML = '<div class="wp-check-ok"><div class="wp-check-msg">✅ ' + escHtml(data.message) + '</div><div style="font-size:13px;color:#8070a0;margin-top:8px">กำลังรอ link ดาวน์โหลดจากทางร้านนะคะ ติดตามได้ที่หน้านี้ค่ะ 🎀</div></div>';
       } else if (data.found && !data.confirmed) {
