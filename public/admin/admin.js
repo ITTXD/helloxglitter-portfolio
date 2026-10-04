@@ -71,7 +71,15 @@ function doLogin(e) {
   })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (data.success) { showDashboard(); }
+      if (data.success) {
+        try {
+          sessionStorage.setItem('hlg_admin_session_v2', '1');
+          sessionStorage.setItem('hlg_admin_logged_in_active', '1');
+          localStorage.setItem('hlg_admin_session_v2', '1');
+          if (data.session_token) sessionStorage.setItem('hlg_admin_token', data.session_token);
+        } catch(e) {}
+        showDashboard();
+      }
       else { errEl.textContent = data.error || 'รหัสผ่านไม่ถูกต้อง'; }
     })
     .catch(function() { errEl.textContent = 'เกิดข้อผิดพลาด กรุณาลองใหม่'; });
@@ -79,6 +87,12 @@ function doLogin(e) {
 }
 
 function doLogout() {
+  try {
+    sessionStorage.removeItem('hlg_admin_session_v2');
+    sessionStorage.removeItem('hlg_admin_logged_in_active');
+    sessionStorage.removeItem('hlg_admin_token');
+    localStorage.removeItem('hlg_admin_session_v2');
+  } catch(e) {}
   fetch('/api/logout', { method: 'POST' }).then(function() { showLogin(); });
 }
 
