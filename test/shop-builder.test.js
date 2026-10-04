@@ -337,6 +337,21 @@ async function runTests() {
     );
   });
 
+  test('clicking wallpaper card directly syncs to cart without separate add-to-cart button', () => {
+    assert.ok(
+      !indexHtml.includes('🛒 เพิ่ม Wallpaper ลงตะกร้า'),
+      'Explicit "เพิ่ม Wallpaper ลงตะกร้า" button panel must be removed'
+    );
+    assert.ok(
+      indexHtml.includes("function wpTogglePattern(name)") && indexHtml.includes("v8SyncWallpaperToCart()"),
+      'wpTogglePattern must automatically sync wallpaper selection to cart'
+    );
+    assert.ok(
+      indexHtml.includes("function wpChangeQty(name, delta)") && indexHtml.includes("v8SyncWallpaperToCart()"),
+      'wpChangeQty must automatically sync wallpaper quantity to cart'
+    );
+  });
+
   console.log(`\n========================================`);
   console.log(`  Results: ${PASSED} passed, ${FAILED} failed`);
   console.log(`========================================\n`);

@@ -7845,6 +7845,15 @@ function wpTogglePattern(name) {
   var card = document.getElementById('wpCard');
   card.classList.toggle('picked');
   wpUpdateSummary();
+  if (typeof v8SyncWallpaperToCart === 'function') {
+    v8SyncWallpaperToCart();
+  }
+  if (card.classList.contains('picked')) {
+    if (window.showToast) showToast('เพิ่ม Wallpaper ลงในตะกร้าแล้ว ♡');
+    if (window.v8RainbowCelebrate) v8RainbowCelebrate('เพิ่มลงตะกร้าแล้ว 🌈');
+  } else {
+    if (window.showToast) showToast('นำ Wallpaper ออกจากตะกร้าแล้ว');
+  }
 }
 function wpChangeQty(name, delta) {
   var q = (wpPicked[name] || 1) + delta;
@@ -7852,6 +7861,9 @@ function wpChangeQty(name, delta) {
   wpPicked[name] = q;
   document.getElementById('wpCardQtyNum').textContent = q;
   wpUpdateSummary();
+  if (typeof v8SyncWallpaperToCart === 'function') {
+    v8SyncWallpaperToCart();
+  }
 }
 function wpUpdateSummary() {
   var q = wpPicked['Wallpaper'] || 1;
@@ -8832,12 +8844,7 @@ document.addEventListener('DOMContentLoaded',function(){
      d.innerHTML='<p>เลือกลายและจำนวนให้เรียบร้อย แล้วเพิ่มทั้งหมดลงตะกร้า จากนั้นค่อยชำระเงินรวมกันค่ะ</p><button class="v8-add-cart-btn" type="button" onclick="v8AddBagsToCart()">🛒 เพิ่มกระเป๋าที่เลือกลงตะกร้า</button>';
      bag.insertAdjacentElement('afterend',d)
    }
-   const wp=document.getElementById('wpCard');
-   if(wp && !document.getElementById('v8WpAddPanel')){
-     const d=document.createElement('div');d.id='v8WpAddPanel';d.className='v8-add-cart-panel';
-     d.innerHTML='<p>เลือกจำนวน Wallpaper แล้วเพิ่มลงตะกร้าได้เลย Email จะกรอกในหน้าตะกร้าเท่านั้นค่ะ</p><button class="v8-add-cart-btn" type="button" onclick="v8AddWallpaperToCart()">🛒 เพิ่ม Wallpaper ลงตะกร้า</button>';
-     wp.insertAdjacentElement('afterend',d)
-   }
+   document.getElementById('v8WpAddPanel')?.remove();
  }
 
  window.v8CartQty=function(i,d){
@@ -9393,8 +9400,10 @@ document.addEventListener('DOMContentLoaded',function(){
    if(wp){
      wp.querySelector('#wpFormCard')?.remove();
      wp.querySelector('#wpSuccessBox')?.remove();
+     wp.querySelector('#v8WpAddPanel')?.remove();
+     document.getElementById('v8WpAddPanel')?.remove();
      [...wp.querySelectorAll('button')].forEach(b=>{
-       if(/ยืนยันการสั่งซื้อ|ตกลงการสั่งซื้อ/i.test(b.textContent||''))b.remove()
+       if(/ยืนยันการสั่งซื้อ|ตกลงการสั่งซื้อ|เพิ่ม Wallpaper/i.test(b.textContent||''))b.remove()
      })
    }
  }
@@ -9490,6 +9499,7 @@ document.addEventListener('DOMContentLoaded',function(){
    hookBagSelection();
    hookWallpaper();
    try{v8SyncBagSelectionToCart()}catch(e){}
+   try{v8SyncWallpaperToCart()}catch(e){}
    if(typeof v8UpdateCartFloat==='function')v8UpdateCartFloat()
  }
 
