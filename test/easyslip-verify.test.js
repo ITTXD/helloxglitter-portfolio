@@ -252,6 +252,92 @@ async function runTests() {
     global.fetch = origFetch;
   });
 
+  // ── 4. MOCK SLIP SECURITY GATING ──
+  console.log('\n── 4. MOCK SLIP SECURITY GATING ──');
+
+  await asyncTest('verifySlipWithEasySlip does NOT bypass with mockslip when ALLOW_MOCK_SLIP is unset (even with unset NODE_ENV)', async () => {
+    const origAllow = process.env.ALLOW_MOCK_SLIP;
+    const origNodeEnv = process.env.NODE_ENV;
+    const origKey = process.env.EASYSLIP_API_KEY;
+    delete process.env.ALLOW_MOCK_SLIP;
+    delete process.env.NODE_ENV;
+    process.env.EASYSLIP_API_KEY = 'test-key';
+
+    const origFetch = global.fetch;
+    let fetchCalled = false;
+    global.fetch = async () => {
+      fetchCalled = true;
+      return {
+        ok: false,
+        status: 400,
+        json: async () => ({ status: 400, message: 'Invalid slip' }),
+      };
+    };
+
+    const res = await verifySlipWithEasySlip({
+      slipData: 'data:image/jpeg;base64,mockslip123',
+      expectedAmount: 590,
+      orderId: 'HXG-SECURITY-01',
+    });
+
+    // Should NOT have returned a mock bypass success; it must have called fetch
+    assert.strictEqual(fetchCalled, true, 'Real fetch must be called instead of mock bypass');
+    assert.strictEqual(res.success, false, 'Must not auto-approve mock slip');
+
+    global.fetch = origFetch;
+    process.env.ALLOW_MOCK_SLIP = origAllow;
+    process.env.NODE_ENV = origNodeEnv;
+    process.env.EASYSLIP_API_KEY = origKey;
+  });
+
+  await asyncTest('verifySlipWithEasySlip allows mockslip only when ALLOW_MOCK_SLIP=true', async () => {
+    const origAllow = process.env.ALLOW_MOCK_SLIP;
+    process.env.ALLOW_MOCK_SLIP = 'true';
+
+    const res = await verifySlipWithEasySlip({
+      slipData: 'data:image/jpeg;base64,mockslip123',
+      expectedAmount: 590,
+      orderId: 'HXG-MOCK-02',
+    });
+
+    assert.strictEqual(res.success, true);
+    assert.ok(res.transRef.startsWith('MOCK-TRANS-'));
+    assert.strictEqual(res.amount, 590);
+
+    process.env.ALLOW_MOCK_SLIP = origAllow;
+  });
+
+  await asyncTest('verifySlipWithEasySlip strictly forbids mockslip in NODE_ENV=production even if ALLOW_MOCK_SLIP=true', async () => {
+    const origAllow = process.env.ALLOW_MOCK_SLIP;
+    const origNodeEnv = process.env.NODE_ENV;
+    process.env.ALLOW_MOCK_SLIP = 'true';
+    process.env.NODE_ENV = 'production';
+
+    const origFetch = global.fetch;
+    let fetchCalled = false;
+    global.fetch = async () => {
+      fetchCalled = true;
+      return {
+        ok: false,
+        status: 400,
+        json: async () => ({ status: 400, message: 'Invalid slip' }),
+      };
+    };
+
+    const res = await verifySlipWithEasySlip({
+      slipData: 'data:image/jpeg;base64,mockslip123',
+      expectedAmount: 590,
+      orderId: 'HXG-PROD-MOCK',
+    });
+
+    assert.strictEqual(fetchCalled, true, 'Fetch must be called; mock slip must not bypass in production');
+    assert.strictEqual(res.success, false, 'Must not approve mock slip in production');
+
+    global.fetch = origFetch;
+    process.env.ALLOW_MOCK_SLIP = origAllow;
+    process.env.NODE_ENV = origNodeEnv;
+  });
+
   console.log('\n========================================');
   console.log(`Results: ${passed} passed, ${failed} failed`);
   console.log('========================================\n');

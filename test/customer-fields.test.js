@@ -220,6 +220,52 @@ async function runTests() {
     assert.strictEqual(data.order.customer_info, 'สมชาย ใจดี\n0819876543\n456 หมู่ 7 เชียงใหม่ 50000');
   });
 
+  await asyncTest('POST /api/orders prevents unauthenticated callers from forging status=1 and slip_verified=true', async () => {
+    const res = createRes();
+    await serverHandler(createReq('POST', '/api/orders', {
+      customer_info: 'ผู้ไม่ประสงค์ดี\n0899999999\nกรุงเทพ',
+      patterns: ['Blair'],
+      total_price: 399,
+      status: 1,
+      slip_verified: true,
+      tracking_number: 'FORGED-TRACK-999'
+    }), res);
+
+    assert.strictEqual(res._status, 201);
+    const data = JSON.parse(res._body);
+    assert.strictEqual(data.order.status, 0, 'Unauthenticated order status must be forced to 0');
+    assert.strictEqual(data.order.slip_verified, false, 'Unauthenticated slip_verified must be forced to false');
+    assert.strictEqual(data.order.tracking_number, '', 'Unauthenticated tracking_number must be stripped');
+  });
+
+  await asyncTest('POST /api/orders allows authenticated admin to specify status and slip_verified', async () => {
+    const res = createRes();
+    const ADMIN_COOKIE = 'admin_session=test-secret';
+    await serverHandler(createReq('POST', '/api/orders', {
+      customer_info: 'แอดมินนำเข้าข้อมูล\n0888888888\nกรุงเทพ',
+      patterns: ['Blair'],
+      total_price: 399,
+      status: 1,
+      slip_verified: true,
+      tracking_number: 'ADMIN-TRACK-123'
+    }, ADMIN_COOKIE), res);
+
+    assert.strictEqual(res._status, 201);
+    const data = JSON.parse(res._body);
+    assert.strictEqual(data.order.status, 1, 'Admin can specify status=1');
+    assert.strictEqual(data.order.slip_verified, true, 'Admin can specify slip_verified=true');
+    assert.strictEqual(data.order.tracking_number, 'ADMIN-TRACK-123', 'Admin can specify tracking_number');
+  });
+
+  await asyncTest('api/[...path].js maintains security parity for POST /api/orders (status, slip_verified, tracking)', async () => {
+    const fs = require('fs');
+    const path = require('path');
+    const apiCode = fs.readFileSync(path.join(__dirname, '../api/[...path].js'), 'utf8');
+    assert.ok(apiCode.includes('isAdminUser && body.status !== undefined ? Number(body.status) : 0'), 'api/[...path].js must force status=0 for non-admins');
+    assert.ok(apiCode.includes('isAdminUser ? !!body.slip_verified : false'), 'api/[...path].js must force slip_verified=false for non-admins');
+    assert.ok(apiCode.includes("tracking_number: isAdminUser ? (body.tracking_number || '') : ''"), 'api/[...path].js must strip tracking_number for non-admins');
+  });
+
   console.log('\n── 3. PHONE TRACKING SEARCH ──');
 
   await asyncTest('GET /api/track/phone/:phone finds order by clean digits', async () => {

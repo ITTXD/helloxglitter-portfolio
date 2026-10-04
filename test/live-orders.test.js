@@ -88,7 +88,7 @@ async function runTests() {
       slip_verified: true,
       status: 1
     };
-    await serverHandler(createReq('POST', '/api/orders', orderPayload), res);
+    await serverHandler(createReq('POST', '/api/orders', orderPayload, ADMIN_COOKIE), res);
     assert.strictEqual(res._status, 201);
   });
 

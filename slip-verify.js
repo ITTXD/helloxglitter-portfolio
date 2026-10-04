@@ -154,11 +154,13 @@ function formatEasySlipErrorMessage(status, data, expectedAmount) {
  * @returns {Promise<{ success: boolean, error?: string, slipData?: object }>}
  */
 async function verifySlipWithEasySlip({ slipData, expectedAmount, orderId, db }) {
-  // Support mock slips for automated testing and local dev when enabled or in non-production
+  // Support mock slips ONLY in non-production environments when explicitly enabled via ALLOW_MOCK_SLIP
+  const isProduction = process.env.NODE_ENV === 'production';
+  const isMockAllowed = !isProduction && (process.env.ALLOW_MOCK_SLIP === 'true' || process.env.ALLOW_MOCK_SLIP === '1');
   if (
-    process.env.ALLOW_MOCK_SLIP === 'true' ||
-    process.env.ALLOW_MOCK_SLIP === '1' ||
-    (process.env.NODE_ENV !== 'production' && typeof slipData === 'string' && (slipData.includes('mockslip') || slipData.includes('MOCK_SLIP')))
+    isMockAllowed &&
+    typeof slipData === 'string' &&
+    (slipData.includes('mockslip') || slipData.includes('MOCK_SLIP'))
   ) {
     const mockAmount = expectedAmount != null ? Number(expectedAmount) : 0;
     return {
