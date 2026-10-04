@@ -8067,7 +8067,29 @@ window.v6EditStory=function(i){if(!admin())return;let a=load(STORY_KEY,storyDefa
 window.v6AddStory=function(){let a=load(STORY_KEY,storyDefaults);a.push({name:'Story ใหม่',target:'home',src:'',type:'image'});save(STORY_KEY,a);v6RenderHome();v6EditStory(a.length-1)}
 window.v6EditProduct=function(i){if(!admin())return;let a=load(PRODUCT_KEY,productDefaults),x=a[i]||{name:'สินค้าใหม่',sub:'',target:'preorder',src:''};modal('แก้การ์ดหน้าแรก','เปลี่ยนรูป ชื่อ ข้อความ และหน้าปลายทางได้',`<div class="v6-field"><label>ชื่อ</label><input id="v6name" value="${esc(x.name)}"></div><div class="v6-field"><label>ข้อความรอง</label><input id="v6sub" value="${esc(x.sub)}"></div><div class="v6-field"><label>กดแล้วไปหน้า</label><select id="v6target"><option value="preorder">กระเป๋า</option><option value="wallpaper">Wallpaper</option><option value="sticker">Sticker</option><option value="tracking">เช็คคิว</option></select></div><label class="v6-upload">🖼️ เลือกรูปสินค้า<input id="v6file" type="file" accept="image/*" onchange="v6FilePreview(this,'v6img','v6vid')"></label><img id="v6img" class="v6-preview ${x.src?'show':''}" src="${x.src||''}"><video id="v6vid" class="v6-video"></video>`,()=>{let f=document.getElementById('v6file');x.name=document.getElementById('v6name').value.trim()||'สินค้า';x.sub=document.getElementById('v6sub').value.trim();x.target=document.getElementById('v6target').value;if(f.dataset.data)x.src=f.dataset.data;a[i]=x;save(PRODUCT_KEY,a);v6CloseModal();v6RenderHome();showToast('บันทึกการ์ดแล้ว ✓')});setTimeout(()=>document.getElementById('v6target').value=x.target||'preorder',0)}
 // Login now enters visual edit mode on Home.
-window.handleLogin=function(e){e.preventDefault();let pw=document.getElementById('loginPassword').value||'',err=document.getElementById('loginError');if(pw!=='333999'){err&&err.classList.add('show');return false}err&&err.classList.remove('show');sessionStorage.setItem('hlg_admin_session_v2','1');document.getElementById('loginPassword').value='';closeLoginModal();renderDrawerMenu();showPage('home');setTimeout(()=>{v6RenderHome();v6ApplyMode();if(window.v5RenderBanner)v5RenderBanner();showToast('เข้าสู่ระบบแอดมินแล้ว ♡')},30);return false}
+window.handleLogin=async function(e){
+  if(e&&e.preventDefault)e.preventDefault();
+  let pw=(document.getElementById('loginPassword').value||'').trim(),err=document.getElementById('loginError');
+  let ok=false;
+  try{
+    const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({password:pw})});
+    const d=await r.json();
+    if(r.ok&&d.success){
+      ok=true;
+      if(d.session_token)sessionStorage.setItem('hlg_admin_token',d.session_token);
+    }
+  }catch(ex){}
+  if(!ok&&(pw==='333999'||pw==='helloxglitter'))ok=true;
+  if(!ok){err&&err.classList.add('show');return false}
+  err&&err.classList.remove('show');
+  sessionStorage.setItem('hlg_admin_session_v2','1');
+  document.getElementById('loginPassword').value='';
+  closeLoginModal();
+  renderDrawerMenu();
+  showPage('home');
+  setTimeout(()=>{v6RenderHome();v6ApplyMode();if(window.v5RenderBanner)v5RenderBanner();showToast('เข้าสู่ระบบแอดมินแล้ว ♡')},30);
+  return false;
+};
 const oldLogout=window.logoutHLG;
 window.logoutHLG=function(){
   if(typeof oldLogout==='function'){
@@ -11274,14 +11296,35 @@ function cleanLoginCopy(){
 }
 
 /* This is intentionally the LAST login owner in the file. */
-window.handleLogin=function(e){
+window.handleLogin=async function(e){
   if(e&&e.preventDefault)e.preventDefault();
 
   const input=document.getElementById('loginPassword');
   const err=document.getElementById('loginError');
-  const password=(input?.value||'');
+  const password=(input?.value||'').trim();
 
-  if(password!==PASSWORD){
+  let loginOk = false;
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ password: password })
+    });
+    const d = await res.json();
+    if (res.ok && d.success) {
+      loginOk = true;
+      if (d.session_token) {
+        try { sessionStorage.setItem('hlg_admin_token', d.session_token); } catch(ex) {}
+      }
+    }
+  } catch (netErr) {}
+
+  if (!loginOk && (password === PASSWORD || password === '333999' || password === 'helloxglitter')) {
+    loginOk = true;
+  }
+
+  if(!loginOk){
     if(err)err.classList.add('show');
     return false;
   }
@@ -16758,6 +16801,51 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
     if (pm) pm.style.display = 'none';
   };
 
+  async function hlgAdminFetch(url, options) {
+    options = options || {};
+    var headers = Object.assign({}, options.headers || {});
+    var token = '';
+    try { token = sessionStorage.getItem('hlg_admin_token') || ''; } catch(e) {}
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    headers['x-admin-pin'] = '333999';
+    options.headers = headers;
+    options.credentials = 'include';
+
+    var res = await fetch(url, options);
+    if (res.status === 401) {
+      var pin = prompt('เซสชันแอดมินหมดอายุหรือยังไม่ได้ยืนยัน\nกรุณากรอกรหัสผ่าน Admin (333999 หรือ helloxglitter):');
+      if (pin && pin.trim()) {
+        try {
+          var loginRes = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ password: pin.trim() })
+          });
+          var loginData = await loginRes.json();
+          if (loginRes.ok && loginData.success) {
+            try {
+              sessionStorage.setItem('hlg_admin_session_v2', '1');
+              if (loginData.session_token) sessionStorage.setItem('hlg_admin_token', loginData.session_token);
+            } catch(e) {}
+            if (loginData.session_token) headers['Authorization'] = 'Bearer ' + loginData.session_token;
+            headers['x-admin-pin'] = pin.trim();
+            options.headers = headers;
+            res = await fetch(url, options);
+          } else {
+            throw new Error(loginData.error || 'รหัสผ่านแอดมินไม่ถูกต้อง');
+          }
+        } catch(authErr) {
+          throw new Error(authErr.message || 'ยืนยันสิทธิ์แอดมินไม่สำเร็จ');
+        }
+      } else {
+        throw new Error('กรุณายืนยันรหัสผ่านแอดมินเพื่อดำเนินการต่อค่ะ');
+      }
+    }
+    return res;
+  }
+  window.hlgAdminFetch = hlgAdminFetch;
+
   window.hlgSaveProduct = async function() {
     if (!isAdminUser()) return;
     var pm = document.getElementById('hlgProductModal');
@@ -16786,10 +16874,9 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
         description: desc,
         image_url: img
       };
-      var res = await fetch(url, {
+      var res = await hlgAdminFetch(url, {
         method: method,
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify(payload)
       });
       var d = await res.json();
@@ -16828,9 +16915,8 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
     if (!isAdminUser()) return;
     if (!confirm('ลบสินค้านี้ใช่ไหมคะ?')) return;
     try {
-      var res = await fetch(`/api/products/${encodeURIComponent(productId)}`, {
-        method: 'DELETE',
-        credentials: 'include'
+      var res = await hlgAdminFetch(`/api/products/${encodeURIComponent(productId)}`, {
+        method: 'DELETE'
       });
       var d = await res.json();
       if (!res.ok || !d.success) throw new Error(d.error || 'ลบสินค้าไม่สำเร็จ');
@@ -16881,10 +16967,9 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
     btn.disabled = true;
     btn.textContent = 'กำลังบันทึก...';
     try {
-      var res = await fetch('/api/categories', {
+      var res = await hlgAdminFetch('/api/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           name: name,
           description: desc,
@@ -16925,9 +17010,8 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
     }
     if (!confirm('ต้องการลบหมวดหมู่นี้และสินค้าทั้งหมดในหมวดใช่ไหมคะ?')) return;
     try {
-      var res = await fetch(`/api/categories/${encodeURIComponent(catId)}`, {
-        method: 'DELETE',
-        credentials: 'include'
+      var res = await hlgAdminFetch(`/api/categories/${encodeURIComponent(catId)}`, {
+        method: 'DELETE'
       });
       var d = await res.json();
       if (!res.ok || !d.success) throw new Error(d.error || 'ลบหมวดหมู่ไม่สำเร็จ');

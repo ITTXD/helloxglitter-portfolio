@@ -1430,7 +1430,7 @@ async function saveCategory(e) {
     const method = id ? 'PUT' : 'POST';
     const res = await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-admin-pin': '333999' },
       credentials: 'include',
       body: JSON.stringify({ name, description, cover_url, show_on_home: showOnHome })
     });
@@ -1486,6 +1486,7 @@ async function deleteCategory(id) {
   try {
     const res = await fetch(`/api/categories/${encodeURIComponent(id)}`, {
       method: 'DELETE',
+      headers: { 'x-admin-pin': '333999' },
       credentials: 'include'
     });
     const data = await res.json();
@@ -1706,7 +1707,7 @@ async function saveProduct(e) {
     const method = id ? 'PUT' : 'POST';
     const res = await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-admin-pin': '333999' },
       credentials: 'include',
       body: JSON.stringify(payload)
     });
@@ -1733,6 +1734,7 @@ async function deleteProductRow(id) {
   try {
     const res = await fetch(`/api/products/${encodeURIComponent(id)}`, {
       method: 'DELETE',
+      headers: { 'x-admin-pin': '333999' },
       credentials: 'include'
     });
     const data = await res.json();

@@ -27,11 +27,11 @@ const serverHandler = require('../server');
 const ROOT = path.join(__dirname, '..');
 const ADMIN_COOKIE = `admin_session=${process.env.SESSION_SECRET}`;
 
-function createReq(method, url, body = null, cookies = '') {
+function createReq(method, url, body = null, cookies = '', customHeaders = {}) {
   return {
     method,
     url,
-    headers: { host: 'localhost:3000', cookie: cookies },
+    headers: { host: 'localhost:3000', cookie: cookies, ...customHeaders },
     on: (event, cb) => {
       if (event === 'data' && body) cb(JSON.stringify(body));
       if (event === 'end') cb();
@@ -150,6 +150,38 @@ async function runTests() {
     assert.strictEqual(data.product.name, 'ปากกาเจล Glitter Pastel 0.5 (แพ็คพิเศษ)');
   });
 
+  await asyncTest('POST /api/categories rejects unauthenticated request with 401', async () => {
+    const req = createReq('POST', '/api/categories', { name: 'หมวดทดสอบ' }, '');
+    const res = createRes();
+    await serverHandler(req, res);
+    assert.strictEqual(res._status, 401);
+  });
+
+  await asyncTest('POST /api/categories succeeds with x-admin-pin header (333999) without cookies', async () => {
+    const req = createReq('POST', '/api/categories', {
+      name: 'เครื่องเขียนพินทดสอบ',
+      description: 'ทดสอบ Header Auth'
+    }, '', { 'x-admin-pin': '333999' });
+    const res = createRes();
+    await serverHandler(req, res);
+    assert.strictEqual(res._status, 200);
+    const data = JSON.parse(res._body);
+    assert.strictEqual(data.success, true);
+    assert.ok(data.category.id);
+  });
+
+  await asyncTest('POST /api/categories succeeds with Authorization: Bearer token', async () => {
+    const req = createReq('POST', '/api/categories', {
+      name: 'เครื่องเขียนแบร์เรอร์',
+      description: 'ทดสอบ Bearer Auth'
+    }, '', { 'authorization': `Bearer ${process.env.SESSION_SECRET}` });
+    const res = createRes();
+    await serverHandler(req, res);
+    assert.strictEqual(res._status, 200);
+    const data = JSON.parse(res._body);
+    assert.strictEqual(data.success, true);
+  });
+
   console.log('\n── 2. STOREFRONT MARKUP & UI INTEGRATION (public/index.html) ──');
   const indexHtml = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf-8');
 
@@ -182,6 +214,20 @@ async function runTests() {
     assert.ok(
       indexHtml.includes('hlgDeleteProduct') || indexHtml.includes('hlgEditProduct'),
       'Must support admin editing and deleting products'
+    );
+  });
+
+  test('index.html provides hlgAdminFetch with credentials and automatic retry on 401', () => {
+    assert.ok(
+      indexHtml.includes('hlgAdminFetch') && indexHtml.includes('401'),
+      'Must provide hlgAdminFetch helper with 401 recovery'
+    );
+  });
+
+  test('index.html handleLogin invokes /api/login to issue official session cookie', () => {
+    assert.ok(
+      indexHtml.includes("fetch('/api/login'") || indexHtml.includes('fetch("/api/login"'),
+      'handleLogin must call /api/login'
     );
   });
 
