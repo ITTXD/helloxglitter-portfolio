@@ -231,6 +231,21 @@ async function runTests() {
     );
   });
 
+  test('index.html cart only requires email when buying wallpaper only', () => {
+    assert.ok(
+      indexHtml.includes('function isOnlyWp()'),
+      'Cart must have isOnlyWp helper function'
+    );
+    assert.ok(
+      indexHtml.includes('onlyWp?`<div class="v8cf-field"') || indexHtml.includes('onlyWp'),
+      'Cart must branch checkout UI for wallpaper-only orders'
+    );
+    assert.ok(
+      indexHtml.includes('Digital Download (Wallpaper)'),
+      'Wallpaper checkout must designate digital download address'
+    );
+  });
+
   console.log(`\n========================================`);
   console.log(`  Results: ${PASSED} passed, ${FAILED} failed`);
   console.log(`========================================\n`);

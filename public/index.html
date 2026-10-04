@@ -10174,6 +10174,7 @@ function subtotal(){return window.hlgTierQuote?window.hlgTierQuote(chosen(),docu
 function shipping(){return window.hlgTierQuote?window.hlgTierQuote(chosen(),document.getElementById('v8cfAddr1')?.value||'').shipping:typeof window.hlgShippingQuote==='function'?window.hlgShippingQuote(document.getElementById('v8cfAddr1')?.value||'',chosen()):{total:chosen().some(x=>x.type!=='wallpaper')?40:0,remote:false}}
 function total(){return subtotal()+shipping().total}
 function hasWp(){return chosen().some(x=>x.type==='wallpaper'||x.requiresEmail)}
+function isOnlyWp(){const c=chosen();return c.length>0&&c.every(x=>x.type==='wallpaper')}
 function validEmail(v){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v||'').trim())}
 
 window.v8CFtoggle=(id,on)=>{const s=sels();s[id]=!!on;saveS(s);renderUnifiedCart()}
@@ -10214,6 +10215,7 @@ window.renderUnifiedCart=function(){
    return
  }
  const n=a.filter(x=>s[x._cartId]!==false).length,all=n===a.length;
+ const onlyWp=isOnlyWp();
  root.innerHTML=`<div class="v8cf-head"><div class="v8cf-title">🛒 ตะกร้าของฉัน</div><div style="font-size:10px;color:#9a7a88">${a.length} รายการ</div></div>
  <div class="v8cf-sub">สามารถเลือกซื้อเฉพาะบางรายการได้ สินค้าที่ไม่เลือกจะยังอยู่ในตะกร้าไว้ซื้อทีหลัง ♡</div>
  <div class="v8cf-selectbar"><label><input type="checkbox" ${all?'checked':''} onchange="v8CFtoggleAll(this.checked)"> เลือกทั้งหมด</label><div style="font-size:10px;color:#a8798d">เลือกแล้ว ${n} รายการ</div></div>
@@ -10223,30 +10225,41 @@ window.renderUnifiedCart=function(){
   <div class="v8cf-info"><b>${esc(x.name)}</b><small>${esc(x.variant||'')}</small><div class="v8cf-price">${Number(x.price||0).toLocaleString()} ฿ / ชิ้น</div></div>
   <div><div class="v8cf-qty"><button onclick="v8CFqty(${i},-1)">−</button><b>${Number(x.qty||1)}</b><button onclick="v8CFqty(${i},1)">＋</button></div><button class="v8cf-remove" onclick="v8CFremove(${i})">ลบสินค้า</button></div>
  </div>`}).join('')}</div>
- <div class="v8cf-card"><div class="v8cf-row"><span>สินค้าที่เลือก</span><b>${n} รายการ</b></div><div class="v8cf-row"><span>ราคาสินค้าก่อนโปรจำนวน</span><b id="hlgItemSubtotal">${chosen().reduce((sum,x)=>sum+Number(x.price||0)*Number(x.qty||1),0).toLocaleString()} ฿</b></div><div class="v8cf-row"><span id="hlgTierName">ส่วนลดโปรจำนวน</span><b id="hlgTierDiscount">−${(window.hlgTierQuote?.(chosen(),document.getElementById('v8cfAddr1')?.value||'').discount||0).toLocaleString()} ฿</b></div><div class="v8cf-row" id="hlgTierGiftRow" style="display:${window.hlgTierQuote?.(chosen(),document.getElementById('v8cfAddr1')?.value||'').gifts?'':'none'}"><span>ของแถม</span><b id="hlgTierGifts">${esc(window.hlgTierQuote?.(chosen(),document.getElementById('v8cfAddr1')?.value||'').gifts||'')}</b></div><div class="v8cf-row"><span id="hlgShippingLabel">ค่าจัดส่ง</span><b id="hlgShippingAmount">${shipping().pending?'รอกรอกที่อยู่':shipping().total.toLocaleString()+' ฿'}</b></div><div class="v8cf-row total"><span>ยอดชำระ</span><strong id="hlgGrandTotal">${shipping().pending?'รอคำนวณค่าส่ง':total().toLocaleString()+' ฿'}</strong></div></div>
+ <div class="v8cf-card"><div class="v8cf-row"><span>สินค้าที่เลือก</span><b>${n} รายการ</b></div><div class="v8cf-row"><span>ราคาสินค้าก่อนโปรจำนวน</span><b id="hlgItemSubtotal">${chosen().reduce((sum,x)=>sum+Number(x.price||0)*Number(x.qty||1),0).toLocaleString()} ฿</b></div><div class="v8cf-row"><span id="hlgTierName">ส่วนลดโปรจำนวน</span><b id="hlgTierDiscount">−${(window.hlgTierQuote?.(chosen(),document.getElementById('v8cfAddr1')?.value||'').discount||0).toLocaleString()} ฿</b></div><div class="v8cf-row" id="hlgTierGiftRow" style="display:${window.hlgTierQuote?.(chosen(),document.getElementById('v8cfAddr1')?.value||'').gifts?'':'none'}"><span>ของแถม</span><b id="hlgTierGifts">${esc(window.hlgTierQuote?.(chosen(),document.getElementById('v8cfAddr1')?.value||'').gifts||'')}</b></div><div class="v8cf-row"><span id="hlgShippingLabel">ค่าจัดส่ง</span><b id="hlgShippingAmount">${onlyWp ? 'ฟรี (Digital)' : (shipping().pending?'รอกรอกที่อยู่':shipping().total.toLocaleString()+' ฿')}</b></div><div class="v8cf-row total"><span>ยอดชำระ</span><strong id="hlgGrandTotal">${onlyWp ? subtotal().toLocaleString()+' ฿' : (shipping().pending?'รอคำนวณค่าส่ง':total().toLocaleString()+' ฿')}</strong></div></div>
  <div class="v8cf-card">
-  <div class="v8cf-field">
-    <label>เบอร์โทรศัพท์ *</label>
-    <input id="v8cfPhone" inputmode="numeric" maxlength="10" placeholder="0812345678">
-  </div>
-
-  <div class="v8cf-field">
-    <label>ชื่อผู้รับ + ที่อยู่จัดส่ง *</label>
-    <textarea id="v8cfAddr1" rows="5" oninput="hlgShippingUpdate()" placeholder="พิมพ์ชื่อผู้รับและที่อยู่ทั้งหมดได้เลย เช่น&#10;สมหญิง ใจดี&#10;99/12 หมู่บ้าน... ซอย... แขวง... เขต... กรุงเทพฯ 10110"></textarea>
-  </div>
-
-  <div class="v8cf-email ${hasWp()?'show':''}">
-    <div class="v8cf-field" style="margin:0">
-      <label>Email *</label>
-      <input id="v8cfEmail" type="email" placeholder="example@gmail.com">
+  ${onlyWp ? `
+    <div class="v8cf-field" style="margin:0 0 10px">
+      <label style="font-weight:700;color:#7c3aed">Email สำหรับรับไฟล์ Wallpaper *</label>
+      <input id="v8cfEmail" type="email" placeholder="example@gmail.com" style="border:1.5px solid #d8b4fe;background:#fdfaff;font-size:15px;padding:12px 14px;border-radius:12px;width:100%;box-sizing:border-box">
+      <div class="why" style="margin-top:6px;font-size:12px;color:#8b5cf6">✨ ออเดอร์เฉพาะ Wallpaper จัดส่งไฟล์ทาง Email ทันทีหลังชำระเงิน ไม่ต้องกรอกที่อยู่ค่ะ</div>
     </div>
-    <div class="why">จำเป็นสำหรับการรับไฟล์ Wallpaper</div>
-  </div>
+    <input id="v8cfPhone" type="hidden" value="">
+    <textarea id="v8cfAddr1" style="display:none"></textarea>
+    <textarea id="v8cfNote" style="display:none"></textarea>
+  ` : `
+    <div class="v8cf-field">
+      <label>เบอร์โทรศัพท์ *</label>
+      <input id="v8cfPhone" inputmode="numeric" maxlength="10" placeholder="0812345678">
+    </div>
 
-  <div class="v8cf-field">
-    <label>หมายเหตุ</label>
-    <textarea id="v8cfNote" rows="2" placeholder="มีอะไรอยากแจ้งร้าน พิมพ์ไว้ตรงนี้ได้เลยนะคะ ( ദ്ดิ ˙ᗜ˙ )"></textarea>
-  </div>
+    <div class="v8cf-field">
+      <label>ชื่อผู้รับ + ที่อยู่จัดส่ง *</label>
+      <textarea id="v8cfAddr1" rows="5" oninput="hlgShippingUpdate()" placeholder="พิมพ์ชื่อผู้รับและที่อยู่ทั้งหมดได้เลย เช่น&#10;สมหญิง ใจดี&#10;99/12 หมู่บ้าน... ซอย... แขวง... เขต... กรุงเทพฯ 10110"></textarea>
+    </div>
+
+    <div class="v8cf-email ${hasWp()?'show':''}">
+      <div class="v8cf-field" style="margin:0">
+        <label>Email *</label>
+        <input id="v8cfEmail" type="email" placeholder="example@gmail.com">
+      </div>
+      <div class="why">จำเป็นสำหรับการรับไฟล์ Wallpaper</div>
+    </div>
+
+    <div class="v8cf-field">
+      <label>หมายเหตุ</label>
+      <textarea id="v8cfNote" rows="2" placeholder="มีอะไรอยากแจ้งร้าน พิมพ์ไว้ตรงนี้ได้เลยนะคะ ( ദ്ดิ ˙ᗜ˙ )"></textarea>
+    </div>
+  `}
   <div class="v8cf-next-step">ตรวจสอบรายการก่อนนะคะ หลังยืนยันออเดอร์จะมีหน้าสรุปยอดพร้อม QR และช่องแนบสลิปให้ค่ะ ♡</div>
   <div id="v8cfErr" class="v8cf-error"></div>
   <button class="v8cf-buy" ${n?'':'disabled'} onclick="v8CFconfirm()">ตรวจสอบและยืนยันคำสั่งซื้อ ♡</button>
@@ -10257,34 +10270,41 @@ window.renderUnifiedCart=function(){
 window.v8CFconfirm=function(){
  clr();const a=ensure(),s=sels(),buy=a.filter(x=>s[x._cartId]!==false);
  if(!buy.length){err('กรุณาเลือกสินค้าที่ต้องการซื้ออย่างน้อย 1 รายการค่ะ');return}
+ const onlyWp = buy.every(x => x.type === 'wallpaper');
  const phone=(document.getElementById('v8cfPhone')?.value||'').replace(/\D/g,'').slice(0,10),
  email=(document.getElementById('v8cfEmail')?.value||'').trim(),
  note=(document.getElementById('v8cfNote')?.value||'').trim(),
  addr1=(document.getElementById('v8cfAddr1')?.value||'').trim();
 
- if(phone.length<9){err('กรุณาใส่เบอร์โทรให้ครบค่ะ');return}
- if(!addr1){err('กรุณาใส่ชื่อผู้รับและที่อยู่จัดส่งค่ะ');return}
- if(buy.some(x=>x.type!=='wallpaper')&&!/(^|\D)\d{5}(?!\d)/.test(addr1)){err('กรุณาใส่รหัสไปรษณีย์ 5 หลัก เพื่อคำนวณค่าส่งค่ะ');return}
- if(hasWp()&&!validEmail(email)){err('รายการที่เลือกมี Wallpaper กรุณาใส่ Email สำหรับรับไฟล์ค่ะ');return}
+ if(onlyWp){
+   if(!email || !email.includes('@')){
+     err('กรุณาใส่ Email สำหรับรับไฟล์ Wallpaper ให้ถูกต้องค่ะ');
+     return;
+   }
+ } else {
+   if(phone.length<9){err('กรุณาใส่เบอร์โทรให้ครบค่ะ');return}
+   if(!addr1){err('กรุณาใส่ชื่อผู้รับและที่อยู่จัดส่งค่ะ');return}
+   if(buy.some(x=>x.type!=='wallpaper')&&!/(^|\D)\d{5}(?!\d)/.test(addr1)){err('กรุณาใส่รหัสไปรษณีย์ 5 หลัก เพื่อคำนวณค่าส่งค่ะ');return}
+   if(hasWp()&&!validEmail(email)){err('รายการที่เลือกมี Wallpaper กรุณาใส่ Email สำหรับรับไฟล์ค่ะ');return}
+ }
 
-
- const firstLine=(addr1.split(/\n+/).map(x=>x.trim()).filter(Boolean)[0]||'ลูกค้า').slice(0,120);
- const fullAddress=addr1;
+ const firstLine=onlyWp ? (email.split('@')[0] || 'ลูกค้า Wallpaper') : (addr1.split(/\n+/).map(x=>x.trim()).filter(Boolean)[0]||'ลูกค้า').slice(0,120);
+ const fullAddress=onlyWp ? 'Digital Download (Wallpaper)' : addr1;
 
  const order={
    id:window.hlgMakeOrderId(),
    queue_no:typeof makeQueueNo==='function'?makeQueueNo():'',
    customer_name:firstLine,
-   customer_phone:phone,
+   customer_phone:phone || '-',
    customer_email:email,
    customer_address:fullAddress,
-   recipient_info:fullAddress+'\\n'+phone,
-   shipping_address:{address1:addr1},
+   recipient_info:onlyWp ? ('Digital Download (Wallpaper)\n' + email) : (fullAddress+'\n'+phone),
+   shipping_address:{address1:onlyWp ? 'Digital Download (Wallpaper)' : addr1},
    customer_note:note,
    items:buy.map(x=>({name:x.name,variant:x.variant||'',qty:Number(x.qty||1),price:Number(x.price||0),image:x.image||'',type:x.type||''})),
-   shipping_cost:shipping().total,
-   total_price:total(),
-   tier_promo:window.hlgTierQuote?.(buy,addr1).snapshot||null,
+   shipping_cost:onlyWp ? 0 : shipping().total,
+   total_price:onlyWp ? subtotal() : total(),
+   tier_promo:onlyWp ? null : (window.hlgTierQuote?.(buy,addr1).snapshot||null),
    payment_slip:slip,
    payment_promptpay_id:window.hlgPromptSettings?.().id||'',
    payment_qr_lock:window.hlgPromptSettings?.().lock!==false,
@@ -10295,11 +10315,12 @@ window.v8CFconfirm=function(){
    status:0,
    tracking_number:'',
    created_at:new Date().toISOString(),
-   preorder_batch:buy.some(x=>x.type==='bag')?'รวมจากตะกร้า':'Digital / Ready stock'
+   preorder_batch:onlyWp ? 'Digital / Wallpaper' : (buy.some(x=>x.type==='bag')?'รวมจากตะกร้า':'Digital / Ready stock')
  };
  const rows=(typeof getOrders==='function'?getOrders():[]);rows.unshift(order);if(typeof saveOrders==='function')saveOrders(rows);else localStorage.setItem('hlg_orders_v2',JSON.stringify(rows));
  const ids=new Set(buy.map(x=>x._cartId)),remain=a.filter(x=>!ids.has(x._cartId));write(remain);const ns={};remain.forEach(x=>ns[x._cartId]=true);saveS(ns);slip='';
- const root=document.getElementById('v8CartContent');root.innerHTML=`<div class="v8cf-done"><div style="font-size:38px">♡</div><h3>รับคำสั่งซื้อแล้วค่ะ</h3><div class="v8cf-code">${esc(order.queue_no||order.id)}</div><p style="font-size:11px;color:#967684">ได้รับออเดอร์แล้วค่ะ เลขคิวนี้ใช้ติดตามสถานะได้ ร้านจะยืนยันการชำระเงินและอัปเดตขั้นตอนต่อไป ♡</p><button class="v8-go-cart-btn" onclick="renderUnifiedCart()">กลับไปดูตะกร้า</button><button class="v8-go-cart-btn" onclick="showPage('tracking')">เช็กสถานะการชำระเงิน →</button></div>`;
+ const root=document.getElementById('v8CartContent');
+ root.innerHTML=`<div class="v8cf-done"><div style="font-size:38px">♡</div><h3>รับคำสั่งซื้อแล้วค่ะ</h3><div class="v8cf-code">${esc(order.queue_no||order.id)}</div><p style="font-size:11px;color:#967684">ได้รับออเดอร์แล้วค่ะ เลขคิวนี้ใช้ติดตามสถานะได้ ร้านจะยืนยันการชำระเงินและอัปเดตขั้นตอนต่อไป ♡</p>${onlyWp ? `<button class="v8-go-cart-btn" style="background:#7c3aed;color:#fff;margin-bottom:8px" onclick="showPage('wpcheck')">📥 ไปหน้าดาวน์โหลด Wallpaper →</button>` : ''}<button class="v8-go-cart-btn" onclick="renderUnifiedCart()">กลับไปดูตะกร้า</button><button class="v8-go-cart-btn" onclick="showPage('tracking')">เช็กสถานะการชำระเงิน →</button></div>`;
 }
 
 window.v8OpenCart=function(){if(typeof showPage==='function')showPage('cart');setTimeout(renderUnifiedCart,20)}
