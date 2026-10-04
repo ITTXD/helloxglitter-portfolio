@@ -344,9 +344,15 @@ function renderTable() {
     var isShopee = o.channel === 'shopee' || !!o.shopee_order_sn;
     var shopeeBadge = isShopee ? ('<br><span style="display:inline-flex;align-items:center;gap:3px;color:#e04422;font-size:10px;font-weight:800;background:#ffebe5;padding:2px 6px;border-radius:4px;border:1px solid #ffd0c4;margin-top:2px"><i class="ti ti-brand-shopee"></i> Shopee: ' + escapeHtml(o.shopee_order_sn || '') + '</span>') : '';
     var queueTxt = o.queue_no ? (' <span style="font-size:11px;font-weight:700;color:#c04878">(' + escapeHtml(o.queue_no) + ')</span>') : '';
+    var slipBadge = '';
+    if (o.slip_data) {
+      slipBadge = o.slip_verified
+        ? ' <span title="สลิปตรวจผ่านแล้ว" style="display:inline-flex;align-items:center;color:#16a34a;font-size:11px;font-weight:700;margin-left:3px"><i class="ti ti-receipt"></i> ✓</span>'
+        : ' <i class="ti ti-receipt" style="color:#d97706;font-size:11px" title="มีสลิป (รอตรวจ)"></i>';
+    }
 
     return '<tr class="order-row' + (o.type === 'wallpaper' ? ' order-wallpaper' : '') + (isShopee ? ' order-shopee' : '') + '" onclick="openOrder(\'' + escapeHtmlAttr(o.id) + '\')">'
-      + '<td class="order-id">' + escapeHtml(o.id) + queueTxt + (o.slip_data ? ' <i class="ti ti-receipt" style="color:#30a030;font-size:11px" title="มีสลีป"></i>' : '') + (o.fast_track ? '<br><span style="color:#8c30d8;font-size:10px;font-weight:800;background:#f3e8fc;padding:2px 4px;border-radius:4px">⚡ FAST TRACK</span>' : '') + shopeeBadge + '</td>'
+      + '<td class="order-id">' + escapeHtml(o.id) + queueTxt + slipBadge + (o.fast_track ? '<br><span style="color:#8c30d8;font-size:10px;font-weight:800;background:#f3e8fc;padding:2px 4px;border-radius:4px">⚡ FAST TRACK</span>' : '') + shopeeBadge + '</td>'
       + '<td class="order-customer">' + custDisplay + '</td>'
       + '<td class="order-patterns">' + escapeHtml(patterns) + '</td>'
       + '<td class="order-qty">' + (o.total_bags || 0) + '</td>'
@@ -404,7 +410,7 @@ function openOrder(id) {
   if (!order) return;
   currentModalOrder = order;
 
-  document.getElementById('modalOrderId').textContent = order.id;
+  document.getElementById('modalOrderId').textContent = order.id + (order.queue_no ? ' (' + order.queue_no + ')' : '');
 
   var html = '';
 
@@ -433,6 +439,13 @@ function openOrder(id) {
     html += '<div style="font-size:13px;margin-top:6px;color:#3d241d">หมายเลขคำสั่งซื้อ Shopee: <b style="font-family:monospace;color:#d83a17">' + escapeHtml(order.shopee_order_sn || '-') + '</b></div>';
     if (order.queue_no) {
       html += '<div style="font-size:13px;margin-top:4px;color:#3d241d">เลขคิวในระบบ: <b style="color:#d15488">' + escapeHtml(order.queue_no) + '</b></div>';
+    }
+    html += '</div>';
+  } else if (order.queue_no) {
+    html += '<div class="m-section" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">';
+    html += '<div style="font-size:13px;color:#166534">หมายเลขคิวในระบบ: <b style="font-size:15px;color:#15803d">' + escapeHtml(order.queue_no) + '</b></div>';
+    if (order.slip_verified) {
+      html += '<span style="background:#dcfce7;color:#15803d;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:800;border:1px solid #86efac">✓ สลิปยืนยันแล้ว</span>';
     }
     html += '</div>';
   }
@@ -511,11 +524,14 @@ function openOrder(id) {
   // Slip
   if (order.slip_data) {
     html += '<div class="m-section">';
-    html += '<div class="m-section-title">สลีปโอนเงิน</div>';
+    html += '<div class="m-section-title">สลีปโอนเงิน' + (order.slip_verified ? ' <span style="color:#16a34a;font-size:12px;font-weight:700">✓ EasySlip ตรวจสอบผ่านแล้ว</span>' : '') + '</div>';
     html += '<img class="slip-admin-img" src="' + order.slip_data + '" alt="สลีป" onclick="window.open(\'' + order.slip_data + '\',\'_blank\')"/>';
     if (order.slip_uploaded_at) {
       var slipDate = new Date(order.slip_uploaded_at);
       html += '<div style="font-size:11px;color:#a09098;margin-top:6px">อัปโหลดเมื่อ: ' + slipDate.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + '</div>';
+    }
+    if (order.slip_trans_ref) {
+      html += '<div style="font-size:11px;color:#4b5563;margin-top:4px">Ref: <b>' + escapeHtml(order.slip_trans_ref) + '</b>' + (order.slip_sender_name ? ' | ผู้โอน: ' + escapeHtml(order.slip_sender_name) : '') + (order.slip_bank ? ' (' + escapeHtml(order.slip_bank) + ')' : '') + '</div>';
     }
     html += '</div>';
   }

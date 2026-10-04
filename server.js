@@ -18,6 +18,7 @@ const {
 } = require('./coupon-service');
 const { sendCouponFlexMessage, sendOrderReceiptFlexMessage } = require('./line-service');
 const {
+  getSlipLockKey,
   acquireSlipLock,
   releaseSlipLock,
   markTransRefUsed,
@@ -255,6 +256,50 @@ function extractCustomerFields(data) {
     customer_address: address,
     customer_info: info,
   };
+}
+
+async function getNextQueueNo() {
+  const allOrders = await fsGetDocs('orders');
+  let maxQueue = 0;
+  allOrders.forEach(o => {
+    const m = String(o.queue_no || '').match(/(\d+)/);
+    if (m) maxQueue = Math.max(maxQueue, parseInt(m[1], 10) || 0);
+  });
+  try {
+    const stickers = await fsGetDocs('sticker_orders');
+    stickers.forEach(o => {
+      const m = String(o.queue_no || '').match(/(\d+)/);
+      if (m) maxQueue = Math.max(maxQueue, parseInt(m[1], 10) || 0);
+    });
+  } catch (e) {}
+  return 'HLG-' + String(maxQueue + 1).padStart(3, '0');
+}
+
+function generateVerifyToken({ transRef, amount, orderId, slipData }) {
+  const secretKey = SESSION_SECRET || ADMIN_PASSWORD || 'hlg-slip-verify-secret';
+  const slipHash = getSlipLockKey(slipData, amount);
+  const timestamp = Date.now();
+  const data = `${transRef || ''}:${amount}:${orderId || ''}:${slipHash}:${timestamp}`;
+  const sig = crypto.createHmac('sha256', secretKey).update(data).digest('hex');
+  return Buffer.from(JSON.stringify({ transRef, amount, orderId, slipHash, timestamp, sig })).toString('base64');
+}
+
+function validateVerifyToken(token, { amount, orderId, slipData, maxAgeMs = 15 * 60 * 1000 }) {
+  if (!token) return null;
+  try {
+    const secretKey = SESSION_SECRET || ADMIN_PASSWORD || 'hlg-slip-verify-secret';
+    const parsed = JSON.parse(Buffer.from(token, 'base64').toString('utf8'));
+    const { transRef, amount: tAmount, orderId: tOrderId, slipHash, timestamp, sig } = parsed;
+    if (Date.now() - timestamp > maxAgeMs) return null;
+    const expectedHash = getSlipLockKey(slipData, amount);
+    if (slipHash !== expectedHash) return null;
+    const data = `${transRef || ''}:${tAmount}:${tOrderId || ''}:${slipHash}:${timestamp}`;
+    const expectedSig = crypto.createHmac('sha256', secretKey).update(data).digest('hex');
+    if (sig !== expectedSig) return null;
+    return parsed;
+  } catch (e) {
+    return null;
+  }
 }
 
 function send404(res) { sendJson(res, 404, { error: 'Not found' }); }
@@ -974,12 +1019,7 @@ async function handleApi(req, res) {
     }
 
     // New Shopee order
-    let maxQueue = 0;
-    allOrders.forEach(o => {
-      const m = String(o.queue_no || '').match(/(\d+)/);
-      if (m) maxQueue = Math.max(maxQueue, parseInt(m[1], 10) || 0);
-    });
-    const queue_no = 'HLG-' + String(maxQueue + 1).padStart(3, '0');
+    const queue_no = await getNextQueueNo();
     const orderId = 'SHP-' + Date.now();
 
     const order = {
@@ -1357,13 +1397,75 @@ async function handleApi(req, res) {
     return true;
   }
 
-  // POST /api/orders/confirm — สร้างออเดอร์ + ตรวจสอบสลีปผ่าน EasySlip (ไม่ต้อง auth)
+  // POST /api/orders/verify-slip — ตรวจสอบสลิปสำหรับปุ่มสีเขียว (ไม่ต้อง auth)
+  if (pathname === '/api/orders/verify-slip' && method === 'POST') {
+    const body = await readBody(req);
+    const slipData = body.slip_data;
+    const amount = Number(body.amount || 0);
+    const orderId = (body.order_id || body.id || '').trim();
+
+    if (!slipData) {
+      sendJson(res, 400, { error: 'กรุณาแนบรูปสลิปการโอนเงินก่อนกดตรวจสอบค่ะ' });
+      return true;
+    }
+
+    const lockRes = await acquireSlipLock({ db, slipData, amount });
+    if (!lockRes.acquired) {
+      sendJson(res, 429, { error: 'สลิปนี้กำลังอยู่ระหว่างการตรวจสอบ กรุณารอสักครู่นะคะ' });
+      return true;
+    }
+
+    let verifyResult;
+    try {
+      verifyResult = await verifySlipWithEasySlip({
+        slipData,
+        expectedAmount: amount,
+        orderId,
+        db
+      });
+    } finally {
+      await releaseSlipLock({ db, lockKey: lockRes.lockKey });
+    }
+
+    if (!verifyResult.success) {
+      sendJson(res, 400, {
+        success: false,
+        error: verifyResult.error || 'การตรวจสอบสลิปล้มเหลว กรุณาตรวจสอบรูปสลิปอีกครั้ง',
+        verifyDetails: verifyResult
+      });
+      return true;
+    }
+
+    const verifyToken = generateVerifyToken({
+      transRef: verifyResult.transRef,
+      amount: verifyResult.amount != null ? verifyResult.amount : amount,
+      orderId,
+      slipData
+    });
+
+    sendJson(res, 200, {
+      success: true,
+      verify_token: verifyToken,
+      verifyDetails: verifyResult
+    });
+    return true;
+  }
+
+  // POST /api/orders/confirm — สร้างออเดอร์ + ตรวจสอบสลีปผ่าน EasySlip และบันทึกลง Firestore (ไม่ต้อง auth)
   if (pathname === '/api/orders/confirm' && method === 'POST') {
     const body = await readBody(req);
-    const orderData = body.order;
+    const orderData = body.order || {};
     const slipData = body.slip_data;
+    const verifyToken = body.verify_token || orderData.verify_token;
 
-    if (!orderData || (!orderData.customer_info && !orderData.customer_name) || !orderData.patterns || orderData.patterns.length === 0) {
+    // Support items mapping to patterns
+    const patterns = (orderData.patterns && orderData.patterns.length > 0)
+      ? orderData.patterns
+      : (orderData.items && orderData.items.length > 0)
+        ? orderData.items.map(x => x.name + (x.variant ? ' (' + x.variant + ')' : ''))
+        : [];
+
+    if (!orderData || (!orderData.customer_info && !orderData.customer_name) || patterns.length === 0) {
       sendJson(res, 400, { error: 'ข้อมูลออเดอร์ไม่ครบ' }); return true;
     }
     if (!slipData) {
@@ -1394,7 +1496,7 @@ async function handleApi(req, res) {
         db,
         code: couponCode,
         lineUserId,
-        items: orderData.patterns || [],
+        items: patterns,
         subtotal: basePrice,
       });
       if (!valResult.valid) {
@@ -1409,47 +1511,85 @@ async function handleApi(req, res) {
     let shippingCost = orderData.shipping_cost != null ? Number(orderData.shipping_cost) : (orderData.is_remote ? 40 : 0);
     const grandTotal = discountedPrice + shippingCost;
 
-    // ตรวจสอบสลิปผ่าน EasySlip API ก่อนบันทึก Database (พร้อมกัน Request ซ้ำซ้อน)
-    const lockRes = await acquireSlipLock({ db, slipData, amount: grandTotal });
-    if (!lockRes.acquired) {
-      sendJson(res, 429, { error: 'สลิปนี้กำลังอยู่ระหว่างการตรวจสอบ กรุณารอสักครู่นะคะ' });
-      return true;
-    }
-
+    // Check if valid verify_token was provided from verify-slip step
+    const validatedToken = validateVerifyToken(verifyToken, { amount: grandTotal, orderId, slipData });
     let verifyResult;
-    try {
-      verifyResult = await verifySlipWithEasySlip({
-        slipData: slipData,
-        expectedAmount: grandTotal,
-        orderId: orderId,
-        db: db,
-      });
-    } finally {
-      await releaseSlipLock({ db, lockKey: lockRes.lockKey });
-    }
 
-    if (!verifyResult.success) {
-      sendJson(res, 400, {
-        error: verifyResult.error || 'การตรวจสอบสลิปล้มเหลว กรุณาตรวจสอบรูปสลิปอีกครั้ง',
-        verifyDetails: verifyResult
-      });
-      return true;
+    if (validatedToken) {
+      verifyResult = {
+        success: true,
+        transRef: validatedToken.transRef,
+        amount: validatedToken.amount,
+        senderBank: '',
+        senderName: '',
+        receiverBank: '',
+        receiverName: '',
+        date: new Date(validatedToken.timestamp).toISOString(),
+      };
+    } else {
+      // ตรวจสอบสลิปผ่าน EasySlip API ก่อนบันทึก Database (พร้อมกัน Request ซ้ำซ้อน)
+      const lockRes = await acquireSlipLock({ db, slipData, amount: grandTotal });
+      if (!lockRes.acquired) {
+        sendJson(res, 429, { error: 'สลิปนี้กำลังอยู่ระหว่างการตรวจสอบ กรุณารอสักครู่นะคะ' });
+        return true;
+      }
+
+      try {
+        verifyResult = await verifySlipWithEasySlip({
+          slipData: slipData,
+          expectedAmount: grandTotal,
+          orderId: orderId,
+          db: db,
+        });
+      } finally {
+        await releaseSlipLock({ db, lockKey: lockRes.lockKey });
+      }
+
+      if (!verifyResult.success) {
+        sendJson(res, 400, {
+          error: verifyResult.error || 'การตรวจสอบสลิปล้มเหลว กรุณาตรวจสอบรูปสลิปอีกครั้ง',
+          verifyDetails: verifyResult
+        });
+        return true;
+      }
     }
 
     const cust = extractCustomerFields(orderData);
 
+    // Dynamic sequential queue number (HLG-XXX)
+    // Security: Check existing database record; allocate next queue_no server-side to prevent client spoofing
+    const existing = await fsFindByField('orders', 'id', orderId);
+    let queue_no = (existing && existing.queue_no) ? existing.queue_no : await getNextQueueNo();
+
+    // Pattern qtys
+    let patternQtys = orderData.pattern_qtys || null;
+    if (!patternQtys && orderData.items) {
+      patternQtys = {};
+      orderData.items.forEach(x => {
+        const pName = x.name + (x.variant ? ' (' + x.variant + ')' : '');
+        patternQtys[pName] = Number(x.qty || 1);
+      });
+    }
+
+    const totalBags = orderData.total_bags
+      || (orderData.items ? orderData.items.filter(x => x.type === 'bag').reduce((n, x) => n + (Number(x.qty) || 1), 0) : 0)
+      || patterns.length
+      || 1;
+
     const order = {
       id: orderId,
+      queue_no,
       created_at: orderData.created_at || new Date().toISOString(),
       customer_name: cust.customer_name,
       customer_phone: cust.customer_phone,
       customer_address: cust.customer_address,
       customer_info: cust.customer_info,
       line_user_id: lineUserId || null,
-      patterns: orderData.patterns,
-      pattern_qtys: orderData.pattern_qtys || null,
+      patterns: patterns,
+      pattern_qtys: patternQtys,
+      items: orderData.items || null,
       qty: orderData.qty || 1,
-      total_bags: orderData.total_bags || orderData.patterns.length,
+      total_bags: totalBags,
       original_price: originalPrice,
       total_price: discountedPrice,
       savings: (orderData.savings || 0) + couponDiscount,
@@ -1457,7 +1597,7 @@ async function handleApi(req, res) {
       coupon_discount: couponDiscount,
       shipping_cost: shippingCost,
       is_remote: orderData.is_remote || false,
-      status: 1,
+      status: 1, // 1 = ยืนยันคิวแล้ว
       note: orderData.note || '',
       note_status: orderData.note ? 'on' : 'off',
       slip_data: slipData,
@@ -1486,8 +1626,13 @@ async function handleApi(req, res) {
       });
     }
 
-    const docRef = await fsAddDoc('orders', order);
-    order._docId = docRef.id;
+    if (existing) {
+      await fsUpdateDoc('orders', existing._docId || existing.id, order);
+      order._docId = existing._docId || existing.id;
+    } else {
+      const docRef = await fsAddDoc('orders', order);
+      order._docId = docRef.id;
+    }
 
     if (verifyResult.transRef) {
       await markTransRefUsed({
