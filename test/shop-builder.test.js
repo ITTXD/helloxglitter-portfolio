@@ -309,6 +309,34 @@ async function runTests() {
     );
   });
 
+  test('wallpaper card on #page-wallpaper uses exact gcard and gallery structure', () => {
+    assert.ok(
+      indexHtml.includes('id="wallpaperGallery"') && indexHtml.includes('class="gallery"'),
+      '#page-wallpaper must wrap wallpaper card in .gallery container'
+    );
+    assert.ok(
+      indexHtml.includes('class="gcard wp-card"') || indexHtml.includes('class="wp-card gcard"'),
+      'Wallpaper card must have .gcard class'
+    );
+    assert.ok(
+      indexHtml.includes('class="gimg wp-card-img"'),
+      'Wallpaper card must use .gimg image class'
+    );
+    assert.ok(
+      indexHtml.includes('class="glabel wp-card-info"'),
+      'Wallpaper card must use .glabel info container'
+    );
+    assert.ok(
+      !/\.wp-card[^{]*\{[^}]*max-width:\s*480px/.test(indexHtml),
+      'Wallpaper card must not have max-width: 480px override'
+    );
+    const adminCss = fs.readFileSync(path.join(ROOT, 'public', 'admin', 'admin.css'), 'utf-8');
+    assert.ok(
+      !adminCss.includes('width: 96px !important;'),
+      'Admin wallpaper thumbnail must not be oversized (96px)'
+    );
+  });
+
   console.log(`\n========================================`);
   console.log(`  Results: ${PASSED} passed, ${FAILED} failed`);
   console.log(`========================================\n`);

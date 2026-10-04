@@ -152,24 +152,17 @@ body { font-family: 'Nunito', sans-serif; background: #f8f9fc; color: #333; min-
 .m-pattern-img { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; border: 1.5px solid #f0d0e0; cursor: pointer; transition: transform .15s; flex-shrink: 0; }
 .m-pattern-img:hover { transform: scale(1.08); }
 .m-pattern-item.m-pattern-wallpaper-item {
-  padding: 10px 12px;
-  background: #fbf7ff;
-  border: 1.5px solid #e6d9fc;
-  border-radius: 14px;
-  margin: 6px 0;
-  display: flex;
-  align-items: center;
-  gap: 14px;
+  padding: 6px 0;
+  border-bottom: 1px dashed #f0e8ec;
 }
 .m-pattern-img-wallpaper {
-  width: 96px !important;
-  height: 96px !important;
-  border-radius: 14px !important;
-  border: 2px solid #b794f4 !important;
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: 10px !important;
+  border: 1.5px solid #d0c0e8 !important;
   object-fit: cover !important;
-  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.16) !important;
 }
-.m-pattern-img-wallpaper:hover { transform: scale(1.04) !important; }
+.m-pattern-img-wallpaper:hover { transform: scale(1.08) !important; }
 .m-pattern-name { font-size: 13px; font-weight: 700; color: #c04070; }
 .m-pattern-price { margin-left: auto; font-size: 13px; font-weight: 700; color: #d45a8a; }
 
