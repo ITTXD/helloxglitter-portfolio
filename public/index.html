@@ -6949,8 +6949,22 @@ function getOrders(){
   try{ return JSON.parse(localStorage.getItem(HLG_ORDERS_KEY)||'[]'); }catch(e){ return []; }
 }
 function saveOrders(rows){
-  if(window.hlgOrderStore?.active) window.hlgOrderStore.save(rows);
-  localStorage.setItem(HLG_ORDERS_KEY, JSON.stringify(rows||[]));
+  if(window.hlgOrderStore?.active) {
+    try { window.hlgOrderStore.save(rows); } catch(e) { console.warn('IndexedDB save failed', e); }
+  }
+  try {
+    var sanitized = (rows || []).map(function(o) {
+      if (o && o.payment_slip && typeof o.payment_slip === 'string' && o.payment_slip.length > 500) {
+        var copy = Object.assign({}, o);
+        delete copy.payment_slip;
+        return copy;
+      }
+      return o;
+    });
+    localStorage.setItem(HLG_ORDERS_KEY, JSON.stringify(sanitized));
+  } catch(e) {
+    console.warn('localStorage saveOrders skipped (quota exceeded):', e);
+  }
 }
 function normalizePhone(v){ return String(v||'').replace(/\D/g,''); }
 function makeQueueNo(){
@@ -14547,7 +14561,18 @@ function gifDb(){return new Promise((resolve,reject)=>{const req=indexedDB.open(
 async function storeGif(file){const db=await gifDb();try{await new Promise((resolve,reject)=>{const tx=db.transaction('assets','readwrite');tx.objectStore('assets').put(file,'thankyou');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}finally{db.close()}}
 async function gifSource(){const value=settings().gif;if(value!=='db:thankyou')return /^(data:image\/gif;base64,|https:\/\/)/i.test(value)?value:'';try{const db=await gifDb();const blob=await new Promise((resolve,reject)=>{const req=db.transaction('assets','readonly').objectStore('assets').get('thankyou');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});db.close();if(!blob)return '';return await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(r.error);r.readAsDataURL(blob)})}catch(e){return ''}}
 const orders=()=>typeof getOrders==='function'?getOrders():read('hlg_orders_v2',[]);
-const save=a=>typeof saveOrders==='function'?saveOrders(a):localStorage.setItem('hlg_orders_v2',JSON.stringify(a));
+const save=a=>{
+ if(typeof saveOrders==='function') return saveOrders(a);
+ try{
+  const lightweight=(a||[]).map(x=>{
+   if(x&&x.payment_slip&&typeof x.payment_slip==='string'&&x.payment_slip.length>500){
+    const c={...x};delete c.payment_slip;return c;
+   }
+   return x;
+  });
+  localStorage.setItem('hlg_orders_v2',JSON.stringify(lightweight));
+ }catch(e){console.warn('localStorage save skipped:',e);}
+};
 const selected=()=>{const s=read(SEL,{});return read(CART,[]).filter(x=>s[x._cartId]!==false)};
 const addr=()=>document.getElementById('v8cfAddr1')?.value.trim()||'';
 const quote=items=>typeof window.hlgShippingQuote==='function'?window.hlgShippingQuote(addr(),items):{total:items.some(x=>x.type!=='wallpaper')?40:0};
@@ -14621,19 +14646,37 @@ window.hrxPostSlip=function(id,file){
  if(!/^image\/(png|jpeg|webp)$/.test(file.type)||file.size>5*1024*1024){if(e){e.textContent='ใช้ JPG, PNG หรือ WEBP ขนาดไม่เกิน 5 MB ค่ะ';e.style.display='block';}return}
  const r=new FileReader();r.onerror=()=>{if(e){e.textContent='อ่านรูปสลิปไม่สำเร็จค่ะ';e.style.display='block';}};
   r.onload=()=>{const img=new Image();img.onerror=()=>{if(e){e.textContent='เปิดรูปสลิปไม่สำเร็จค่ะ';e.style.display='block';}};img.onload=async()=>{
-  try{const scale=Math.min(1,1600/Math.max(img.naturalWidth,img.naturalHeight)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);
-    const a=orders(),i=a.findIndex(x=>x.id===id);if(i<0)return;const previous={...a[i]};
-    a[i].payment_slip=canvas.toDataURL('image/jpeg',.83);
+  try{
+    const maxDim=1000;
+    const scale=Math.min(1,maxDim/Math.max(img.naturalWidth||1,img.naturalHeight||1)),canvas=document.createElement('canvas');
+    canvas.width=Math.max(1,Math.round((img.naturalWidth||maxDim)*scale));
+    canvas.height=Math.max(1,Math.round((img.naturalHeight||maxDim)*scale));
+    const ctx=canvas.getContext('2d');
+    ctx.fillStyle='#fff';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    const slipData=canvas.toDataURL('image/jpeg',.78);
+
+    const a=orders(),i=a.findIndex(x=>x.id===id);
+    if(i<0)return;
+    a[i].payment_slip=slipData;
     a[i].payment_status='แนบสลิปแล้ว (รอตรวจสอบ)';
     a[i].payment_verification='pending';
     a[i].slip_verified=false;
     delete a[i].verify_token;
     delete a[i].payment_customer_confirmed_at;
-    try{save(a);await window.hlgOrderStore?.flush?.()}catch(writeError){a[i]=previous;throw writeError}
+
+    // Keep slip in memory for EasySlip scanning and direct Cloud Firestore upload.
+    // Local storage quota will never block the customer from paying.
+    try{ save(a); }catch(storageErr){ console.warn('Local storage cache bypassed for slip:', storageErr); }
+
     if(e){e.textContent='';e.style.display='none';}
     renderDone(a[i]);
     showToast?.('แนบสลิปแล้วค่ะ กรุณากดปุ่มสีเขียวเพื่อเช็กสลิป')
-  }catch(ex){console.error('Slip save failed',ex);if(e){e.textContent='บันทึกสลิปไม่สำเร็จ กรุณาลองอีกครั้งหรือติดต่อร้านค่ะ';e.style.display='block';}}
+  }catch(ex){
+    console.error('Slip processing failed',ex);
+    if(e){e.textContent='เปิดรูปสลิปไม่สำเร็จ กรุณาลองเลือกรูปใหม่อีกครั้งค่ะ';e.style.display='block';}
+  }
  };img.src=r.result};r.readAsDataURL(file)
 };
 
@@ -14670,8 +14713,7 @@ window.hrxVerifySlip=async function(id){
      if(btn){btn.disabled=false;btn.innerHTML='🔍 ตรวจสอบสลิปอีกครั้ง';}
      o.slip_verified=false;
      delete o.verify_token;
-     save(rows);
-     await window.hlgOrderStore?.flush?.();
+     try{ save(rows); }catch(e){}
      renderDone(o);
      return;
    }
@@ -14686,8 +14728,7 @@ window.hrxVerifySlip=async function(id){
    o.payment_status='ตรวจสอบสลิปผ่านแล้ว';
    o.payment_verification='verified';
 
-   save(rows);
-   await window.hlgOrderStore?.flush?.();
+   try{ save(rows); }catch(e){}
    renderDone(o);
    showToast?.('✓ สลิปถูกต้อง ยอดเงินครบถ้วน สามารถกดยืนยันการชำระได้แล้วค่ะ');
  }catch(netErr){
@@ -14773,8 +14814,7 @@ window.hrxConfirmPayment=async function(id){
    o.status=1;
    o.slip_verified=true;
 
-   save(rows);
-   await window.hlgOrderStore?.flush?.();
+   try{ save(rows); }catch(e){}
    renderDone(o);
 
    try{window.hrxShowPaymentThanks?.(o)}catch(popupErr){console.error('Thank-you popup failed',popupErr)}
@@ -14808,14 +14848,20 @@ function all(store){return new Promise((resolve,reject)=>{const req=db.transacti
 function transaction(names,write){return new Promise((resolve,reject)=>{const tx=db.transaction(names,'readwrite');tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error||new Error('Database write failed'));tx.onabort=()=>reject(tx.error||new Error('Database write aborted'));try{write(tx)}catch(e){tx.abort();reject(e)}})}
 function queue(work){const task=chain.then(work);chain=task.catch(()=>{});lastWrite=task;return task}
 const api=window.hlgOrderStore={active:true,ready:false,get:()=>cache.slice(),save(rows){
- if(!api.ready)throw new Error('Order database is loading');
  const previous=cache,snapshot=Array.isArray(rows)?rows.slice():[];cache=snapshot;
- const task=queue(()=>transaction(['state'],tx=>tx.objectStore('state').put(snapshot,'orders')));
- task.catch(e=>{if(cache===snapshot)cache=previous;console.error('Order database write failed',e)});
+ const task=queue(async()=>{
+  if(!api.ready&&api.readyPromise)try{await api.readyPromise}catch(e){}
+  if(!db)return;
+  return transaction(['state'],tx=>tx.objectStore('state').put(snapshot,'orders'))
+ });
+ task.catch(e=>{if(cache===snapshot)cache=previous;console.warn('Order database write skipped',e)});
  return task
 },archive(order){
- if(!api.ready)return Promise.reject(new Error('Order database is loading'));
- return queue(()=>transaction(['trash'],tx=>tx.objectStore('trash').put(order)))
+ return queue(async()=>{
+  if(!api.ready&&api.readyPromise)try{await api.readyPromise}catch(e){}
+  if(!db)return;
+  return transaction(['trash'],tx=>tx.objectStore('trash').put(order))
+ });
 },flush:()=>lastWrite,readyPromise:null};
 api.readyPromise=(async()=>{
  db=await open();

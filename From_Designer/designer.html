@@ -13940,9 +13940,9 @@ window.hrxPostSlip=function(id,file){
  if(!/^image\/(png|jpeg|webp)$/.test(file.type)||file.size>5*1024*1024){if(e)e.textContent='ใช้ JPG, PNG หรือ WEBP ขนาดไม่เกิน 5 MB ค่ะ';return}
  const r=new FileReader();r.onerror=()=>{if(e)e.textContent='อ่านรูปสลิปไม่สำเร็จค่ะ'};
   r.onload=()=>{const img=new Image();img.onerror=()=>{if(e)e.textContent='เปิดรูปสลิปไม่สำเร็จค่ะ'};img.onload=async()=>{
-  try{const scale=Math.min(1,1600/Math.max(img.naturalWidth,img.naturalHeight)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);
-    const a=orders(),i=a.findIndex(x=>x.id===id);if(i<0)return;const previous={...a[i]};a[i].payment_slip=canvas.toDataURL('image/jpeg',.83);a[i].payment_status='รอตรวจสอบสลิป';a[i].payment_verification='pending';delete a[i].payment_customer_confirmed_at;try{save(a);await window.hlgOrderStore?.flush?.()}catch(writeError){a[i]=previous;throw writeError}if(e)e.textContent='';renderDone(a[i]);showToast?.('อัปโหลดสลิปแล้ว รอร้านตรวจสอบค่ะ')
-  }catch(ex){console.error('Slip save failed',ex);if(e)e.textContent='บันทึกสลิปไม่สำเร็จ กรุณาลองอีกครั้งหรือติดต่อร้านค่ะ'}
+  try{const scale=Math.min(1,1000/Math.max(img.naturalWidth||1,img.naturalHeight||1)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round((img.naturalWidth||1000)*scale));canvas.height=Math.max(1,Math.round((img.naturalHeight||1000)*scale));const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    const a=orders(),i=a.findIndex(x=>x.id===id);if(i<0)return;a[i].payment_slip=canvas.toDataURL('image/jpeg',.78);a[i].payment_status='รอตรวจสอบสลิป';a[i].payment_verification='pending';delete a[i].payment_customer_confirmed_at;try{save(a)}catch(storageErr){}if(e)e.textContent='';renderDone(a[i]);showToast?.('อัปโหลดสลิปแล้ว รอร้านตรวจสอบค่ะ')
+  }catch(ex){console.error('Slip processing failed',ex);if(e)e.textContent='เปิดรูปสลิปไม่สำเร็จ กรุณาลองเลือกรูปใหม่อีกครั้งค่ะ'}
  };img.src=r.result};r.readAsDataURL(file)
 };
  window.hrxConfirmPayment=async function(id){
