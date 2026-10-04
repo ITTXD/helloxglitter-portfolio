@@ -6373,16 +6373,18 @@ if(document.readyState!=='loading'){
   </div>
 
   <div class="sec">
-    <div id="wpAdminBar" style="display:none;margin-bottom:16px;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#fff0f6 0%,#ffeaf2 100%);border:2px dashed #f095ba;border-radius:16px;padding:14px 18px;box-shadow:0 4px 14px rgba(188,75,123,0.1)">
-      <div>
-        <div style="font-size:14px;color:#94345d;font-weight:800;display:flex;align-items:center;gap:6px">
+    <div id="wpAdminBar" style="display:none;margin-bottom:18px;flex-direction:column;gap:12px;background:linear-gradient(135deg,#fff0f6 0%,#ffeaf2 100%);border:2px dashed #f095ba;border-radius:18px;padding:16px 18px;box-shadow:0 4px 16px rgba(188,75,123,0.12)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <div style="font-size:15px;color:#94345d;font-weight:800;display:flex;align-items:center;gap:6px">
           <span>🎨 โหมดจัดการ Wallpaper (Admin)</span>
-          <span style="font-size:10px;background:#bc4b7b;color:#fff;padding:2px 7px;border-radius:6px;font-weight:700">ระบบจัดการสินค้า</span>
         </div>
-        <div style="font-size:12px;color:#7e5b6c;margin-top:2px">ตั้งชื่อ ราคา และแนบลิงก์ดาวน์โหลด (Google Drive / ลิงก์ไฟล์) ได้ทันที</div>
+        <span style="font-size:11px;background:#fceaf1;color:#a83e6a;padding:3px 10px;border-radius:99px;font-weight:700">สำหรับแอดมิน</span>
       </div>
-      <button type="button" onclick="hlgOpenAddProductModal('wallpaper')" style="border:none;background:linear-gradient(135deg,#c4477c,#9e3260);color:#fff;border-radius:12px;padding:10px 18px;font:inherit;font-size:13px;font-weight:800;cursor:pointer;box-shadow:0 4px 12px rgba(188,75,123,.3);white-space:nowrap;display:inline-flex;align-items:center;gap:6px">
-        <span style="font-size:16px;line-height:1">＋</span> เพิ่ม Wallpaper ใหม่
+      <div style="font-size:12px;color:#7e5b6c;line-height:1.5">
+        กดปุ่มด้านล่างเพื่อเพิ่ม Wallpaper ลายใหม่ ตั้งชื่อ ราคา และแนบลิงก์ Google Drive ให้ลูกค้าดาวน์โหลดหลังชำระเงินค่ะ ♡
+      </div>
+      <button type="button" onclick="hlgOpenAddProductModal('wallpaper')" style="width:100%;box-sizing:border-box;border:none;background:linear-gradient(135deg,#c4477c,#9e3260);color:#fff;border-radius:12px;padding:12px 18px;font:inherit;font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 4px 14px rgba(188,75,123,.3);display:flex;align-items:center;justify-content:center;gap:8px">
+        <span style="font-size:18px;line-height:1">＋</span> เพิ่ม Wallpaper ใหม่ (ตั้งชื่อ / ราคา / แนบลิงก์ดาวน์โหลด)
       </button>
     </div>
     <div id="wpAdminUnlock" style="display:none;margin-bottom:14px;align-items:center;justify-content:space-between;background:#fff5f9;border:1px dashed #f2b8cc;border-radius:14px;padding:10px 14px">
