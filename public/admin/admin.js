@@ -470,10 +470,11 @@ function openOrder(id) {
   var promo = computePromoPrice(pq);
   var groups = {};
   (order.patterns || []).forEach(function(name) {
+    var isWpName = /wallpaper/i.test(name);
     var pat = getPatternByName(name)
       || (typeof getStickerByName === 'function' ? getStickerByName(name) : null)
-      || (typeof WP_PATTERNS !== 'undefined' ? WP_PATTERNS.find(function(x) { return x.name === name; }) : null);
-    var sizeKey = pat ? (pat.sizeKey || (order.type === 'sticker' ? 'sticker' : order.type === 'wallpaper' ? 'wallpaper' : 'normal')) : 'normal';
+      || (typeof WP_PATTERNS !== 'undefined' ? WP_PATTERNS.find(function(x) { return x.name === name || (isWpName && /wallpaper/i.test(x.name)); }) : null);
+    var sizeKey = pat ? (pat.sizeKey || (order.type === 'sticker' ? 'sticker' : (order.type === 'wallpaper' || isWpName) ? 'wallpaper' : 'normal')) : ((order.type === 'wallpaper' || isWpName) ? 'wallpaper' : 'normal');
     if (!groups[sizeKey]) groups[sizeKey] = [];
     groups[sizeKey].push({ name: name, qty: pq[name] || order.qty || 1, pat: pat });
   });
@@ -482,11 +483,12 @@ function openOrder(id) {
     var sizeLabel = sk === 'normal' ? 'Normal' : sk === 'large' ? 'Large' : sk === 'easy' ? 'Easy' : sk === 'maxi' ? 'Maxi' : sk === 'sticker' ? 'Sticker' : sk === 'wallpaper' ? 'Wallpaper' : sk;
     html += '<div class="m-pattern-group-label">' + sizeLabel + '</div>';
     groups[sk].forEach(function(item) {
-      var img = item.pat ? item.pat.img : '';
-      html += '<div class="m-pattern-item">';
-      if (img) html += '<img class="m-pattern-img" src="' + escapeHtmlAttr(img) + '" alt="" onclick="event.stopPropagation();openLightbox(\'' + escapeHtmlAttr(img) + '\')"/>';
+      var isWp = sk === 'wallpaper' || order.type === 'wallpaper' || /wallpaper/i.test(item.name);
+      var img = (item.pat && item.pat.img) ? item.pat.img : (isWp ? '/images/wallphone.png' : '');
+      html += '<div class="m-pattern-item' + (isWp ? ' m-pattern-wallpaper-item' : '') + '">';
+      if (img) html += '<img class="m-pattern-img' + (isWp ? ' m-pattern-img-wallpaper' : '') + '" src="' + escapeHtmlAttr(img) + '" alt="" onclick="event.stopPropagation();openLightbox(\'' + escapeHtmlAttr(img) + '\')"/>';
       html += '<span class="m-pattern-name">' + escapeHtml(item.name) + ' × ' + item.qty + '</span>';
-      var itemPrice = item.pat ? ((item.pat.priceOrig || item.pat.price || (order.type === 'sticker' ? 69 : 0)) * item.qty) : '-';
+      var itemPrice = item.pat ? ((item.pat.priceOrig || item.pat.price || (order.type === 'sticker' ? 69 : (isWp ? 99 : 0))) * item.qty) : (isWp ? 99 * item.qty : '-');
       html += '<span class="m-pattern-price">' + (typeof itemPrice === 'number' ? itemPrice.toLocaleString() + ' ฿' : itemPrice) + '</span>';
       html += '</div>';
     });
@@ -1304,10 +1306,11 @@ function renderCategoryList() {
     const row = document.createElement("div");
     row.style.cssText = "display:flex;gap:12px;align-items:center;border-top:1px solid #f4dfeb;padding:12px 0;";
 
+    const fallbackCatImg = c.id === 'wallpaper' ? '/images/wallphone.png' : (c.id === 'bag' ? '/images/normal-01.jpg' : null);
     const img = document.createElement("img");
-    img.src = c.cover_url || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24'%3E%3Ctext y='18' font-size='18'%3E🎀%3C/text%3E%3C/svg%3E";
+    img.src = c.cover_url || fallbackCatImg || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24'%3E%3Ctext y='18' font-size='18'%3E🎀%3C/text%3E%3C/svg%3E";
     img.alt = c.name;
-    img.style.cssText = "width:50px;height:50px;object-fit:cover;border-radius:10px;background:#fff2f8;border:1px solid #f4dce7;";
+    img.style.cssText = "width:64px;height:64px;object-fit:cover;border-radius:12px;background:#fff2f8;border:1.5px solid #f4dce7;flex-shrink:0;";
 
     const info = document.createElement("div");
     info.style.cssText = "flex:1;min-width:0;";
@@ -1592,10 +1595,12 @@ function renderProductList() {
     const el = document.createElement("div");
     el.style.cssText = "display:flex;gap:12px;align-items:center;border-top:1px solid #f4dfeb;padding:11px 0;";
 
+    const isWp = (x.category_id === 'wallpaper' || x.type === 'wallpaper' || /wallpaper/i.test(x.name));
+    const fallbackProdImg = isWp ? '/images/wallphone.png' : ((x.category_id === 'bag' || x.type === 'bag') ? '/images/normal-01.jpg' : null);
     const img = document.createElement("img");
-    img.src = x.image_url || x.imageUrl || x._img || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='52' height='52' viewBox='0 0 24 24'%3E%3Ctext y='18' font-size='18'%3E🛍️%3C/text%3E%3C/svg%3E";
+    img.src = x.image_url || x.imageUrl || x._img || fallbackProdImg || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='52' height='52' viewBox='0 0 24 24'%3E%3Ctext y='18' font-size='18'%3E🛍️%3C/text%3E%3C/svg%3E";
     img.alt = x.name;
-    img.style.cssText = "width:52px;height:52px;object-fit:cover;border-radius:9px;background:#f8edf2;border:1px solid #f2d7e4";
+    img.style.cssText = "width:64px;height:64px;object-fit:cover;border-radius:12px;background:#f8edf2;border:1.5px solid #f2d7e4;flex-shrink:0;";
 
     const label = document.createElement("span");
     label.style.cssText = "flex:1;font-size:13px;";
@@ -1840,10 +1845,12 @@ function renderPreviewList() {
     const row = document.createElement("div");
     row.style.cssText = "display:flex;gap:12px;align-items:center;border-top:1px solid #f4dfeb;padding:12px 0;";
 
+    const isWpCard = card.target === 'wallpaper' || /wallpaper/i.test(card.name);
+    const fallbackPvImg = isWpCard ? '/images/wallphone.png' : ((card.target === 'preorder' || /กระเป๋า/i.test(card.name)) ? '/images/normal-01.jpg' : null);
     const img = document.createElement("img");
-    img.src = card.image_url || card.imageUrl || card.src || card.legacySrc || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='50' viewBox='0 0 24 24'%3E%3Ctext y='18' font-size='18'%3E💗%3C/text%3E%3C/svg%3E";
+    img.src = card.image_url || card.imageUrl || card.src || card.legacySrc || fallbackPvImg || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='50' viewBox='0 0 24 24'%3E%3Ctext y='18' font-size='18'%3E💗%3C/text%3E%3C/svg%3E";
     img.alt = card.name;
-    img.style.cssText = "width:50px;height:50px;object-fit:cover;border-radius:10px;background:#fff2f8;border:1px solid #f4dce7;";
+    img.style.cssText = "width:64px;height:64px;object-fit:cover;border-radius:12px;background:#fff2f8;border:1.5px solid #f4dce7;flex-shrink:0;";
 
     const info = document.createElement("div");
     info.style.cssText = "flex:1;min-width:0;";

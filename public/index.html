@@ -538,11 +538,40 @@ html { scroll-behavior: smooth; }
 .notice-purple .notice-highlight { border-color: #d8c0f0; color: #6b3fa0; background: white; }
 .wp-submit-btn { background: #7c3aed; }
 .wp-submit-btn:hover { background: #6d28d9; }
-.wp-card { position: relative; background: white; border: 2px solid #d0c0e8; border-radius: 16px; overflow: hidden; cursor: pointer; transition: all .2s; width: 100%; }
-.wp-card:hover { border-color: #a78bfa; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(124, 58, 237, 0.15); }
+.wp-card {
+  position: relative;
+  background: white;
+  border: 2px solid #d0c0e8;
+  border-radius: 18px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all .2s;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto 16px;
+  box-shadow: 0 6px 22px rgba(124, 58, 237, 0.09);
+}
+.wp-card:hover { border-color: #a78bfa; transform: translateY(-2px); box-shadow: 0 10px 28px rgba(124, 58, 237, 0.16); }
 .wp-card.picked { border-color: #7c3aed; box-shadow: 0 0 0 3px #ede0ff; }
-.wp-card-img { width: 100%; display: block; object-fit: contain; }
-.wp-card-info { padding: 12px 16px; text-align: center; }
+.wp-card-img {
+  width: 100%;
+  aspect-ratio: 1/1;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  background: #faf5ff;
+}
+.wp-card .gzoom {
+  opacity: 0.9;
+  border-color: rgba(124, 58, 237, 0.3);
+  color: #7c3aed;
+  background: rgba(255, 255, 255, 0.92);
+}
+.wp-card:hover .gzoom {
+  opacity: 1;
+  background: #ffffff;
+}
+.wp-card-info { padding: 14px 18px; text-align: center; }
 .wp-card-name { font-size: 15px; font-weight: 800; color: #6b3fa0; margin-bottom: 4px; }
 .wp-card-price { font-size: 18px; font-weight: 800; color: #7c3aed; }
 .wp-card-check { display: none; position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; background: #7c3aed; border-radius: 50%; align-items: center; justify-content: center; color: white; font-size: 16px; z-index: 2; }
@@ -3962,7 +3991,8 @@ async function renderInline(){
 
     for(let i=0;i<a.length;i++){
       const x=a[i];if(x.hidden&&!isAdmin())continue;
-      const u=images[i];
+      const fallbackPvImg = (x.target === 'wallpaper' || /wallpaper/i.test(x.name)) ? '/images/wallphone.png' : ((x.target === 'preorder' || /กระเป๋า/i.test(x.name)) ? '/images/normal-01.jpg' : null);
+      const u = images[i] || fallbackPvImg;
       const card=document.createElement('div');
       card.className='v8-inline-preview-card '+(isAdmin()?'admin':'customer')+(x.hidden?' v8-inline-hidden':'');
       card.dataset.v8InlinePreview='1';
@@ -6289,6 +6319,7 @@ if(document.readyState!=='loading'){
     <div class="sec-title"><i class="ti ti-photo"></i> Wallpaper <span style="font-size:12px;color:#b8a0d0;font-weight:400">— เลือกจำนวนได้</span></div>
     <div class="wp-card" id="wpCard" onclick="wpTogglePattern('Wallpaper')">
       <img class="wp-card-img" src="https://helloxglitterstore.vercel.app/images/wallphone.png" onerror="handleImgError(this, 'Wallpaper', './images/wallphone.png')" alt="Wallpaper"/>
+      <div class="gzoom wp-zoom" onclick="event.stopPropagation();openImgLightbox('https://helloxglitterstore.vercel.app/images/wallphone.png')" title="ซูมดูรูปขนาดใหญ่"><i class="ti ti-zoom-in"></i></div>
       <div class="wp-card-info">
         <div class="wp-card-name">Wallpaper Special Set</div>
         <div class="wp-card-price">99 ฿</div>
@@ -6561,7 +6592,8 @@ var STICKER_PATTERNS = [
 ];
 
 var WP_PATTERNS = [
-  {name:'Wallpaper',price:99,img:CDN_BASE+'/images/wallphone.png',localImg:'./images/wallphone.png'}
+  {name:'Wallpaper',price:99,img:CDN_BASE+'/images/wallphone.png',localImg:'./images/wallphone.png'},
+  {name:'Wallpaper Special Set',price:99,img:CDN_BASE+'/images/wallphone.png',localImg:'./images/wallphone.png'}
 ];
 
 var BASE_SHIPPING = 0;

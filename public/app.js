@@ -788,14 +788,16 @@ function renderOrderCard(order) {
 
   var pq = order.pattern_qtys || {};
   var itemsHtml = (order.patterns || []).map(function(name) {
+    var isWp = order.type === 'wallpaper' || /wallpaper/i.test(name);
     var p = ALL_PATTERNS.find(function(x) { return x.name === name; })
       || (typeof getStickerByName === 'function' ? getStickerByName(name) : null)
-      || (typeof WP_PATTERNS !== 'undefined' ? WP_PATTERNS.find(function(x) { return x.name === name; }) : null);
-    var img = p && p.img ? '<img class="tr-img-thumb" src="' + p.img + '" alt="' + escHtml(name) + '">' : '<div class="tr-img-thumb" style="background:#fadadd;"></div>';
+      || (typeof WP_PATTERNS !== 'undefined' ? WP_PATTERNS.find(function(x) { return x.name === name || (isWp && /wallpaper/i.test(x.name)); }) : null);
+    var pImg = p && p.img ? p.img : (isWp ? '/images/wallphone.png' : '');
+    var img = pImg ? '<img class="tr-img-thumb" src="' + pImg + '" alt="' + escHtml(name) + '">' : '<div class="tr-img-thumb" style="background:#fadadd;"></div>';
     var q = pq[name] || order.qty || 1;
-    var unitPrice = p ? (p.priceOrig || p.price || 0) : 0;
+    var unitPrice = p ? (p.priceOrig || p.price || 0) : (isWp ? 99 : 0);
     var price = unitPrice * q;
-    var unitLabel = order.type === 'sticker' ? 'ชุด' : order.type === 'wallpaper' ? 'ลาย' : 'ใบ';
+    var unitLabel = order.type === 'sticker' ? 'ชุด' : (isWp ? 'ลาย' : 'ใบ');
     return '<div class="tr-item-row">' + img + '<div><div class="tr-item-name">' + escHtml(name) + '</div><div class="tr-item-size">×' + q + ' ' + unitLabel + '</div></div><div class="tr-item-price">' + (price ? price.toLocaleString() + ' ฿' : '') + '</div></div>';
   }).join('');
 

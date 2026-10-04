@@ -59,7 +59,8 @@ var ALL_PATTERNS = NORMAL_PATTERNS.concat(LARGE_PATTERNS).concat(EASY_PATTERNS).
 
 // ==================== WALLPAPER PATTERNS ====================
 var WP_PATTERNS = [
-  {name:'Wallpaper',price:99,img:'/images/normal-01.jpg'}
+  {name:'Wallpaper',price:99,img:'/images/wallphone.png',localImg:'./images/wallphone.png'},
+  {name:'Wallpaper Special Set',price:99,img:'/images/wallphone.png',localImg:'./images/wallphone.png'}
 ];
 
 // ==================== PROMO TIERS (disabled — using full prices) ====================
