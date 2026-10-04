@@ -16536,24 +16536,528 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
     }
   };
 
+  function isAdminUser() {
+    try {
+      return sessionStorage.getItem('hlg_admin_session_v2') === '1' &&
+        !document.body.classList.contains('v8-third-person-view') &&
+        !document.body.classList.contains('v8-customer-preview-mode');
+    } catch(e) { return false; }
+  }
+
+  function compressImage(file, maxDimension, quality) {
+    maxDimension = maxDimension || 1000;
+    quality = quality || 0.78;
+    return new Promise(function(resolve, reject) {
+      if (!file || !file.type || !file.type.startsWith('image/')) {
+        return reject(new Error('กรุณาเลือกไฟล์รูปภาพค่ะ'));
+      }
+      var reader = new FileReader();
+      reader.onerror = function() { reject(new Error('อ่านไฟล์รูปภาพไม่สำเร็จ')); };
+      reader.onload = function() {
+        var img = new Image();
+        img.onerror = function() { reject(new Error('เปิดรูปภาพไม่สำเร็จ')); };
+        img.onload = function() {
+          try {
+            var w = img.naturalWidth || img.width || 1;
+            var h = img.naturalHeight || img.height || 1;
+            var scale = Math.min(1, maxDimension / Math.max(w, h));
+            var canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(w * scale));
+            canvas.height = Math.max(1, Math.round(h * scale));
+            var ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          } catch(err) {
+            reject(err);
+          }
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function ensureModals() {
+    if (!document.getElementById('hlgProductModal')) {
+      var pm = document.createElement('div');
+      pm.id = 'hlgProductModal';
+      pm.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(45,28,37,.55);backdrop-filter:blur(3px);z-index:70000;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;';
+      pm.innerHTML = `
+        <div style="background:#fff;border-radius:24px;width:min(500px,100%);max-height:90vh;overflow-y:auto;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.25);border:1px solid #f2d5e1;box-sizing:border-box">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <h3 id="hlgProdModalTitle" style="margin:0;font-size:18px;color:#94345d">＋ เพิ่มสินค้าใหม่</h3>
+            <button type="button" onclick="hlgCloseProductModal()" style="border:none;background:#fceaf1;color:#a83e6a;width:32px;height:32px;border-radius:50%;font-size:16px;font-weight:700;cursor:pointer">✕</button>
+          </div>
+          <p style="font-size:12px;color:#876774;margin:0 0 14px;line-height:1.5">ตั้งชื่อ ราคาเอง และอัปโหลดรูปภาพสินค้าได้ทันทีค่ะ ♡</p>
+          <input type="hidden" id="hlgProdModalCatId">
+          <input type="hidden" id="hlgProdModalProdId">
+          
+          <div style="margin-bottom:12px">
+            <label style="display:block;font-size:12px;font-weight:700;color:#613e50;margin-bottom:5px">ชื่อสินค้า *</label>
+            <input id="hlgProdModalName" placeholder="เช่น ปากกาเจล Pastel Pink 0.5" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #e8c7d5;border-radius:12px;font:inherit;font-size:13px">
+          </div>
+
+          <div style="margin-bottom:12px">
+            <label style="display:block;font-size:12px;font-weight:700;color:#613e50;margin-bottom:5px">ราคา (บาท) *</label>
+            <input id="hlgProdModalPrice" type="number" min="0" placeholder="เช่น 49" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #e8c7d5;border-radius:12px;font:inherit;font-size:13px">
+          </div>
+
+          <div style="margin-bottom:12px">
+            <label style="display:block;font-size:12px;font-weight:700;color:#613e50;margin-bottom:5px">คำอธิบายสินค้า</label>
+            <textarea id="hlgProdModalDesc" rows="2" placeholder="เช่น หมึกเจลสีพาสเทล เขียนลื่น กันน้ำ นำเข้าพิเศษ" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #e8c7d5;border-radius:12px;font:inherit;font-size:13px"></textarea>
+          </div>
+
+          <div style="margin-bottom:18px">
+            <label style="display:block;font-size:12px;font-weight:700;color:#613e50;margin-bottom:6px">รูปภาพสินค้า</label>
+            <div style="display:flex;align-items:center;gap:14px">
+              <div id="hlgProdModalImgPrev" style="width:76px;height:76px;border-radius:14px;background:#fff5f9;border:1.5px dashed #f0a8c2;display:grid;place-items:center;overflow:hidden;flex-shrink:0">
+                <span style="font-size:26px">📷</span>
+              </div>
+              <div>
+                <label style="display:inline-block;border:1px solid #e5a8bf;background:#fff0f6;color:#b83a6f;border-radius:10px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">
+                  <span>เลือกรูปภาพสินค้า</span>
+                  <input type="file" id="hlgProdModalFile" accept="image/*" style="display:none">
+                </label>
+                <div style="font-size:11px;color:#967684;margin-top:5px">ระบบย่อขนาดรูปอัตโนมัติ ไม่เปลืองเน็ต</div>
+              </div>
+              <input type="hidden" id="hlgProdModalImgData">
+            </div>
+          </div>
+
+          <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+            <button type="button" onclick="hlgCloseProductModal()" style="border:none;background:#f5e3eb;color:#8e4264;border-radius:12px;padding:10px 16px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">ยกเลิก</button>
+            <button type="button" id="hlgProdModalSaveBtn" onclick="hlgSaveProduct()" style="border:none;background:#bc4b7b;color:#fff;border-radius:12px;padding:10px 20px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 3px 10px rgba(188,75,123,0.25)">บันทึกสินค้า ✓</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(pm);
+
+      var fileInput = pm.querySelector('#hlgProdModalFile');
+      fileInput.onchange = async function() {
+        var file = fileInput.files && fileInput.files[0];
+        if (!file) return;
+        try {
+          var compressed = await compressImage(file, 1000, 0.78);
+          pm.querySelector('#hlgProdModalImgData').value = compressed;
+          pm.querySelector('#hlgProdModalImgPrev').innerHTML = `<img src="${compressed}" style="width:100%;height:100%;object-fit:cover">`;
+        } catch(err) {
+          alert(err.message || 'เลือกรูปภาพไม่สำเร็จ');
+        }
+      };
+      pm.onclick = function(e) { if (e.target === pm) hlgCloseProductModal(); };
+    }
+
+    if (!document.getElementById('hlgCategoryModal')) {
+      var cm = document.createElement('div');
+      cm.id = 'hlgCategoryModal';
+      cm.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(45,28,37,.55);backdrop-filter:blur(3px);z-index:70000;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;';
+      cm.innerHTML = `
+        <div style="background:#fff;border-radius:24px;width:min(500px,100%);max-height:90vh;overflow-y:auto;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.25);border:1px solid #f2d5e1;box-sizing:border-box">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <h3 style="margin:0;font-size:18px;color:#94345d">＋ สร้างหมวดขายของใหม่</h3>
+            <button type="button" onclick="hlgCloseCategoryModal()" style="border:none;background:#fceaf1;color:#a83e6a;width:32px;height:32px;border-radius:50%;font-size:16px;font-weight:700;cursor:pointer">✕</button>
+          </div>
+          <p style="font-size:12px;color:#876774;margin:0 0 14px;line-height:1.5">สร้างหมวดขายของใหม่ เช่น ปากกา, พวงกุญแจ, สติกเกอร์ ฯลฯ ได้หน้าร้านทันที</p>
+          
+          <div style="margin-bottom:12px">
+            <label style="display:block;font-size:12px;font-weight:700;color:#613e50;margin-bottom:5px">ชื่อหมวดหมู่ *</label>
+            <input id="hlgCatModalName" placeholder="เช่น ปากกาและเครื่องเขียน" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #e8c7d5;border-radius:12px;font:inherit;font-size:13px">
+          </div>
+
+          <div style="margin-bottom:12px">
+            <label style="display:block;font-size:12px;font-weight:700;color:#613e50;margin-bottom:5px">คำอธิบายหมวดหมู่</label>
+            <textarea id="hlgCatModalDesc" rows="2" placeholder="เช่น คอลเลกชันเครื่องเขียนน่ารักนำเข้าจากญี่ปุ่น ♡" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #e8c7d5;border-radius:12px;font:inherit;font-size:13px"></textarea>
+          </div>
+
+          <div style="margin-bottom:14px">
+            <label style="display:block;font-size:12px;font-weight:700;color:#613e50;margin-bottom:6px">รูปภาพหน้าปกหมวดหมู่</label>
+            <div style="display:flex;align-items:center;gap:14px">
+              <div id="hlgCatModalImgPrev" style="width:76px;height:76px;border-radius:14px;background:#fff5f9;border:1.5px dashed #f0a8c2;display:grid;place-items:center;overflow:hidden;flex-shrink:0">
+                <span style="font-size:26px">🖼️</span>
+              </div>
+              <div>
+                <label style="display:inline-block;border:1px solid #e5a8bf;background:#fff0f6;color:#b83a6f;border-radius:10px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">
+                  <span>เลือกรูปหน้าปก</span>
+                  <input type="file" id="hlgCatModalFile" accept="image/*" style="display:none">
+                </label>
+                <div style="font-size:11px;color:#967684;margin-top:5px">แสดงที่หัวหน้าร้านและหน้าแรก</div>
+              </div>
+              <input type="hidden" id="hlgCatModalImgData">
+            </div>
+          </div>
+
+          <div style="margin-bottom:18px">
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#613e50;cursor:pointer">
+              <input type="checkbox" id="hlgCatModalShowHome" checked style="accent-color:#bc4b7b">
+              <span>แสดงใน <b>"กลุ่มที่แนะนำ 💗"</b> บนหน้าแรกอัตโนมัติ</span>
+            </label>
+          </div>
+
+          <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+            <button type="button" onclick="hlgCloseCategoryModal()" style="border:none;background:#f5e3eb;color:#8e4264;border-radius:12px;padding:10px 16px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">ยกเลิก</button>
+            <button type="button" id="hlgCatModalSaveBtn" onclick="hlgSaveCategory()" style="border:none;background:#bc4b7b;color:#fff;border-radius:12px;padding:10px 20px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 3px 10px rgba(188,75,123,0.25)">บันทึกหมวดใหม่ ✓</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(cm);
+
+      var fileInput = cm.querySelector('#hlgCatModalFile');
+      fileInput.onchange = async function() {
+        var file = fileInput.files && fileInput.files[0];
+        if (!file) return;
+        try {
+          var compressed = await compressImage(file, 1000, 0.78);
+          cm.querySelector('#hlgCatModalImgData').value = compressed;
+          cm.querySelector('#hlgCatModalImgPrev').innerHTML = `<img src="${compressed}" style="width:100%;height:100%;object-fit:cover">`;
+        } catch(err) {
+          alert(err.message || 'เลือกรูปภาพไม่สำเร็จ');
+        }
+      };
+      cm.onclick = function(e) { if (e.target === cm) hlgCloseCategoryModal(); };
+    }
+  }
+
+  window.hlgOpenAddProductModal = function(categoryId, editProductId) {
+    if (!isAdminUser()) return;
+    ensureModals();
+    var pm = document.getElementById('hlgProductModal');
+    if (!pm) return;
+    pm.querySelector('#hlgProdModalCatId').value = categoryId || '';
+    pm.querySelector('#hlgProdModalProdId').value = editProductId || '';
+    pm.querySelector('#hlgProdModalFile').value = '';
+
+    if (editProductId) {
+      var prods = getCustomProducts();
+      var p = prods.find(function(x) { return String(x.id) === String(editProductId); });
+      if (p) {
+        pm.querySelector('#hlgProdModalTitle').textContent = '✎ แก้ไขสินค้า';
+        pm.querySelector('#hlgProdModalName').value = p.name || '';
+        pm.querySelector('#hlgProdModalPrice').value = p.price != null ? p.price : '';
+        pm.querySelector('#hlgProdModalDesc').value = p.description || '';
+        var img = p.image_url || p.imageUrl || '';
+        pm.querySelector('#hlgProdModalImgData').value = img;
+        pm.querySelector('#hlgProdModalImgPrev').innerHTML = img ? `<img src="${esc(img)}" style="width:100%;height:100%;object-fit:cover">` : '<span style="font-size:26px">📷</span>';
+      }
+    } else {
+      pm.querySelector('#hlgProdModalTitle').textContent = '＋ เพิ่มสินค้าใหม่';
+      pm.querySelector('#hlgProdModalName').value = '';
+      pm.querySelector('#hlgProdModalPrice').value = '';
+      pm.querySelector('#hlgProdModalDesc').value = '';
+      pm.querySelector('#hlgProdModalImgData').value = '';
+      pm.querySelector('#hlgProdModalImgPrev').innerHTML = '<span style="font-size:26px">📷</span>';
+    }
+    pm.style.display = 'flex';
+  };
+
+  window.hlgOpenProductModal = window.hlgOpenAddProductModal;
+
+  window.hlgCloseProductModal = function() {
+    var pm = document.getElementById('hlgProductModal');
+    if (pm) pm.style.display = 'none';
+  };
+
+  window.hlgSaveProduct = async function() {
+    if (!isAdminUser()) return;
+    var pm = document.getElementById('hlgProductModal');
+    if (!pm) return;
+    var btn = pm.querySelector('#hlgProdModalSaveBtn');
+    var catId = (pm.querySelector('#hlgProdModalCatId').value || '').trim();
+    var prodId = (pm.querySelector('#hlgProdModalProdId').value || '').trim();
+    var name = (pm.querySelector('#hlgProdModalName').value || '').trim();
+    var priceStr = pm.querySelector('#hlgProdModalPrice').value;
+    var price = Number(priceStr);
+    var desc = (pm.querySelector('#hlgProdModalDesc').value || '').trim();
+    var img = pm.querySelector('#hlgProdModalImgData').value || '';
+
+    if (!name) { alert('กรุณากรอกชื่อสินค้าค่ะ'); return; }
+    if (isNaN(price) || price < 0 || priceStr === '') { alert('กรุณากรอกราคาเป็นตัวเลขที่ถูกต้องค่ะ'); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'กำลังบันทึก...';
+    try {
+      var url = prodId ? `/api/products/${encodeURIComponent(prodId)}` : '/api/products';
+      var method = prodId ? 'PUT' : 'POST';
+      var payload = {
+        category_id: catId,
+        name: name,
+        price: price,
+        description: desc,
+        image_url: img
+      };
+      var res = await fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(payload)
+      });
+      var d = await res.json();
+      if (!res.ok || !d.success) {
+        throw new Error(d.error || 'บันทึกสินค้าไม่สำเร็จ');
+      }
+
+      var prods = getCustomProducts();
+      if (prodId) {
+        var idx = prods.findIndex(function(x) { return String(x.id) === String(prodId); });
+        if (idx >= 0) prods[idx] = d.product;
+        else prods.push(d.product);
+      } else {
+        prods.push(d.product);
+      }
+      localStorage.setItem(PROD_KEY, JSON.stringify(prods));
+      localStorage.setItem(PROD_KEY_V1, JSON.stringify(prods));
+      if (typeof window.hlgSyncCustomProducts === 'function') window.hlgSyncCustomProducts();
+
+      hlgCloseProductModal();
+      if (catId) window.hlgEnsureCategoryPage(catId);
+      if (typeof showToast === 'function') showToast('บันทึกสินค้าเรียบร้อยแล้ว ♡');
+    } catch(err) {
+      alert(err.message || 'บันทึกสินค้าไม่สำเร็จ');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'บันทึกสินค้า ✓';
+    }
+  };
+
+  window.hlgEditProduct = function(productId, categoryId) {
+    window.hlgOpenAddProductModal(categoryId, productId);
+  };
+
+  window.hlgDeleteProduct = async function(productId, categoryId) {
+    if (!isAdminUser()) return;
+    if (!confirm('ลบสินค้านี้ใช่ไหมคะ?')) return;
+    try {
+      var res = await fetch(`/api/products/${encodeURIComponent(productId)}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+      var d = await res.json();
+      if (!res.ok || !d.success) throw new Error(d.error || 'ลบสินค้าไม่สำเร็จ');
+
+      var prods = getCustomProducts().filter(function(x) { return String(x.id) !== String(productId); });
+      localStorage.setItem(PROD_KEY, JSON.stringify(prods));
+      localStorage.setItem(PROD_KEY_V1, JSON.stringify(prods));
+      if (typeof window.hlgSyncCustomProducts === 'function') window.hlgSyncCustomProducts();
+
+      if (categoryId) window.hlgEnsureCategoryPage(categoryId);
+      if (typeof showToast === 'function') showToast('ลบสินค้าแล้ว');
+    } catch(err) {
+      alert(err.message || 'ลบสินค้าไม่สำเร็จ');
+    }
+  };
+
+  window.hlgOpenCategoryModal = function() {
+    if (!isAdminUser()) return;
+    ensureModals();
+    var cm = document.getElementById('hlgCategoryModal');
+    if (!cm) return;
+    cm.querySelector('#hlgCatModalName').value = '';
+    cm.querySelector('#hlgCatModalDesc').value = '';
+    cm.querySelector('#hlgCatModalFile').value = '';
+    cm.querySelector('#hlgCatModalImgData').value = '';
+    cm.querySelector('#hlgCatModalImgPrev').innerHTML = '<span style="font-size:26px">🖼️</span>';
+    cm.querySelector('#hlgCatModalShowHome').checked = true;
+    cm.style.display = 'flex';
+  };
+
+  window.hlgCloseCategoryModal = function() {
+    var cm = document.getElementById('hlgCategoryModal');
+    if (cm) cm.style.display = 'none';
+  };
+
+  window.hlgSaveCategory = async function() {
+    if (!isAdminUser()) return;
+    var cm = document.getElementById('hlgCategoryModal');
+    if (!cm) return;
+    var btn = cm.querySelector('#hlgCatModalSaveBtn');
+    var name = (cm.querySelector('#hlgCatModalName').value || '').trim();
+    var desc = (cm.querySelector('#hlgCatModalDesc').value || '').trim();
+    var coverUrl = cm.querySelector('#hlgCatModalImgData').value || '';
+    var showOnHome = cm.querySelector('#hlgCatModalShowHome').checked;
+
+    if (!name) { alert('กรุณากรอกชื่อหมวดหมู่ค่ะ'); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'กำลังบันทึก...';
+    try {
+      var res = await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: name,
+          description: desc,
+          cover_url: coverUrl,
+          show_on_home: showOnHome
+        })
+      });
+      var d = await res.json();
+      if (!res.ok || !d.success) throw new Error(d.error || 'สร้างหมวดหมู่ไม่สำเร็จ');
+
+      var cats = getCategories();
+      var existingIdx = cats.findIndex(function(c) { return c.id === d.category.id; });
+      if (existingIdx >= 0) cats[existingIdx] = d.category;
+      else cats.push(d.category);
+      localStorage.setItem(CAT_KEY, JSON.stringify(cats));
+
+      if (typeof window.hlgRenderCategoryPills === 'function') window.hlgRenderCategoryPills();
+      if (typeof fetchStorefrontDynamicData === 'function') fetchStorefrontDynamicData();
+      if (typeof window.renderAdminCategoriesPanel === 'function') window.renderAdminCategoriesPanel();
+
+      hlgCloseCategoryModal();
+      if (typeof showToast === 'function') showToast('สร้างหมวดขายของใหม่แล้ว ♡');
+      window.hlgEnsureCategoryPage(d.category.id);
+      if (typeof showPage === 'function') showPage(d.category.id);
+    } catch(err) {
+      alert(err.message || 'สร้างหมวดหมู่ไม่สำเร็จ');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'บันทึกหมวดใหม่ ✓';
+    }
+  };
+
+  window.hlgDeleteCategory = async function(catId) {
+    if (!isAdminUser()) return;
+    if (['bag', 'sticker', 'wallpaper'].includes(catId)) {
+      alert('หมวดหมู่หลักของระบบไม่สามารถลบได้ค่ะ');
+      return;
+    }
+    if (!confirm('ต้องการลบหมวดหมู่นี้และสินค้าทั้งหมดในหมวดใช่ไหมคะ?')) return;
+    try {
+      var res = await fetch(`/api/categories/${encodeURIComponent(catId)}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+      var d = await res.json();
+      if (!res.ok || !d.success) throw new Error(d.error || 'ลบหมวดหมู่ไม่สำเร็จ');
+
+      var cats = getCategories().filter(function(c) { return c.id !== catId; });
+      localStorage.setItem(CAT_KEY, JSON.stringify(cats));
+
+      var prods = getCustomProducts().filter(function(p) { return p.category_id !== catId && p.type !== catId; });
+      localStorage.setItem(PROD_KEY, JSON.stringify(prods));
+      localStorage.setItem(PROD_KEY_V1, JSON.stringify(prods));
+
+      if (typeof window.hlgRenderCategoryPills === 'function') window.hlgRenderCategoryPills();
+      if (typeof window.renderAdminCategoriesPanel === 'function') window.renderAdminCategoriesPanel();
+      if (typeof showToast === 'function') showToast('ลบหมวดหมู่เรียบร้อยแล้ว');
+    } catch(err) {
+      alert(err.message || 'ลบหมวดหมู่ไม่สำเร็จ');
+    }
+  };
+
+  window.ensureAdminCategoryTab = function() {
+    var tabs = document.querySelector('#page-admin .admin-tabs');
+    var anchor = document.getElementById('adminPanel-store');
+    if (!tabs || !anchor) return;
+    if (!document.getElementById('hlgCatAdminTab')) {
+      var b = document.createElement('button');
+      b.id = 'hlgCatAdminTab';
+      b.type = 'button';
+      b.className = 'admin-tab';
+      b.dataset.adminTab = 'categories';
+      b.innerHTML = '<i class="ti ti-tags"></i> หมวดขายของ';
+      b.onclick = function() { window.switchAdminTab('categories', b); };
+      tabs.insertBefore(b, tabs.children[1] || null);
+    }
+    if (!document.getElementById('adminPanel-categories')) {
+      var sec = document.createElement('section');
+      sec.id = 'adminPanel-categories';
+      sec.className = 'admin-panel';
+      anchor.insertAdjacentElement('afterend', sec);
+    }
+  };
+
+  window.renderAdminCategoriesPanel = function() {
+    window.ensureAdminCategoryTab();
+    var panel = document.getElementById('adminPanel-categories');
+    if (!panel) return;
+    var cats = getCategories();
+    var allProds = getCustomProducts();
+
+    var catCards = cats.map(function(c) {
+      var isBuiltin = ['bag', 'sticker', 'wallpaper'].includes(c.id);
+      var prodCount = isBuiltin ? (c.id === 'bag' ? 46 : (c.id === 'sticker' ? 14 : 'Digital')) : allProds.filter(function(p) { return p.category_id === c.id || p.type === c.id; }).length;
+      var targetPage = c.id === 'bag' ? 'preorder' : c.id;
+      var icon = c.id === 'bag' ? '👜' : c.id === 'sticker' ? '✨' : c.id === 'wallpaper' ? '🎨' : '🎀';
+      var cover = c.cover_url || '';
+
+      return `
+        <div style="background:#fff;border:1px solid #f2d5e1;border-radius:18px;padding:16px;box-shadow:0 4px 16px rgba(184,75,123,0.06);display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;gap:12px;align-items:center">
+            <div style="width:54px;height:54px;border-radius:12px;background:#fff5f9;border:1px solid #f2d5e1;overflow:hidden;display:grid;place-items:center;flex-shrink:0">
+              ${cover ? `<img src="${esc(cover)}" style="width:100%;height:100%;object-fit:cover">` : `<span style="font-size:24px">${icon}</span>`}
+            </div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:700;font-size:14px;color:#4a2b38;display:flex;align-items:center;gap:6px">
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</span>
+                ${isBuiltin ? `<span style="font-size:10px;background:#fceaf1;color:#a83e6a;padding:2px 6px;border-radius:6px;font-weight:600">ระบบ</span>` : ''}
+              </div>
+              <div style="font-size:11px;color:#8a6d7b;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.description || 'ไม่มีคำอธิบาย')}</div>
+              <div style="font-size:11px;color:#b84070;margin-top:4px;font-weight:600">${prodCount} สินค้า · ${c.show_on_home !== false ? '💗 แสดงบนหน้าแรก' : 'ซ่อนจากหน้าแรก'}</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:auto;padding-top:8px;border-top:1px solid #fdf2f6">
+            <button type="button" onclick="${isBuiltin ? `showPage('${targetPage}')` : `hlgEnsureCategoryPage('${c.id}');showPage('${c.id}')`}" style="flex:1;border:none;border-radius:10px;background:#bc4b7b;color:#fff;font-weight:700;padding:8px 12px;font:inherit;font-size:12px;cursor:pointer">
+              เปิดหน้าร้าน / จัดการสินค้า ↗
+            </button>
+            ${!isBuiltin ? `
+              <button type="button" onclick="hlgDeleteCategory('${esc(c.id)}')" style="border:1px solid #f2cad6;border-radius:10px;background:#ffeef3;color:#c03865;font-weight:700;padding:8px 10px;font:inherit;font-size:12px;cursor:pointer" title="ลบหมวด">
+                🗑️
+              </button>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    panel.innerHTML = `
+      <div class="admin-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+          <div>
+            <div class="admin-section-title" style="margin:0 0 4px">🛍️ จัดการหมวดขายของ & สินค้า</div>
+            <div class="admin-section-sub" style="margin:0">กด "＋ สร้างหมวดขายของใหม่" หรือเลือกหมวดเพื่อเข้าไปกด ＋ เพิ่มสินค้า ตั้งราคาเองได้ทันทีค่ะ ♡</div>
+          </div>
+          <button type="button" onclick="hlgOpenCategoryModal()" style="border:none;border-radius:12px;background:#bc4b7b;color:#fff;font-weight:700;padding:10px 18px;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 4px 14px rgba(188,75,123,0.25)">
+            <span>＋ สร้างหมวดขายของใหม่</span>
+          </button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:14px">
+          ${catCards}
+        </div>
+      </div>
+    `;
+  };
+
+  var prevAdminSwitch = window.switchAdminTab;
+  window.switchAdminTab = function(tab, btn) {
+    if (typeof window.ensureAdminCategoryTab === 'function') window.ensureAdminCategoryTab();
+    var r = prevAdminSwitch ? prevAdminSwitch.apply(this, arguments) : undefined;
+    if (tab === 'categories') {
+      window.renderAdminCategoriesPanel();
+    }
+    return r;
+  };
+
   window.hlgEnsureCategoryPage = function(categoryId) {
     if (!categoryId) return null;
-    const reserved = ['home', 'preorder', 'bag', 'sticker', 'wallpaper', 'cart', 'tracking', 'admin', 'thankyou', 'wpcheck', 'external', 'product'];
+    var reserved = ['home', 'preorder', 'bag', 'sticker', 'wallpaper', 'cart', 'tracking', 'admin', 'thankyou', 'wpcheck', 'external', 'product'];
     if (reserved.indexOf(categoryId) >= 0) return null;
 
-    const cats = getCategories();
-    const cat = cats.find(function(c) { return c.id === categoryId; }) || {
+    var cats = getCategories();
+    var cat = cats.find(function(c) { return c.id === categoryId; }) || {
       id: categoryId,
       name: categoryId,
       description: ''
     };
 
-    let pageEl = document.getElementById('page-' + categoryId);
+    var pageEl = document.getElementById('page-' + categoryId);
     if (!pageEl) {
       pageEl = document.createElement('div');
       pageEl.id = 'page-' + categoryId;
       pageEl.className = 'page';
-      const anchor = document.getElementById('page-cart') || document.querySelector('.page');
+      var anchor = document.getElementById('page-cart') || document.querySelector('.page');
       if (anchor && anchor.parentNode) {
         anchor.parentNode.insertBefore(pageEl, anchor);
       } else {
@@ -16561,14 +17065,32 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
       }
     }
 
-    const prods = getCustomProducts().filter(function(p) {
+    var prods = getCustomProducts().filter(function(p) {
       return (p.category_id === categoryId) || (p.type === categoryId);
     });
 
-    const coverHtml = cat.cover_url ? `<div style="max-width:320px;margin:0 auto 12px;border-radius:16px;overflow:hidden;box-shadow:0 4px 16px rgba(184,75,123,0.12)"><img src="${esc(cat.cover_url)}" alt="${esc(cat.name)}" style="width:100%;height:auto;display:block"></div>` : '';
+    var isAdm = isAdminUser();
+    var coverHtml = cat.cover_url ? `<div style="max-width:320px;margin:0 auto 12px;border-radius:18px;overflow:hidden;box-shadow:0 4px 16px rgba(184,75,123,0.12)"><img src="${esc(cat.cover_url)}" alt="${esc(cat.name)}" style="width:100%;height:auto;display:block"></div>` : '';
 
-    const productsHtml = prods.length > 0 ? prods.map(function(p) {
-      const img = p.image_url || p.imageUrl || '';
+    var adminBarHtml = isAdm ? `
+      <div class="hlg-cat-admin-bar" style="background:#fff0f6;border:1.5px dashed #f0a8c2;border-radius:18px;padding:14px 18px;margin:0 auto 18px;max-width:960px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;box-shadow:0 4px 14px rgba(184,75,123,0.08)">
+        <div>
+          <b style="color:#b83a6f;font-size:14px;display:block">👑 โหมดแอดมิน: จัดการสินค้าหมวด "${esc(cat.name)}"</b>
+          <span style="font-size:12px;color:#875c6e">เพิ่มสินค้า อัปโหลดรูปภาพ ตั้งราคาเองได้ทันที ลูกค้าจะเห็นและสั่งซื้อได้เลยค่ะ</span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="hlg-btn-add-product" onclick="hlgOpenAddProductModal('${esc(categoryId)}')" style="border:none;border-radius:12px;background:#bc4b7b;color:#fff;font-weight:700;padding:9px 16px;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 3px 10px rgba(188,75,123,0.25)">
+            <span>＋ เพิ่มสินค้าใหม่ในหมวดนี้</span>
+          </button>
+          <button type="button" onclick="showPage('admin')" style="border:1px solid #eabacb;border-radius:12px;background:#fff;color:#a8406f;font-weight:600;padding:9px 14px;font-size:12px;cursor:pointer">
+            <span>กลับหน้า Admin</span>
+          </button>
+        </div>
+      </div>
+    ` : '';
+
+    var productsHtml = prods.length > 0 ? prods.map(function(p) {
+      var img = p.image_url || p.imageUrl || '';
       return `
         <div class="gcard" style="background:#fff;border:1px solid #f2d5e1;border-radius:18px;overflow:hidden;box-shadow:0 4px 16px rgba(184,75,123,0.08);display:flex;flex-direction:column">
           <div style="aspect-ratio:1/1;position:relative;background:#fff5f9;display:flex;align-items:center;justify-content:center;overflow:hidden">
@@ -16583,13 +17105,19 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
               <button type="button" class="hlg-cat-add-btn" style="border:none;border-radius:10px;background:#bc4b7b;color:#fff;padding:7px 12px;font:inherit;font-size:12px;font-weight:600;cursor:pointer" onclick="hlgAddCustomProductToCart('${esc(p.id)}')">＋ ใส่ตะกร้า</button>
             </div>
           </div>
+          ${isAdm ? `
+            <div style="display:flex;gap:6px;padding:8px 12px;background:#fff9fb;border-top:1px dashed #f5d7e3">
+              <button type="button" onclick="hlgOpenAddProductModal('${esc(categoryId)}', '${esc(p.id)}')" style="flex:1;border:1px solid #e8b8cb;border-radius:8px;background:#fff;color:#a8406f;padding:5px 8px;font:inherit;font-size:11px;font-weight:700;cursor:pointer">✎ แก้ไข</button>
+              <button type="button" onclick="hlgDeleteProduct('${esc(p.id)}', '${esc(categoryId)}')" style="border:1px solid #f2cad6;border-radius:8px;background:#ffeef3;color:#c03865;padding:5px 8px;font:inherit;font-size:11px;font-weight:700;cursor:pointer">🗑️ ลบ</button>
+            </div>
+          ` : ''}
         </div>
       `;
     }).join('') : `
       <div style="text-align:center;padding:48px 16px;color:#8a6d7b;grid-column:1/-1;background:#fff;border-radius:18px;border:1px dashed #f2d5e1">
         <div style="font-size:36px;margin-bottom:8px">🎀</div>
         <b>ยังไม่มีสินค้าในหมวดหมู่นี้ค่ะ ♡</b>
-        <p style="font-size:12px;margin:6px 0 0">แอดมินสามารถเพิ่มสินค้าลงในหมวดหมู่นี้ได้จากระบบหลังบ้าน</p>
+        <p style="font-size:12px;margin:6px 0 0">${isAdm ? 'แอดมินแตะปุ่ม "＋ เพิ่มสินค้าใหม่ในหมวดนี้" ด้านบนเพื่อลงขายสินค้าชิ้นแรกได้เลยค่ะ' : 'ร้านกำลังเตรียมสินค้าใหม่ อดใจรอนิดนึงนะคะ 💖'}</p>
       </div>
     `;
 
@@ -16602,6 +17130,7 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
         <div class="hero-sub" style="font-size:13px;color:#7e5e6e;margin:0">${esc(cat.description || 'เลือกสินค้าที่ชอบ แล้วกดใส่ตะกร้าได้เลยค่ะ 💖')}</div>
       </div>
       <div class="sec" style="max-width:960px;margin:0 auto;padding:0 14px 40px">
+        ${adminBarHtml}
         <div class="sec-title" style="margin-bottom:14px"><i class="ti ti-heart"></i> รายการสินค้า (${prods.length} รายการ)</div>
         <div class="hlg-custom-cat-grid" id="catGrid-${esc(categoryId)}" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(160px, 1fr));gap:14px">
           ${productsHtml}
@@ -16613,16 +17142,16 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
   };
 
   window.hlgRenderCategoryPills = function() {
-    const cats = getCategories().filter(function(c) { return c && c.show_on_home !== false; });
-    let container = document.getElementById('hlgHomeCategoryPills');
-    const homeProducts = document.querySelector('#page-home .v5-products');
+    var cats = getCategories().filter(function(c) { return c && c.show_on_home !== false; });
+    var container = document.getElementById('hlgHomeCategoryPills');
+    var homeProducts = document.querySelector('#page-home .v5-products');
     if (!homeProducts) return;
 
     if (!container) {
       container = document.createElement('div');
       container.id = 'hlgHomeCategoryPills';
       container.style.cssText = 'display:flex;gap:8px;overflow-x:auto;padding:8px 12px 14px;scrollbar-width:none;-webkit-overflow-scrolling:touch;';
-      const head = homeProducts.previousElementSibling;
+      var head = homeProducts.previousElementSibling;
       if (head && head.parentNode) {
         head.parentNode.insertBefore(container, homeProducts);
       }
@@ -16630,9 +17159,9 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
 
     if (!container) return;
     container.innerHTML = cats.map(function(c) {
-      const isBuiltin = ['bag', 'sticker', 'wallpaper'].indexOf(c.id) >= 0;
-      const targetPage = c.id === 'bag' ? 'preorder' : c.id;
-      const icon = c.id === 'bag' ? '👜' : c.id === 'sticker' ? '✨' : c.id === 'wallpaper' ? '🎨' : '🎀';
+      var isBuiltin = ['bag', 'sticker', 'wallpaper'].indexOf(c.id) >= 0;
+      var targetPage = c.id === 'bag' ? 'preorder' : c.id;
+      var icon = c.id === 'bag' ? '👜' : c.id === 'sticker' ? '✨' : c.id === 'wallpaper' ? '🎨' : '🎀';
       return `
         <button type="button" class="hlg-cat-pill" onclick="${isBuiltin ? `showPage('${targetPage}')` : `hlgEnsureCategoryPage('${c.id}');showPage('${c.id}')`}" style="flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:20px;border:1px solid #f2d5e1;background:#fff;color:#8a4465;font:inherit;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(184,75,123,0.06);white-space:nowrap">
           <span>${icon}</span>
@@ -16644,32 +17173,33 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
 
   async function fetchStorefrontDynamicData() {
     try {
-      const [catRes, prodRes, pvRes] = await Promise.all([
-        fetch('/api/categories').catch(() => null),
-        fetch('/api/products').catch(() => null),
-        fetch('/api/preview-cards').catch(() => null)
+      var [catRes, prodRes, pvRes] = await Promise.all([
+        fetch('/api/categories').catch(function() { return null; }),
+        fetch('/api/products').catch(function() { return null; }),
+        fetch('/api/preview-cards').catch(function() { return null; })
       ]);
       if (catRes && catRes.ok) {
-        const d = await catRes.json();
+        var d = await catRes.json();
         if (d && Array.isArray(d.categories)) {
           localStorage.setItem(CAT_KEY, JSON.stringify(d.categories));
         }
       }
       if (prodRes && prodRes.ok) {
-        const d = await prodRes.json();
+        var d = await prodRes.json();
         if (d && Array.isArray(d.products)) {
           localStorage.setItem(PROD_KEY, JSON.stringify(d.products));
           localStorage.setItem(PROD_KEY_V1, JSON.stringify(d.products));
         }
       }
       if (pvRes && pvRes.ok) {
-        const d = await pvRes.json();
+        var d = await pvRes.json();
         if (d && Array.isArray(d.preview_cards) && d.preview_cards.length > 0) {
           localStorage.setItem('hlg_preview_cards_v2', JSON.stringify(d.preview_cards));
         }
       }
       if (typeof window.v8InlinePreviewRender === 'function') window.v8InlinePreviewRender();
       if (typeof window.hlgRenderCategoryPills === 'function') window.hlgRenderCategoryPills();
+      if (typeof window.renderAdminCategoriesPanel === 'function') window.renderAdminCategoriesPanel();
     } catch(e) {
       console.warn('Failed to fetch dynamic storefront data:', e);
     }
@@ -16677,8 +17207,8 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
 
   function checkUrlCategoryParam() {
     try {
-      const params = new URLSearchParams(window.location.search);
-      const target = params.get('page') || (window.location.hash ? window.location.hash.replace(/^#/, '') : '');
+      var params = new URLSearchParams(window.location.search);
+      var target = params.get('page') || (window.location.hash ? window.location.hash.replace(/^#/, '') : '');
       if (target && !['home', 'cart', 'tracking', 'admin', 'preorder', 'bag', 'wallpaper', 'sticker'].includes(target)) {
         setTimeout(function() {
           if (typeof window.hlgEnsureCategoryPage === 'function') window.hlgEnsureCategoryPage(target);
@@ -16690,12 +17220,16 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
 
   document.addEventListener('DOMContentLoaded', function() {
     setTimeout(function() {
+      ensureModals();
+      if (typeof window.ensureAdminCategoryTab === 'function') window.ensureAdminCategoryTab();
       if (typeof window.hlgRenderCategoryPills === 'function') window.hlgRenderCategoryPills();
       fetchStorefrontDynamicData();
       checkUrlCategoryParam();
     }, 150);
   });
   if (document.readyState !== 'loading') {
+    ensureModals();
+    if (typeof window.ensureAdminCategoryTab === 'function') window.ensureAdminCategoryTab();
     fetchStorefrontDynamicData();
     checkUrlCategoryParam();
   }
