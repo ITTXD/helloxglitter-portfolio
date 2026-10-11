@@ -6177,7 +6177,7 @@ if(document.readyState!=='loading'){
         <div class="ptab active" data-panel="pnormal"><div class="pt-name">Normal</div><div class="pt-sub">15×16"</div></div>
         <div class="ptab" data-panel="plarge"><div class="pt-name">Large</div><div class="pt-sub">15.5×4×16"</div></div>
         <div class="ptab" data-panel="peasy"><div class="pt-name">Easy Bag</div><div class="pt-sub">10.5×5×14"</div></div>
-        <div class="ptab" data-panel="pmaxi"><div class="pt-name">Maxi</div><div class="pt-sub">18×20"</div></div>
+        <div class="ptab" data-panel="pmaxi"><div class="pt-name">Maxi</div><div class="pt-sub">13.5×6×17"</div></div>
       </div>
       <div id="promoPanels"></div>
     </div>
@@ -6387,12 +6387,7 @@ if(document.readyState!=='loading'){
         <span style="font-size:18px;line-height:1">＋</span> เพิ่ม Wallpaper ใหม่ (ตั้งชื่อ / ราคา / แนบลิงก์ดาวน์โหลด)
       </button>
     </div>
-    <div id="wpAdminUnlock" style="display:none;margin-bottom:14px;align-items:center;justify-content:space-between;background:#fff5f9;border:1px dashed #f2b8cc;border-radius:14px;padding:10px 14px">
-      <span style="font-size:12px;color:#a8406e">🔒 แอดมินร้านต้องการเพิ่ม/แก้ไข Wallpaper หรือไม่?</span>
-      <button type="button" onclick="openLoginModal()" style="border:1px solid #e5a8bf;background:#fff;color:#b83a6f;border-radius:10px;padding:6px 12px;font:inherit;font-size:12px;font-weight:700;cursor:pointer">
-        เข้าสู่ระบบ Admin ↗
-      </button>
-    </div>
+
     <div class="sec-title"><i class="ti ti-photo"></i> Wallpaper <span style="font-size:12px;color:#b8a0d0;font-weight:400">— เลือกจำนวนได้</span></div>
     <div class="gallery" id="wallpaperGallery">
       <div class="gcard wp-card" id="wpCard" onclick="wpTogglePattern('Wallpaper')">
@@ -7894,10 +7889,8 @@ function v8GoToShopeeTracking() {
 function renderWallpaperGallery() {
   var gallery = document.getElementById('wallpaperGallery');
   var adminBar = document.getElementById('wpAdminBar');
-  var unlockBar = document.getElementById('wpAdminUnlock');
   var isAdm = (typeof isAdminUser === 'function' ? isAdminUser() : false);
   if (adminBar) adminBar.style.display = isAdm ? 'flex' : 'none';
-  if (unlockBar) unlockBar.style.display = isAdm ? 'none' : 'flex';
 
   var customProds = (typeof getCustomProducts === 'function' ? getCustomProducts() : []);
   var wpProds = customProds.filter(function(p) {

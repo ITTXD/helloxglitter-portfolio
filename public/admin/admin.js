@@ -509,10 +509,20 @@ function openOrder(id) {
   }
   html += '</div></div>';
 
+  // Download Links for Wallpaper
+  if (order.download_links && order.download_links.length > 0) {
+    html += '<div class="m-section" style="background:#fdf4ff;border:1px solid #f0abfc;border-radius:12px;padding:12px 14px;margin-bottom:14px">';
+    html += '<div style="font-size:13px;font-weight:800;color:#c026d3;margin-bottom:8px"><i class="ti ti-link"></i> ลิงก์ดาวน์โหลดที่ส่งให้ลูกค้า</div>';
+    order.download_links.forEach(function(l) {
+      html += '<div style="margin-bottom:6px"><div style="font-size:11px;color:#86198f;font-weight:700">' + escapeHtml(l.name) + '</div><a href="' + escapeHtmlAttr(l.url) + '" target="_blank" style="font-size:12px;color:#d946ef;text-decoration:underline;word-break:break-all">' + escapeHtml(l.url) + '</a></div>';
+    });
+    html += '</div>';
+  }
+
   // Summary
   html += '<div class="m-section">';
   html += '<div class="m-section-title">สรุป</div>';
-  html += '<div class="m-row"><span class="m-row-label">จำนวนทั้งหมด</span><span class="m-row-val">' + (order.total_bags || 0) + ' ใบ</span></div>';
+  html += '<div class="m-row"><span class="m-row-label">จำนวนทั้งหมด</span><span class="m-row-val">' + (order.total_bags || 0) + ' ชิ้น</span></div>';
   html += '<div class="m-row"><span class="m-row-label">ยอดสินค้า</span><span class="m-row-val">' + (order.total_price || 0).toLocaleString() + ' ฿</span></div>';
   var shippingCost = order.shipping_cost != null ? order.shipping_cost : 0;
   var shippingLabel = shippingCost === 0 ? 'ค่าจัดส่ง (ฟรี)' : (order.is_remote ? 'ค่าจัดส่ง (พื้นที่ห่างไกล)' : 'ค่าจัดส่ง');
@@ -1577,7 +1587,7 @@ function renderProductsView() {
               <option value="normal">Normal · 15×16"</option>
               <option value="large">Large · 15.5×4×16"</option>
               <option value="easy">Easy Bag · 10.5×5×14"</option>
-              <option value="maxi">Maxi · 18×20"</option>
+              <option value="maxi">Maxi · 13.5×6×17"</option>
             </select>
           </label>
           <label style="display:block;font-size:13px;color:#765461;font-weight:600">
@@ -1745,7 +1755,7 @@ async function saveProduct(e) {
     }
   }
 
-  const sizeMap = { normal: 'Normal · 15×16"', large: 'Large · 15.5×4×16"', easy: 'Easy Bag · 10.5×5×14"', maxi: 'Maxi · 18×20"' };
+  const sizeMap = { normal: 'Normal · 15×16"', large: 'Large · 15.5×4×16"', easy: 'Easy Bag · 10.5×5×14"', maxi: 'Maxi · 13.5×6×17"' };
   const payload = {
     category_id,
     type: category_id,
