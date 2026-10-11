@@ -1587,7 +1587,7 @@ function renderProductsView() {
               <option value="normal">Normal · 15×16"</option>
               <option value="large">Large · 15.5×4×16"</option>
               <option value="easy">Easy Bag · 10.5×5×14"</option>
-              <option value="maxi">Maxi · 18×20"</option>
+              <option value="maxi">Maxi · 13.5×6×17"</option>
             </select>
           </label>
           <label style="display:block;font-size:13px;color:#765461;font-weight:600">
@@ -1755,7 +1755,7 @@ async function saveProduct(e) {
     }
   }
 
-  const sizeMap = { normal: 'Normal · 15×16"', large: 'Large · 15.5×4×16"', easy: 'Easy Bag · 10.5×5×14"', maxi: 'Maxi · 18×20"' };
+  const sizeMap = { normal: 'Normal · 15×16"', large: 'Large · 15.5×4×16"', easy: 'Easy Bag · 10.5×5×14"', maxi: 'Maxi · 13.5×6×17"' };
   const payload = {
     category_id,
     type: category_id,
