@@ -132,6 +132,14 @@ test('canonical base override wins over catalog price', () => {
   assert.strictEqual(result.price, 350);
 });
 
+test('legacy JSON SKU can resolve a built-in catalog product', () => {
+  const catalog = makeCatalog();
+  const legacy = HLGPricing.legacySku({ type: 'bag', name: 'Merilah', variant: '15 × 16 inch' });
+  const product = catalog.lookup({ sku: legacy });
+  assert.ok(product);
+  assert.strictEqual(product.sku, 'bag|Merilah|15 × 16 inch');
+});
+
 test('legacy JSON base override is still readable during migration', () => {
   const catalog = makeCatalog();
   const legacy = HLGPricing.legacySku({ type: 'bag', name: 'Merilah', variant: '15 × 16 inch' });

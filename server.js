@@ -18,6 +18,7 @@ const {
 } = require('./coupon-service');
 const { sendCouponFlexMessage, sendOrderReceiptFlexMessage } = require('./line-service');
 const pricingConfig = require('./pricing-config');
+const quoteService = require('./quote-service');
 const {
   getSlipLockKey,
   acquireSlipLock,
@@ -56,7 +57,8 @@ if (process.env.FIREBASE_PROJECT_ID) {
 const localMemStore = {
   orders: [],
   settings: [],
-  coupons: []
+  coupons: [],
+  quotes: []
 };
 
 async function fsAddDoc(collectionName, data) {
@@ -187,8 +189,28 @@ const serverPricingStore = {
   }
 };
 
+const serverQuoteStore = {
+  async saveQuote(doc) {
+    await fsSetDoc('quotes', doc.quote_id, doc);
+    return doc;
+  },
+  async getQuote(quoteId) {
+    return fsGetDoc('quotes', quoteId);
+  }
+};
+
+const quoteRateLimiter = quoteService.createRateLimiter({ max: 30, windowMs: 60 * 1000 });
+
 function sendPricingError(res, err) {
   const mapped = pricingConfig.httpError(err);
+  sendJson(res, mapped.status, mapped.body);
+}
+
+function sendQuoteError(res, err) {
+  const mapped = quoteService.httpError(err);
+  if (mapped.body.retry_after != null && typeof res.setHeader === 'function') {
+    res.setHeader('Retry-After', String(mapped.body.retry_after));
+  }
   sendJson(res, mapped.status, mapped.body);
 }
 
@@ -501,6 +523,55 @@ async function handleApi(req, res) {
     } catch (err) {
       console.error('Failed to build pricing catalog:', err);
       sendPricingError(res, err);
+    }
+    return true;
+  }
+
+  // POST /api/quotes — server-authoritative quote preview (P2).
+  // The quote API remains callable even when the browser feature flag is off;
+  // the flag only controls storefront shadow/live display.
+  if (pathname === '/api/quotes' && method === 'POST') {
+    if (typeof res.setHeader === 'function') res.setHeader('Cache-Control', 'no-store');
+    const rate = quoteRateLimiter.check(quoteService.clientKey(req));
+    if (!rate.allowed) {
+      const limited = quoteService.quoteError('RATE_LIMITED', 'ตรวจสอบราคาบ่อยเกินไป กรุณาลองใหม่ภายหลัง');
+      limited.retry_after = rate.retry_after;
+      sendQuoteError(res, limited);
+      return true;
+    }
+
+    const body = await readBody(req);
+    try {
+      const now = Date.now();
+      const config = await pricingConfig.loadConfig(serverPricingStore);
+      const storefront = (await fsGetDoc('settings', 'storefront')) || {};
+      const built = pricingConfig.buildCatalogContext(config, {
+        customProducts: Array.isArray(storefront.custom_products) ? storefront.custom_products : [],
+        categories: Array.isArray(storefront.categories) ? storefront.categories : []
+      }, { now: now });
+      const cookieUser = parseLineUserFromRequest(req);
+      const bodyLineUserId = body && typeof body === 'object' && !Array.isArray(body) ? body.line_user_id : '';
+      const result = await quoteService.issueQuote({
+        body: body,
+        config: config,
+        pricing: built.pricing,
+        tier: config.tier,
+        shipping: config.shipping,
+        catalog: built.engine,
+        store: serverQuoteStore,
+        couponValidator: validateCouponForCheckout,
+        db: db,
+        lineUserId: cookieUser ? cookieUser.line_user_id : bodyLineUserId,
+        now: now
+      });
+      sendJson(res, 200, result.response);
+    } catch (err) {
+      if (err && err.code && err.code !== 'QUOTE_ERROR') {
+        console.warn('[quote] rejected:', err.code);
+      } else {
+        console.error('Failed to create quote:', err);
+      }
+      sendQuoteError(res, err);
     }
     return true;
   }

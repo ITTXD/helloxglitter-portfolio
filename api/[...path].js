@@ -16,6 +16,7 @@ const {
 } = require('../coupon-service');
 const { sendCouponFlexMessage, sendOrderReceiptFlexMessage } = require('../line-service');
 const pricingConfig = require('../pricing-config');
+const quoteService = require('../quote-service');
 const {
   getSlipLockKey,
   acquireSlipLock,
@@ -23,7 +24,7 @@ const {
   markTransRefUsed,
 } = require('../slip-lock');
 const { initializeApp } = require('firebase/app');
-const { getFirestore, collection, addDoc, getDocs, query, orderBy, doc, getDoc, updateDoc, setDoc, deleteDoc, where, limit, runTransaction } = require('firebase/firestore');
+const { getFirestore, collection, addDoc, getDocs, query, orderBy, doc, getDoc, updateDoc, setDoc, deleteDoc, where, limit, runTransaction, Timestamp } = require('firebase/firestore');
 
 const firebaseConfig = {
   apiKey: process.env.FIREBASE_API_KEY,
@@ -128,8 +129,34 @@ const firestorePricingStore = {
   }
 };
 
+const firestoreQuoteStore = {
+  async saveQuote(quoteDoc) {
+    // `expires_at_ts` is a Firestore Timestamp so a TTL policy can remove old
+    // quotes automatically. App-level expiry still uses expires_at_ms.
+    const stored = Object.assign({}, quoteDoc, {
+      expires_at_ts: Timestamp.fromMillis(Number(quoteDoc.expires_at_ms) || Date.now())
+    });
+    await setDoc(doc(db, 'quotes', quoteDoc.quote_id), stored);
+    return quoteDoc;
+  },
+  async getQuote(quoteId) {
+    const snap = await getDoc(doc(db, 'quotes', quoteId));
+    return snap.exists() ? snap.data() : null;
+  }
+};
+
+const quoteRateLimiter = quoteService.createRateLimiter({ max: 30, windowMs: 60 * 1000 });
+
 function sendPricingError(res, err) {
   const mapped = pricingConfig.httpError(err);
+  sendJson(res, mapped.status, mapped.body);
+}
+
+function sendQuoteError(res, err) {
+  const mapped = quoteService.httpError(err);
+  if (mapped.body.retry_after != null && typeof res.setHeader === 'function') {
+    res.setHeader('Retry-After', String(mapped.body.retry_after));
+  }
   sendJson(res, mapped.status, mapped.body);
 }
 
@@ -403,6 +430,54 @@ module.exports = async (req, res) => {
       } catch (err) {
         console.error('Failed to build pricing catalog:', err);
         sendPricingError(res, err);
+      }
+      return;
+    }
+
+    // POST /api/quotes — server-authoritative quote preview (P2).
+    if (pathname === '/api/quotes' && method === 'POST') {
+      if (typeof res.setHeader === 'function') res.setHeader('Cache-Control', 'no-store');
+      const rate = quoteRateLimiter.check(quoteService.clientKey(req));
+      if (!rate.allowed) {
+        const limited = quoteService.quoteError('RATE_LIMITED', 'ตรวจสอบราคาบ่อยเกินไป กรุณาลองใหม่ภายหลัง');
+        limited.retry_after = rate.retry_after;
+        sendQuoteError(res, limited);
+        return;
+      }
+
+      const body = await readBody(req);
+      try {
+        const now = Date.now();
+        const config = await pricingConfig.loadConfig(firestorePricingStore);
+        const storefrontSnap = await getDoc(doc(db, 'settings', 'storefront'));
+        const storefront = storefrontSnap.exists() ? storefrontSnap.data() : {};
+        const built = pricingConfig.buildCatalogContext(config, {
+          customProducts: Array.isArray(storefront.custom_products) ? storefront.custom_products : [],
+          categories: Array.isArray(storefront.categories) ? storefront.categories : []
+        }, { now: now });
+        const cookieUser = parseLineUserFromRequest(req);
+        const bodyLineUserId = body && typeof body === 'object' && !Array.isArray(body) ? body.line_user_id : '';
+        const result = await quoteService.issueQuote({
+          body: body,
+          config: config,
+          pricing: built.pricing,
+          tier: config.tier,
+          shipping: config.shipping,
+          catalog: built.engine,
+          store: firestoreQuoteStore,
+          couponValidator: validateCouponForCheckout,
+          db: db,
+          lineUserId: cookieUser ? cookieUser.line_user_id : bodyLineUserId,
+          now: now
+        });
+        sendJson(res, 200, result.response);
+      } catch (err) {
+        if (err && err.code && err.code !== 'QUOTE_ERROR') {
+          console.warn('[quote] rejected:', err.code);
+        } else {
+          console.error('Failed to create quote:', err);
+        }
+        sendQuoteError(res, err);
       }
       return;
     }

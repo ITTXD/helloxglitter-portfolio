@@ -214,6 +214,19 @@ function defaultTier() {
   };
 }
 
+function defaultFeatures() {
+  return {
+    quote_preview: {
+      // Shadow mode is intentionally the safe default: the browser computes a
+      // local preview from the same shared engine and compares it with the
+      // server quote, but checkout still uses the legacy path until P3.
+      enabled: true,
+      mode: 'shadow',
+      groups: ['all']
+    }
+  };
+}
+
 function defaultConfig() {
   return {
     schema_version: SCHEMA_VERSION,
@@ -222,6 +235,7 @@ function defaultConfig() {
     pricing: { base: {}, promos: [] },
     tier: defaultTier(),
     shipping: { base: DEFAULT_SHIPPING.base, extra: DEFAULT_SHIPPING.extra, rules: [] },
+    features: defaultFeatures(),
     updated_at: null,
     updated_by: null,
     published_at: null
@@ -462,6 +476,42 @@ function sanitizeShipping(input, errors, path) {
   return out;
 }
 
+function sanitizeFeatures(input, errors, path) {
+  const out = defaultFeatures();
+  if (input == null) return out;
+  if (!isObject(input)) {
+    pushError(errors, path, 'ต้องเป็น object');
+    return out;
+  }
+
+  const raw = input.quote_preview;
+  if (raw == null) return out;
+  if (!isObject(raw)) {
+    pushError(errors, path + '.quote_preview', 'ต้องเป็น object');
+    return out;
+  }
+
+  if (raw.enabled != null && typeof raw.enabled !== 'boolean') {
+    pushError(errors, path + '.quote_preview.enabled', 'ต้องเป็น true หรือ false');
+  }
+  out.quote_preview.enabled = raw.enabled === true;
+
+  if (raw.mode != null && raw.mode !== 'shadow' && raw.mode !== 'active') {
+    pushError(errors, path + '.quote_preview.mode', 'โหมดต้องเป็น shadow หรือ active');
+  }
+  out.quote_preview.mode = raw.mode === 'active' ? 'active' : 'shadow';
+
+  if (hasOwn(raw, 'groups')) {
+    out.quote_preview.groups = sanitizeStringArray(
+      raw.groups,
+      path + '.quote_preview.groups',
+      errors,
+      { max: 100, maxLength: 100 }
+    );
+  }
+  return out;
+}
+
 function sanitizeConfigInput(input, options) {
   const opts = options || {};
   const errors = [];
@@ -477,7 +527,8 @@ function sanitizeConfigInput(input, options) {
   const value = {
     pricing: sanitizePricing(raw.pricing, errors, 'pricing'),
     tier: sanitizeTier(raw.tier, errors, 'tier'),
-    shipping: sanitizeShipping(raw.shipping, errors, 'shipping')
+    shipping: sanitizeShipping(raw.shipping, errors, 'shipping'),
+    features: sanitizeFeatures(raw.features, errors, 'features')
   };
   return { ok: errors.length === 0, errors: errors, value: value };
 }
@@ -506,6 +557,7 @@ function normalizeStoredConfig(raw) {
     pricing: sections.value.pricing,
     tier: sections.value.tier,
     shipping: sections.value.shipping,
+    features: sections.value.features,
     updated_at: typeof raw.updated_at === 'string' ? raw.updated_at : null,
     updated_by: typeof raw.updated_by === 'string' ? raw.updated_by.slice(0, 120) : null,
     published_at: typeof raw.published_at === 'string' ? raw.published_at : null
@@ -574,7 +626,11 @@ function summarizeConfig(config) {
     tier_product_rules: isObject(tier.productRules) ? Object.keys(tier.productRules).length : 0,
     shipping_base: safeVersion(shipping.base) || 0,
     shipping_extra: safeVersion(shipping.extra) || 0,
-    shipping_rules: Array.isArray(shipping.rules) ? shipping.rules.length : 0
+    shipping_rules: Array.isArray(shipping.rules) ? shipping.rules.length : 0,
+    quote_preview_enabled: !!(config && config.features && config.features.quote_preview && config.features.quote_preview.enabled),
+    quote_preview_mode: config && config.features && config.features.quote_preview
+      ? config.features.quote_preview.mode
+      : 'shadow'
   };
 }
 
@@ -594,6 +650,18 @@ async function publishConfig(store, input, actor) {
     throw configError('INVALID_CONFIG', 'ข้อมูล pricing config ไม่ผ่านการตรวจสอบ', sections.errors);
   }
 
+  // Older admin clients publish only pricing/tier/shipping. Preserve the
+  // current rollout flags instead of resetting them on every pricing publish.
+  let features = sections.value.features;
+  if (body.features == null) {
+    try {
+      const current = await loadConfig(store);
+      features = current && current.features ? current.features : defaultFeatures();
+    } catch (err) {
+      features = defaultFeatures();
+    }
+  }
+
   const now = new Date().toISOString();
   const nextVersion = expectedVersion + 1;
   if (!Number.isSafeInteger(nextVersion)) {
@@ -605,6 +673,7 @@ async function publishConfig(store, input, actor) {
     pricing: sections.value.pricing,
     tier: sections.value.tier,
     shipping: sections.value.shipping,
+    features: features,
     updated_at: now,
     updated_by: actorText(actor),
     published_at: now
@@ -697,25 +766,25 @@ function mergeCategories(customCategories) {
   return out;
 }
 
-function buildCatalog(config, source, options) {
+function buildCatalogContext(config, source, options) {
   const opts = options || {};
   const customProducts = Array.isArray(source && source.customProducts) ? source.customProducts : [];
   const categories = mergeCategories(source && source.categories);
-  const catalog = HLGPricing.createCatalog({
+  const engineCatalog = HLGPricing.createCatalog({
     patterns: patterns.ALL_PATTERNS,
     stickers: patterns.STICKER_PATTERNS,
     customProducts: customProducts,
     categories: categories,
     includeDefaultWallpaper: true
   });
-  const duplicates = Array.from(new Set(catalog.duplicates || []));
+  const duplicates = Array.from(new Set(engineCatalog.duplicates || []));
   if (duplicates.length) {
     throw configError('DUPLICATE_SKU', 'พบ SKU ซ้ำใน catalog', { duplicates: duplicates });
   }
 
   const pricing = isObject(config && config.pricing) ? config.pricing : { base: {}, promos: [] };
   const now = opts.now == null ? Date.now() : opts.now;
-  const items = catalog.items.map(function (product) {
+  const items = engineCatalog.items.map(function (product) {
     const resolved = HLGPricing.resolveItemPrice(product, pricing, now);
     return {
       sku: product.sku,
@@ -743,15 +812,24 @@ function buildCatalog(config, source, options) {
   });
 
   return {
-    schema_version: SCHEMA_VERSION,
-    catalog_version: HLGPricing.VERSION,
-    pricing_version: config && config.version ? Number(config.version) : 0,
-    generated_at: new Date().toISOString(),
-    categories: categories,
-    count: items.length,
-    duplicates: [],
-    items: items
+    engine: engineCatalog,
+    pricing: pricing,
+    now: now,
+    catalog: {
+      schema_version: SCHEMA_VERSION,
+      catalog_version: HLGPricing.VERSION,
+      pricing_version: config && config.version ? Number(config.version) : 0,
+      generated_at: new Date().toISOString(),
+      categories: categories,
+      count: items.length,
+      duplicates: [],
+      items: items
+    }
   };
+}
+
+function buildCatalog(config, source, options) {
+  return buildCatalogContext(config, source, options).catalog;
 }
 
 function httpError(err) {
@@ -779,13 +857,16 @@ module.exports = {
   DEFAULT_SHIPPING: DEFAULT_SHIPPING,
   defaultConfig: defaultConfig,
   defaultTier: defaultTier,
+  defaultFeatures: defaultFeatures,
   normalizeStoredConfig: normalizeStoredConfig,
   sanitizeConfigInput: sanitizeConfigInput,
+  sanitizeFeatures: sanitizeFeatures,
   loadConfig: loadConfig,
   publishConfig: publishConfig,
   restoreConfig: restoreConfig,
   listHistory: listHistory,
   buildCatalog: buildCatalog,
+  buildCatalogContext: buildCatalogContext,
   mergeCategories: mergeCategories,
   summarizeConfig: summarizeConfig,
   invalidateConfigCache: invalidateConfigCache,

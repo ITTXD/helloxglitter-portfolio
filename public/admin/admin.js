@@ -3047,6 +3047,7 @@ async function deletePreviewCard(idx) {
     loading: false,
     error: '',
     notice: null,
+    featureDraft: null,
     seq: 0
   };
 
@@ -3085,6 +3086,42 @@ async function deletePreviewCard(idx) {
       tier: hasLocal(TIER_KEY) ? readJSON(TIER_KEY, {}) : (cloud.tier || {}),
       shipping: hasLocal(SHIPPING_KEY) ? readJSON(SHIPPING_KEY, { base: 40, extra: 25, rules: [] }) : (cloud.shipping || { base: 40, extra: 25, rules: [] })
     };
+  }
+
+  function featureFromConfig(config) {
+    var feature = config && config.features && config.features.quote_preview;
+    return {
+      enabled: feature ? feature.enabled === true : true,
+      mode: feature && feature.mode === 'active' ? 'active' : 'shadow',
+      groups: feature && Array.isArray(feature.groups) ? feature.groups.slice() : ['all']
+    };
+  }
+
+  function featureGroupsText(groups) {
+    return (Array.isArray(groups) ? groups : []).join(', ');
+  }
+
+  function parseFeatureGroups(value) {
+    var seen = {};
+    return String(value || '').split(/[\n,]+/).map(function (item) {
+      return item.trim();
+    }).filter(function (item) {
+      if (!item || seen[item]) return false;
+      seen[item] = true;
+      return true;
+    }).slice(0, 100);
+  }
+
+  function readFeatureInputs() {
+    var root = document.getElementById('cloudPricingManagerContainer');
+    if (!root || !state.featureDraft) return state.featureDraft;
+    var enabled = root.querySelector('[data-feature="enabled"]');
+    var mode = root.querySelector('[data-feature="mode"]');
+    var groups = root.querySelector('[data-feature="groups"]');
+    if (enabled) state.featureDraft.enabled = enabled.checked === true;
+    if (mode) state.featureDraft.mode = mode.value === 'active' ? 'active' : 'shadow';
+    if (groups) state.featureDraft.groups = parseFeatureGroups(groups.value);
+    return state.featureDraft;
   }
 
   function summary(config) {
@@ -3181,6 +3218,19 @@ async function deletePreviewCard(idx) {
 
     var note = state.notice ? '<div class="hlg-cloud-status' + noticeClass + '">' + esc(state.notice.text) + '</div>' : '';
     var historyRows = renderRows(state.history || [], cloud.version);
+    var feature = state.featureDraft || featureFromConfig(cloud);
+    var featureMode = feature.mode === 'active' ? 'active' : 'shadow';
+    var featureHtml = '<div class="hlg-cloud-feature">'
+      + '<h4>Quote preview (P2)</h4>'
+      + '<label class="hlg-cloud-feature-check"><input type="checkbox" data-feature="enabled"' + (feature.enabled ? ' checked' : '') + '> เปิดใช้ quote preview ฝั่งหน้าร้าน</label>'
+      + '<div class="hlg-cloud-feature-row"><span>โหมด</span><select data-feature="mode">'
+      + '<option value="shadow"' + (featureMode === 'shadow' ? ' selected' : '') + '>Shadow — เปรียบเทียบ + log เท่านั้น</option>'
+      + '<option value="active"' + (featureMode === 'active' ? ' selected' : '') + '>Active — แสดง “ราคายืนยันจากระบบ”</option>'
+      + '</select></div>'
+      + '<div class="hlg-cloud-feature-row"><span>กลุ่มที่เปิด</span><input type="text" data-feature="groups" value="' + esc(featureGroupsText(feature.groups)) + '" placeholder="all, public, admin, line, line:U..., ชื่อกลุ่ม"></div>'
+      + '<p class="hlg-cloud-feature-help">คั่นกลุ่มด้วย comma · <b>all</b> = ทุกคน · <b>public</b> = ลูกค้าทั่วไป · <b>admin</b> = แอดมิน · <b>line</b> = ลูกค้าที่ล็อกอิน LINE ทุกคน · <b>line:U...</b> = LINE ID เจาะจง · กลุ่มกำหนดเองใช้ <code>hlg_pricing_group_v1</code> หรือ <code>?hlg_group=ชื่อกลุ่ม</code></p>'
+      + '<p class="hlg-cloud-feature-help"><b>P2 เป็น preview เท่านั้น</b> — ยอดตอนยืนยันออเดอร์ยังใช้ flow เดิมจนถึง P3</p>'
+      + '</div>';
 
     root.innerHTML = '<div class="hlg-cloud">'
       + '<h3>☁️ ราคากลางบน Cloud</h3>'
@@ -3195,6 +3245,7 @@ async function deletePreviewCard(idx) {
       + 'โปรตามจำนวน ' + (localSummary.tier ? 'เปิด' : 'ปิด') + ' · ค่าส่ง ' + localSummary.shippingBase + ' + ' + localSummary.shippingExtra + ' · ' + localSummary.shippingRules + ' กฎ<br>'
       + 'ประวัติที่เครื่องนี้เคยใช้ v' + esc(localMetaVersion) + '</div>'
       + '</div>'
+      + featureHtml
       + (missingLocal ? '<p>ℹ️ บางส่วนยังไม่มีข้อมูลในเครื่องนี้ ระบบจะใช้ค่าจาก Cloud ล่าสุดเมื่อกดเผยแพร่ (แนะนำให้กด “ดึงจาก Cloud” ก่อนแก้ไข)</p>' : '')
       + note
       + '<div class="hlg-cloud-actions">'
@@ -3216,6 +3267,10 @@ async function deletePreviewCard(idx) {
         else if (action === 'restore') restore(Number(button.getAttribute('data-version')));
       });
     });
+    root.querySelectorAll('[data-feature]').forEach(function (input) {
+      input.addEventListener('change', readFeatureInputs);
+      input.addEventListener('input', readFeatureInputs);
+    });
   }
 
   function refresh() {
@@ -3226,6 +3281,7 @@ async function deletePreviewCard(idx) {
     return request('/api/pricing/config').then(function (config) {
       if (seq !== state.seq) return;
       state.config = config;
+      state.featureDraft = featureFromConfig(config);
       return request('/api/pricing/config/history?limit=15').then(function (data) {
         state.history = Array.isArray(data.history) ? data.history : [];
         state.historyError = '';
@@ -3253,11 +3309,19 @@ async function deletePreviewCard(idx) {
     if (!confirm('เผยแพร่ราคา/โปร/ค่าส่งจากเครื่องนี้ขึ้น Cloud เป็นเวอร์ชัน ' + (version + 1) + ' ใช่ไหมคะ?\nลูกค้าทุกเครื่องจะใช้เวอร์ชันนี้')) return;
 
     var local = localSnapshot();
+    var featureDraft = readFeatureInputs() || featureFromConfig(state.config);
     var body = {
       version: version,
       pricing: local.pricing,
       tier: local.tier,
-      shipping: local.shipping
+      shipping: local.shipping,
+      features: {
+        quote_preview: {
+          enabled: featureDraft.enabled === true,
+          mode: featureDraft.mode === 'active' ? 'active' : 'shadow',
+          groups: Array.isArray(featureDraft.groups) ? featureDraft.groups : ['all']
+        }
+      }
     };
     state.notice = null;
     setNotice('ok', 'กำลังเผยแพร่...');

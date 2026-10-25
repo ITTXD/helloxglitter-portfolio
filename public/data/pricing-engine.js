@@ -281,6 +281,7 @@
 
     var bySku = new Map();
     var byAnySku = new Map();
+    var byLegacy = new Map();
     var byProductId = new Map();
     var duplicates = [];
     items.forEach(function (product) {
@@ -290,6 +291,9 @@
         if (byAnySku.has(sku) && byAnySku.get(sku) !== product) duplicates.push(sku);
         byAnySku.set(sku, product);
       });
+      // Legacy JSON-array SKUs (`["bag","name","variant"]`) are only unique for
+      // built-in categories. Custom products use the canonical custom|... SKU.
+      if (product.type !== 'custom') byLegacy.set(legacySku(product), product);
       if (product.productId) byProductId.set(product.productId, product);
     });
 
@@ -299,10 +303,11 @@
       if (productId && byProductId.has(productId)) return byProductId.get(productId);
       var sku = text(item.sku || '');
       if (sku && byAnySku.has(sku)) return byAnySku.get(sku);
+      if (sku && byLegacy.has(sku)) return byLegacy.get(sku);
       var canonical = canonicalSku(item);
       if (byAnySku.has(canonical)) return byAnySku.get(canonical);
       var legacy = legacySku(item);
-      if (byAnySku.has(legacy)) return byAnySku.get(legacy);
+      if (byLegacy.has(legacy)) return byLegacy.get(legacy);
       return null;
     }
 

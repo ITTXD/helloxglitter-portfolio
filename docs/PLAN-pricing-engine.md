@@ -1,8 +1,8 @@
 # PLAN: Shared Pricing Engine + Server-Authoritative Checkout
 
 Branch: `feat/shared-pricing-engine`
-Last updated: 2026-10-25
-Status: **P1 complete — trusted catalog + published Cloud pricing config are live; checkout is still not wired to the server quote yet**
+Last updated: 2026-10-26
+Status: **P2 complete — quote API + browser shadow/active preview are implemented; checkout is still client-authoritative until P3**
 
 ---
 
@@ -21,7 +21,8 @@ Status: **P1 complete — trusted catalog + published Cloud pricing config are l
 
 P0 ทำ engine กลาง + test
 P1 ทำ trusted catalog, pricing config บน Cloud, admin publish/history/restore และ storefront hydration
-ยังไม่เปลี่ยน flow ขายจริง: `/api/orders`, การตรวจสลิป, sticker/wallpaper ยังเชื่อยอดจาก client จนกว่าจะถึง P2/P3
+P2 ทำ `POST /api/quotes`, quote storage/TTL, browser shadow/active preview และ feature flag แยกรายกลุ่ม
+ยังไม่เปลี่ยน flow ขายจริง: `/api/orders`, การตรวจสลิป, sticker/wallpaper ยังเชื่อยอดจาก client จนกว่าจะถึง P3
 
 
 ---
@@ -263,7 +264,7 @@ node test/pricing-engine.test.js
 - [x] ไม่มีสูตรราคาซ้ำใน engine
 - [x] ราคา client ถูก ignore
 - [x] legacy pricing key อ่านได้
-- [x] test ผ่าน 26/26
+- [x] test ผ่าน 27/27
 - [x] ยังไม่เปลี่ยน behavior การขายจริง
 - [x] ยังไม่ wire เข้า checkout (ตั้งใจ)
 
@@ -285,7 +286,7 @@ node test/pricing-engine.test.js
 
 #### Storage
 
-- `settings/pricing` — config ปัจจุบัน `{schema_version, version, pricing, tier, shipping, updated_at, updated_by, published_at}`
+- `settings/pricing` — config ปัจจุบัน `{schema_version, version, pricing, tier, shipping, features, updated_at, updated_by, published_at}`
 - `pricing_config_history/{version}` — snapshot เต็มของทุกเวอร์ชันที่เผยแพร่ พร้อม `restored_from` ถ้าเป็นการย้อนกลับ
 - `settings/storefront.custom_products` + `settings/storefront.categories` — แหล่งสินค้า/หมวดที่แอดมินเพิ่มเอง
 - ไม่เก็บ secret ใด ๆ ใน `settings/pricing`
@@ -418,7 +419,8 @@ node test/pricing-cloud.test.js   # 32/32
 - [x] duplicate SKU / invalid price ถูก reject
 - [x] config ไม่มี secret
 - [x] ไม่มีราคา/โปรจาก client ใน request ของ pricing endpoints
-- [ ] ยังไม่มีการใช้ catalog/config นี้ใน `/api/quotes` หรือ `/api/orders` (P2/P3)
+- [x] `/api/quotes` ใช้ trusted catalog/config นี้แล้ว (P2)
+- [ ] `/api/orders` ยังไม่ใช้ quote; จะเปลี่ยนใน P3
 
 #### Known limitations (P1)
 
@@ -432,6 +434,148 @@ node test/pricing-cloud.test.js   # 32/32
 - history เก็บ snapshot เต็มทุกเวอร์ชัน ยังไม่มี retention/pruning
 - admin actor เป็น label จาก header/localStorage ไม่ใช่ identity ที่ตรวจสอบจาก server
 - ยังไม่ทดสอบใน browser จริง; test เป็น Node/VM + static checks
+
+### 4.9 P2 — Quote API + browser preview (เสร็จแล้ว)
+
+#### ไฟล์ที่เพิ่ม/แก้
+
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `quote-service.js` | validate quote input, resolve canonical SKU, coupon validation hook, create/store quote, TTL/used/owner/token checks, rate limiter, HTTP error mapping |
+| `pricing-config.js` | `features.quote_preview`, feature-preserving publish, `buildCatalogContext()` (public catalog + trusted engine in one pass) |
+| `server.js` | local `POST /api/quotes`, in-memory quote store, 30/min limiter |
+| `api/[...path].js` | production `POST /api/quotes`, Firestore `quotes` store, `expires_at_ts` for optional TTL policy |
+| `public/data/pricing-quote.js` | storefront preview, server comparison, shadow log, active panel, expiry auto-requote, group flags |
+| `public/index.html` | deferred load order: engine → cloud hydration → quote preview |
+| `public/admin/admin.js` | quote-preview feature controls in the Cloud pricing card |
+| `public/admin/index.html` | styles for the feature controls |
+| `test/pricing-quote.test.js` | P2 unit + API + VM browser tests (34/34) |
+
+#### Endpoint
+
+```
+POST /api/quotes
+body: {
+  items: [{ sku, qty }],       // canonical SKU preferred; built-in legacy JSON SKU readable
+  address: string,             // blank allowed for digital-only carts
+  coupon_code?: string,
+  line_user_id?: string        // fallback only when no LINE cookie exists
+}
+→ {
+  success: true,
+  quote_id, quote_version, expires_at, expires_in, currency,
+  items, item_discount,
+  tier: { name, quantity, level, discount, gifts, free_shipping },
+  tier_discount,
+  coupon: { code, redeem_category, eligible_subtotal, discount } | null,
+  coupon_discount,
+  subtotal, total_before_shipping,
+  shipping: { base, extra, total, remote, pending, rule, freeShipping },
+  shipping_cost, grand_total, free_shipping, gifts, discount_total,
+  pricing_version, quote_token
+}
+```
+
+- `quote_token` is returned once; only its SHA-256 hash is stored.
+- The quote doc stores `line_user_hash` / `address_hash`, not the raw LINE ID or address. P3 must re-hash the submitted values to bind an order to the quote: `line_user_hash = SHA-256('line:' + normalized_line_user_id)` and `address_hash = SHA-256(normalized_address)`.
+- `line_id_token` is accepted by the documented contract shape but is **not verified in P2**. Cookie identity wins; body `line_user_id` is a fallback. P3 must verify identity and require token/owner binding.
+- There is no public quote-read route yet.
+- API remains callable even when the browser feature flag is off.
+
+Error mapping: invalid input / unknown SKU / qty / limits / coupon → `400`; missing token → `401`; not found → `404`; expired → `410`; used → `409`; token/owner mismatch → `403`; rate limit → `429`; storage/service → `500`. Full table in §6.6.
+
+#### Storage / TTL / limits
+
+`quotes/{quote_id}` stores:
+
+```js
+{
+  schema_version, quote_id, quote_token_hash,
+  status: 'open', used_at: null, used_in_order_id: null,
+  created_at, expires_at, expires_at_ms,
+  line_user_hash, address_hash, request_hash,
+  requested_items: [{ sku, qty }],
+  items, totals,
+  item_discount, tier_discount, coupon_discount,
+  subtotal, total_before_shipping, shipping_cost, grand_total,
+  free_shipping, gifts,
+  coupon_code, coupon_id, coupon,
+  pricing_version,
+  pricing_snapshot: {
+    engine_version, pricing_version, config_hash,
+    tier, shipping, coupon, item_prices
+  }
+}
+```
+
+- TTL: **30 นาที**; enforced by `quoteService.isQuoteExpired()` / `getQuote()`.
+- Production also writes `expires_at_ts` (Firestore Timestamp). A Firestore TTL policy on `quotes.expires_at_ts` should be enabled in the project; until then app-level expiry still rejects old quotes but documents remain.
+- `pricing_snapshot` is intentionally compact (config hash + item/tier/shipping/coupon snapshot), not the full pricing config.
+- Limits: 50 line items, 1–999 per line, 999 total units, address 2,000 characters, coupon code 120.
+- Rate limit: **30 requests/minute per process per hashed IP**. The bucket is in-memory, so it is per serverless instance, not global.
+- Expired quotes are rejected by read/verify but never block a new `POST /api/quotes`; the browser automatically requests a fresh quote.
+
+#### Feature flag / rollout
+
+`settings/pricing.features.quote_preview`:
+
+```js
+{
+  enabled: true,
+  mode: 'shadow',          // 'shadow' | 'active'
+  groups: ['all']          // all | public | admin | line | line:U... | custom
+}
+```
+
+- Default when missing: `{ enabled:true, mode:'shadow', groups:['all'] }`.
+- Publishing pricing/tier/shipping **without** `features` preserves the current flag.
+- Restoring an older version also preserves the current feature flag (rollout state is not rolled back).
+- `mode:'shadow'` compares and logs only; `mode:'active'` renders the “ราคายืนยันจากระบบ” panel.
+- Group sources (first match): `?hlg_group=`, `hlg_pricing_group_v1`, admin session → `admin`, LINE user → `line:<id>`, otherwise `public`.
+- `line` matches every LINE user; `line:<id>` matches one.
+- `?hlg_quote=1` forces on, `?hlg_quote=0` forces off; `?hlg_quote_debug=1` shows the panel + mismatch details in shadow mode.
+- Admin Cloud card can edit enabled/mode/groups and includes them on publish.
+
+#### Browser behavior
+
+- Loads public config first. If the flag is off, it does **not** fetch catalog or call `/api/quotes`.
+- Loads `/api/pricing/catalog`, rebuilds the same engine catalog in the browser, maps selected cart lines to canonical SKUs, and computes a local preview.
+- Calls the server quote and compares: item/tier/coupon discount, subtotal, shipping, grand total, and per-line totals.
+- Reuses an unexpired confirmed quote when the cart/address/coupon/identity/config signature is unchanged; expiry or a forced refresh creates a new quote.
+- Shadow log key: `hlg_quote_shadow_log_v1` (last 50). Stores quote id, config version, match/differences; **no coupon code and no quote token**.
+- Active panel is non-blocking and shows:
+  - “ราคายืนยันจากระบบ” + server grand total
+  - shipping-pending message when no postcode
+  - expired message + automatic re-quote
+  - rate-limit / unsupported / error messages
+- Unresolved collection products show “ยังตรวจสอบราคาบางรายการกับระบบไม่ได้”; checkout remains available.
+- The script never changes `v8CFconfirm`, `/api/orders`, slip verification, sticker/wallpaper endpoints, or order totals.
+
+#### Test / acceptance
+
+```bash
+node test/pricing-quote.test.js   # 34/34
+```
+
+- [x] browser/server parity on built-in, base-override/promo, and Cloud custom fixtures
+- [x] no negative quotes; coupon capped at eligible subtotal
+- [x] quote docs store only hashes for token/owner/address; no raw address or LINE ID
+- [x] expired quote rejected and same request can be re-quoted
+- [x] malformed/timeout quote responses show a non-blocking error instead of zero/loading
+- [x] owner / used / expiry checks implemented for `getQuote()`
+- [x] rate limit / max items / total units / address length enforced
+- [x] shadow log + active panel
+- [x] checkout still works while flag is off (no order code changed)
+- [ ] P3: orders use quote totals and quote is marked used
+
+#### Known limitations (P2)
+
+- Quote is **preview/foundation only**; `/api/orders` and all payment endpoints still trust client totals.
+- `line_id_token` is not verified; body `line_user_id` is unauthenticated fallback.
+- Rate limit is per process, not distributed; Firestore has no configured TTL policy yet.
+- No public/authenticated quote-read endpoint; P3 will add one with token + owner binding.
+- Collection products in `hlg_collections_v1` are still absent from the server catalog.
+- Real-browser manual verification is still required; tests use VM + fake DOM.
 
 ---
 
@@ -600,15 +744,29 @@ couponQuote(items, tier, {
 
 ### 6.6 Error codes
 
-| Code | ความหมาย |
-|---|---|
-| `EMPTY_CART` | ไม่มีสินค้า |
-| `UNKNOWN_ITEM` | SKU/สินค้าไม่อยู่ใน catalog |
-| `INVALID_QTY` | qty ไม่ใช่จำนวนเต็มบวก หรือเกิน max |
-| `DUPLICATE_SKU` | (P1) catalog มี SKU ซ้ำ |
-| `QUOTE_EXPIRED` | (P2) quote เกิน TTL |
-| `QUOTE_USED` | (P2/P3) quote ถูกใช้แล้ว |
-| `COUPON_NOT_ELIGIBLE` | (P3) คูปองใช้กับตะกร้านี้ไม่ได้ |
+| Code | HTTP | ความหมาย |
+|---|---|---|
+| `INVALID_QUOTE_INPUT` | 400 | body/field ของ quote ไม่ถูกต้อง |
+| `EMPTY_CART` | 400 | ไม่มีสินค้า |
+| `UNKNOWN_ITEM` | 400 | SKU/สินค้าไม่อยู่ใน catalog |
+| `INVALID_QTY` | 400 | qty ไม่ใช่จำนวนเต็มบวก หรือเกิน max |
+| `DUPLICATE_ITEM` | 400 | ส่ง SKU เดียวกันซ้ำ; ต้องรวม qty ก่อน |
+| `TOO_MANY_ITEMS` | 400 | เกิน 50 รายการ |
+| `TOO_MANY_UNITS` | 400 | จำนวนรวมเกิน 999 ชิ้น |
+| `INVALID_ADDRESS` | 400 | ที่อยู่ผิดประเภท/ยาวเกิน 2,000 ตัวอักษร |
+| `DUPLICATE_SKU` | 409 | (P1) catalog มี SKU ซ้ำ |
+| `COUPON_NOT_ELIGIBLE` | 400 | คูปองใช้กับตะกร้านี้ไม่ได้/หมดอายุ/ผิดเจ้าของ |
+| `QUOTE_NOT_FOUND` | 404 | ไม่พบ quote |
+| `QUOTE_TOKEN_REQUIRED` | 401 | ไม่ได้ส่ง token ตอนอ่าน quote |
+| `QUOTE_TOKEN_MISMATCH` | 403 | token ไม่ตรง |
+| `QUOTE_OWNER_MISMATCH` | 403 | quote ผูกกับ LINE อื่น |
+| `QUOTE_EXPIRED` | 410 | quote เกิน TTL 30 นาที |
+| `QUOTE_USED` | 409 | quote ถูกใช้แล้ว |
+| `RATE_LIMITED` | 429 | เกิน 30 ครั้ง/นาที (มี `retry_after`) |
+| `QUOTE_STORAGE_FAILED` / `QUOTE_SERVICE_UNAVAILABLE` | 500 | storage/catalog/coupon service ใช้งานไม่ได้ |
+| `QUOTE_ERROR` | 500 | unexpected quote failure; response เป็นข้อความ generic |
+
+`5xx` responses use a generic Thai error message and never echo storage/provider details; the error code remains for logs/debugging. Unexpected coupon-service failures are wrapped as `QUOTE_SERVICE_UNAVAILABLE`.
 
 ---
 
@@ -628,6 +786,7 @@ GET /api/pricing/config
     pricing: { base, promos },
     tier,
     shipping,
+    features: { quote_preview: { enabled, mode, groups } },
     updated_at, updated_by, published_at
   }
 ```
@@ -636,7 +795,8 @@ GET /api/pricing/config
 PUT /api/pricing/config        (admin only)
 body: {
   version,                    // optimistic concurrency
-  pricing, tier, shipping
+  pricing, tier, shipping,
+  features?                   // omit to preserve the current rollout flag
 }
 → { success: true, ...config ที่ publish แล้ว }
 ```
@@ -675,54 +835,28 @@ GET /api/pricing/catalog
 - SKU ซ้ำ → `409 DUPLICATE_SKU` + `details.duplicates`
 - ยังไม่รวมสินค้าที่อยู่แค่ `hlg_collections_v1` (local-only)
 
-### 7.3 Quote (P2)
+### 7.3 Quote (P2 — implemented)
+
+สัญญาเต็ม, storage schema, limits, feature flags และ UI behavior อยู่ใน **§4.9** สรุป:
 
 ```
 POST /api/quotes
-body: {
-  items: [{ sku, qty }],
-  coupon_code?: string,
-  address: string,
-  line_user_id?: string,
-  line_id_token?: string
-}
-→ {
-  quote_id,
-  expires_at,
-  currency: 'THB',
-  items: [...],
-  item_discount,
-  tier_discount,
-  coupon_discount,
-  subtotal,
-  shipping_cost,
-  grand_total,
-  free_shipping,
-  gifts,
-  pricing_version,
-  quote_token
-}
+body: { items: [{ sku, qty }], address, coupon_code?, line_user_id? }
+→ { success:true, quote_id, quote_token, expires_at, totals, shipping, tier, coupon, ... }
 ```
 
 Server:
 
-1. validate schema / จำนวนรายการ / qty
-2. โหลด catalog + pricing config
-3. resolve coupon (ถ้ามี) จาก code + LINE identity
-4. เรียก `computeQuote`
-5. เก็บ quote doc:
-   - `quote_id`
-   - `items`
-   - `totals`
-   - `pricing_snapshot`
-   - `coupon_code` / `coupon_id`
-   - `line_user_id`
-   - `created_at`, `expires_at`
-   - `used_at: null`
-   - `address_hash`
-6. return `quote_id` + totals
+1. rate limit (30/min per process/IP) + validate schema / max 50 items / qty 1–999 / total ≤ 999
+2. โหลด trusted catalog + published pricing config
+3. resolve canonical SKU และตรวจ coupon ownership/status/expiry/category
+4. เรียก `HLGPricing.computeQuote` ตัวเดียวกับ browser
+5. เก็บ quote doc + compact `pricing_snapshot`, token hash, TTL 30 นาที
+6. return quote + token (token ใช้ครั้งเดียวใน response; ไม่มี read route ใน P2)
 
-TTL แนะนำ: **30 นาที**
+- Expired quote อ่าน/verify ไม่ได้ แต่ `POST /api/quotes` สร้างใหม่ได้เสมอ
+- ยังไม่ mark used; P3 จะทำ reservation/used ใน order transaction
+- `line_id_token` ยังไม่ verify; body `line_user_id` เป็น fallback ที่ยังไม่น่าเชื่อถือ
 
 ### 7.4 Create order (P3)
 
@@ -841,6 +975,13 @@ Server:
   shipping: {
     base, extra, rules: [{ postcode, province, district, enabled }]
   },
+  features: {
+    quote_preview: {
+      enabled: true,
+      mode: 'shadow',                 // 'shadow' | 'active'
+      groups: ['all']                 // public/admin/line/line:U.../custom
+    }
+  },
   updated_at,
   updated_by
 }
@@ -852,28 +993,39 @@ Server:
 
 ```js
 {
+  schema_version,
   quote_id,
+  quote_token_hash,              // SHA-256; raw token never stored
+  status: 'open',
+  used_at: null,
+  used_in_order_id: null,
   created_at,
   expires_at,
-  used_at,
-  line_user_id,
-  address,
-  items: [{ sku, qty }],
+  expires_at_ms,
+  line_user_hash,
+  address_hash,
+  request_hash,
+  requested_items: [{ sku, qty }],
+  items: [...],
   totals: {
-    item_discount,
-    tier_discount,
-    coupon_discount,
-    subtotal,
-    shipping_cost,
-    grand_total
+    item_discount, tier_discount, coupon_discount,
+    subtotal, total_before_shipping, shipping_cost,
+    grand_total, discount_total
   },
-  coupon_code,
-  coupon_id,
+  item_discount, tier_discount, coupon_discount,
+  subtotal, total_before_shipping, shipping_cost, grand_total,
+  free_shipping, gifts,
+  coupon_code, coupon_id, coupon,
   pricing_version,
-  pricing_snapshot,
-  quote_token_hash
+  pricing_snapshot: {
+    engine_version, pricing_version, config_hash,
+    tier, shipping, coupon, item_prices
+  }
 }
 ```
+
+- Production additionally writes `expires_at_ts` (Firestore Timestamp) for an optional TTL policy.
+- TTL is enforced by the app at 30 minutes; no quote-read route exists in P2.
 
 ### 8.3 Order — canonical money fields
 
@@ -953,7 +1105,8 @@ Flow:
 - [x] cache config ฝั่ง server 60 วินาที
 - [x] เพิ่ม duplicate SKU / invalid price validation
 - [x] storefront hydration จาก published config
-- [ ] ใช้ catalog/config ใน quote/order (P2/P3)
+- [x] ใช้ catalog/config ใน `/api/quotes` (P2)
+- [ ] ใช้ catalog/config ใน `/api/orders` (P3)
 
 **Acceptance:**
 
@@ -966,27 +1119,28 @@ Flow:
 
 > หมายเหตุ: P1 ยังไม่ปิดช่องโหว่ราคาใน checkout และยังไม่รวม collection products ที่อยู่เฉพาะ localStorage
 
-### P2 — Quote API + browser preview
+### P2 — Quote API + browser preview (เสร็จแล้ว)
 
 งาน:
 
-1. เพิ่ม `POST /api/quotes`
-2. เก็บ quote doc + TTL
-3. ให้ browser เรียก quote เพื่อแสดงยอด
-4. ระหว่างเปลี่ยนผ่าน ทำ shadow mode:
-   - คำนวณฝั่ง browser ด้วย engine
-   - เทียบกับ server quote
-   - log ความต่าง (sku, config version, ยอด)
-5. feature flag เปิดใช้ quote ทีละกลุ่ม
-6. แสดงข้อความ "ราคายืนยันจากระบบ" / quote หมดอายุ
-7. rate limit + max items
+- [x] เพิ่ม `POST /api/quotes` ใน local + production API
+- [x] เก็บ quote doc + TTL 30 นาที (app-enforced) + token hash
+- [x] ให้ browser คำนวณ preview ด้วย engine แล้วเรียก quote
+- [x] shadow mode เปรียบเทียบยอดและ log ความต่าง
+- [x] feature flag `features.quote_preview` แยกรายกลุ่ม (shadow/active)
+- [x] แสดง “ราคายืนยันจากระบบ” / ข้อความ quote หมดอายุ + auto re-quote
+- [x] rate limit 30/min + max 50 items / 999 units / address 2,000 chars
+- [x] coupon ownership/status/expiry/category ผ่าน `validateCouponForCheckout`
+- [x] admin Cloud card ตั้งค่า flag ได้
+- [x] P2 tests 34/34 + full suite ผ่าน
 
 **Acceptance:**
 
-- server quote กับ browser preview ตรงกันใน fixture เดียวกัน
-- ไม่มี quote ที่ราคาติดลบ
-- quote หมดอายุแล้วขอใหม่ได้
-- ยังใช้ flow order เดิมได้ระหว่าง flag ปิด
+- [x] server quote กับ browser preview ตรงกันใน fixture built-in + Cloud custom
+- [x] ไม่มี quote ที่ราคาติดลบ; coupon cap ที่ eligible subtotal
+- [x] quote หมดอายุแล้วขอใหม่ได้
+- [x] ยังใช้ flow order เดิมได้ระหว่าง flag ปิด
+- [ ] P3: ใช้ quote ใน order + mark used
 
 ### P3 — Server-authoritative order + coupon reservation
 
@@ -1070,18 +1224,18 @@ Flow:
 
 ### 10.5 Rollout / rollback
 
-แนะนำ feature flags:
+Feature flags:
 
-- `pricing_quote_enabled`
-- `pricing_server_authoritative`
-- `coupon_reservation_enabled`
+- P2 (มีแล้ว): `settings/pricing.features.quote_preview = { enabled, mode, groups }`
+- P3: `pricing_server_authoritative`
+- P3: `coupon_reservation_enabled`
 
 ลำดับ:
 
-1. deploy P0 (ไม่มี behavior change)
-2. P1 config cloud + admin publish (ทำแล้ว)
-3. P2 quote shadow mode
-4. เปิด quote สำหรับ % ผู้ใช้
+1. deploy P0 (ไม่มี behavior change) — ทำแล้ว
+2. P1 config cloud + admin publish — ทำแล้ว
+3. P2 quote shadow mode — ทำแล้ว (default)
+4. เปิด `mode:'active'` ทีละกลุ่มผ่าน `groups`
 5. P3 order server-authoritative
 6. เปิด 100%
 7. cleanup
@@ -1105,17 +1259,18 @@ Rollback:
 - [x] pricing config ถูก validate + sanitize ก่อน save และปฏิเสธ dangerous keys
 - [x] public อ่าน pricing config ได้อย่างเดียว; publish/history/restore ต้องเป็น admin
 - [ ] จำกัดขนาด request body / rate limit ของ admin config endpoint
-- [ ] validate qty เป็นจำนวนเต็มบวก + max
-- [ ] จำกัดจำนวน items ต่อ quote/order
-- [ ] rate limit `/api/quotes`
-- [ ] ตรวจ coupon ownership + status + expiry + category
-- [ ] coupon reservation ทำใน transaction
-- [ ] quote มี TTL + used flag + owner binding
+- [x] validate qty เป็นจำนวนเต็มบวก + max (quote)
+- [x] จำกัดจำนวน items ต่อ quote (50) + total units (999)
+- [x] rate limit `/api/quotes` (30/min per process/IP; ยังไม่ distributed)
+- [x] ตรวจ coupon ownership + status + expiry + category (ผ่าน coupon service)
+- [ ] coupon reservation ทำใน transaction (P3)
+- [x] quote มี TTL + token hash + owner/address hash; `getQuote()` ตรวจ expiry/used/owner/token
+- [ ] quote-read/order route บังคับ token + owner (P3; P2 ยังไม่มี read route)
 - [ ] verify token ผูก order + amount + slip hash
 - [ ] admin API ต้องมี session + role (P1 ใช้ session cookie; ยังไม่มี role แยก)
 - [ ] Firestore rules ไม่อนุญาตให้ client เขียน order/quotes/config โดยตรง
 - [ ] log ไม่เก็บข้อมูลบัตร/สลิปเต็ม
-- [ ] ไม่ log token/coupon code แบบละเอียดเกินจำเป็น
+- [x] shadow log ไม่เก็บ coupon code หรือ quote token; 5xx response ไม่สะท้อนข้อความ internal
 
 ---
 
@@ -1138,20 +1293,29 @@ Rollback:
 
 รัน: `node test/pricing-cloud.test.js` (32/32)
 
-### Integration (P2/P3)
+### Integration (P2 — มีแล้ว)
 
-- `POST /api/quotes` ด้วย SKU จริง → ได้ยอดถูก
-- client ส่ง `price` / `total_price` / `discount` → server ignore
-- quote หมดอายุ → 400/409
-- quote ถูกใช้แล้ว → 409
-- quote ของ LINE อื่น → 403
-- coupon ผิดหมวด → 400
+- [x] `POST /api/quotes` ด้วย SKU จริง → ได้ยอดถูก
+- [x] client ส่ง `price` / `total_price` / `discount` → server ignore
+- [x] quote หมดอายุ → `410` ตอนอ่าน; `POST` ใหม่ได้
+- [x] quote ถูกใช้แล้ว → `409`
+- [x] quote ของ LINE อื่น → `403`
+- [x] coupon ผิดหมวด/หมดอายุ/ผิดเจ้าของ → `400`
+- [x] coupon discount cap ที่ eligible subtotal
+- [x] shipping pending / wallpaper-only / remote
+- [x] max items / max units / invalid address / invalid qty
+- [x] token ผิด → `403`; token hash only
+- [x] browser/server parity + shadow/active/flag-off behavior
+- [x] script order + fake-DOM active panel / expiry helper
+- [x] static parity ระหว่าง `server.js` และ `api/[...path].js`
+
+รัน: `node test/pricing-quote.test.js` (34/34)
+
+### Integration (P3 — ยังไม่ทำ)
+
 - coupon ใช้ซ้ำ → 409
 - coupon race 2 request → สำเร็จ 1
 - stock ไม่พอ → reject ก่อนสร้าง order
-- shipping pending → ไม่คิดค่าส่งจนมีที่อยู่
-- wallpaper-only → ค่าส่ง 0
-- remote + tier free shipping → จ่ายเฉพาะ extra
 - slip amount ไม่ตรง grand_total → reject
 - verify token ปลอม/หมดอายุ → reject
 - confirm ซ้ำ → idempotent
@@ -1175,12 +1339,8 @@ Rollback:
 
 ## 13. Open decisions
 
-1. **Quote storage**
-   - Firestore quote doc (แนะนำ: ตรวจย้อนหลัง/ใช้งานง่าย)
-   - หรือ HMAC signed quote (เบากว่า แต่ไม่เก็บ audit)
-2. **Quote TTL**
-   - แนะนำ 30 นาที
-   - ต้องตัดสินว่าถ้าหมดอายุระหว่างลูกค้ากรอกที่อยู่ จะต่ออายุอัตโนมัติหรือให้ขอใหม่
+1. **Quote storage** — **ตัดสินแล้ว (P2):** Firestore `quotes/{quote_id}` + in-memory adapter สำหรับ local
+2. **Quote TTL** — **ตัดสินแล้ว (P2):** 30 นาที, app-enforced; browser ขอ quote ใหม่อัตโนมัติเมื่อหมดอายุ
 3. **Stock reservation**
    - จองตอน quote หรือตอน order
    - แนะนำจองตอน order เพื่อไม่ให้ quote ที่ถูกทิ้งกินสต็อก
@@ -1196,9 +1356,7 @@ Rollback:
 7. **Digital wallpaper**
    - ส่งลิงก์ตอน confirm หรือหลังชำระ
    - ต้องผูก order + สิทธิ์ดาวน์โหลด
-8. **Custom product prices**
-   - ต้อง sync ขึ้น Firestore ก่อน P1 จึงจะให้ server คำนวณได้
-   - ต้องตัดสินว่าใช้ collection ใหม่ (`shop_products`) หรือ `settings/storefront.custom_products` ก่อน
+8. **Custom product prices** — **ตัดสินแล้ว (P1):** ใช้ `settings/storefront.custom_products` + `/api/products`; collection products local-only ยังไม่รองรับ
 9. **Rounding**
    - ตอนนี้ใช้ integer baht + `Math.round`
    - ถ้าอนาคตมีทศนิยม ต้องเปลี่ยนเป็น satang ทั้งระบบ
@@ -1213,11 +1371,14 @@ Rollback:
 |---|---|
 | `public/data/pricing-engine.js` | shared engine (P0) |
 | `test/pricing-engine.test.js` | engine tests (P0) |
-| `pricing-config.js` | config validation/cache/publish/history/restore + trusted catalog (P1) |
+| `pricing-config.js` | config validation/cache/publish/history/restore + trusted catalog + feature flags (P1/P2) |
 | `test/pricing-cloud.test.js` | P1 config/catalog/hydration/API tests |
+| `quote-service.js` | quote validation/storage/TTL/token/rate limit (P2) |
+| `test/pricing-quote.test.js` | P2 quote API + browser shadow/active tests |
 | `public/data/pricing-cloud.js` | storefront hydration จาก published config (P1) |
-| `public/index.html` | storefront pricing/checkout/slip flow + hydration script |
-| `api/[...path].js` | production API (Vercel) + transactional publish |
+| `public/data/pricing-quote.js` | browser preview + shadow log + active quote panel (P2) |
+| `public/index.html` | storefront pricing/checkout/slip flow + hydration/quote scripts |
+| `api/[...path].js` | production API (Vercel) + transactional publish + Firestore quotes |
 | `server.js` | local API — ต้อง keep parity กับ `api/[...path].js` |
 | `coupon-service.js` | coupon validation / mark used |
 | `public/admin/admin.js` | admin pricing/tier/shipping editors + cloud panel |
@@ -1230,18 +1391,20 @@ Rollback:
 
 ## 15. Next step
 
-ขั้นถัดไปที่แนะนำ: **P2 — Quote API + browser preview**
+ขั้นถัดไปที่แนะนำ: **P3 — Server-authoritative order + coupon reservation**
 
 ลำดับย่อย:
 
-1. ออกแบบ schema ของ quote doc + TTL + owner binding
-2. เพิ่ม `POST /api/quotes` โดยโหลด catalog/config จาก P1
-3. ให้ browser เรียก quote แทนการคำนวณยอดสุดท้ายเอง (เริ่มแบบ shadow mode)
-4. log ความต่างระหว่าง browser preview กับ server quote
-5. เพิ่ม rate limit / max items
-6. ค่อยเปลี่ยน `/api/orders` ใน P3 เมื่อ quote นิ่งแล้ว
+1. deploy P2 preview; ตรวจ shadow log (`hlg_quote_shadow_log_v1`) ว่า browser/server ตรงกัน
+2. เปิด `mode:'active'` เฉพาะ `groups:['admin']` หรือกลุ่มทดสอบก่อน
+3. เพิ่ม quote-read/order route ที่บังคับ `quote_id` + `quote_token` + LINE owner
+4. เปลี่ยน `/api/orders`, `/api/orders/confirm`, verify-slip ให้ใช้ `grand_total` จาก quote/order
+5. เพิ่ม coupon reserve/use/release และ mark quote used ใน transaction
+6. แก้ sticker/wallpaper endpoints และ admin/report totals
+7. ค่อยเปิด active 100% หลัง monitor mismatch/expired/coupon conflict
 
-ก่อนเริ่ม P2 ควรตรวจสองเรื่อง:
+ก่อนเริ่ม P3 ควรตรวจ:
 
-- deploy P1 preview และกด publish config จริงจาก `/admin/` หนึ่งครั้ง
+- deploy P2 และ publish `features.quote_preview` อย่างน้อยหนึ่งครั้ง
 - ตรวจว่า collection products ที่ยัง local-only ต้องย้ายขึ้น Firestore หรือยอมรับว่า quote ยังไม่รองรับ
+- เปิด Firestore TTL policy ที่ `quotes.expires_at_ts` (ถ้าต้องการให้ลบ quote เก่าอัตโนมัติ)
