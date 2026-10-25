@@ -17,6 +17,7 @@ const {
   parseLineUserFromRequest,
 } = require('./coupon-service');
 const { sendCouponFlexMessage, sendOrderReceiptFlexMessage } = require('./line-service');
+const pricingConfig = require('./pricing-config');
 const {
   getSlipLockKey,
   acquireSlipLock,
@@ -144,6 +145,51 @@ async function fsFindByField(collectionName, fieldName, fieldValue) {
   if (snap.empty) return null;
   const d = snap.docs[0];
   return { _docId: d.id, ...d.data() };
+}
+
+// ==================== PRICING CONFIG STORE ====================
+let pricingPublishQueue = Promise.resolve();
+
+function pricingVersionConflict(currentVersion) {
+  const err = new Error('ข้อมูลราคาบน Cloud ถูกแก้ไขจากเครื่องอื่น กรุณาโหลดเวอร์ชันล่าสุดแล้วลองใหม่');
+  err.code = 'VERSION_CONFLICT';
+  err.current_version = currentVersion;
+  return err;
+}
+
+const serverPricingStore = {
+  cacheKey: 'server',
+  async loadConfigDoc() {
+    return fsGetDoc('settings', 'pricing');
+  },
+  publish(expectedVersion, configDoc, historyDoc) {
+    const run = pricingPublishQueue.then(async () => {
+      const existing = await fsGetDoc('settings', 'pricing');
+      const currentVersion = Number(existing && existing.version) || 0;
+      if (currentVersion !== expectedVersion) {
+        throw pricingVersionConflict(currentVersion);
+      }
+      await fsSetDoc('settings', 'pricing', configDoc);
+      await fsSetDoc('pricing_config_history', String(configDoc.version), historyDoc);
+      return configDoc;
+    });
+    pricingPublishQueue = run.catch(() => {});
+    return run;
+  },
+  async getHistory(version) {
+    return fsGetDoc('pricing_config_history', String(version));
+  },
+  async listHistory(limit) {
+    const rows = await fsGetDocs('pricing_config_history', 'version');
+    return rows
+      .sort((a, b) => Number(b.version) - Number(a.version))
+      .slice(0, limit);
+  }
+};
+
+function sendPricingError(res, err) {
+  const mapped = pricingConfig.httpError(err);
+  sendJson(res, mapped.status, mapped.body);
 }
 
 async function findOrderRecord(id) {
@@ -375,6 +421,87 @@ async function handleApi(req, res) {
   // GET /api/check-auth
   if (pathname === '/api/check-auth' && method === 'GET') {
     sendJson(res, 200, { authenticated: isAdmin(req) });
+    return true;
+  }
+
+  // ==================== PRICING CONFIG / TRUSTED CATALOG ====================
+  // Public, read-only config. Secrets must never be stored in settings/pricing.
+  if (pathname === '/api/pricing/config' && method === 'GET') {
+    try {
+      const config = await pricingConfig.loadConfig(serverPricingStore);
+      sendJson(res, 200, Object.assign({ success: true }, config));
+    } catch (err) {
+      console.error('Failed to load pricing config:', err);
+      sendPricingError(res, err);
+    }
+    return true;
+  }
+
+  // Admin publish. `version` is the version the admin last read, so a stale
+  // browser cannot silently overwrite a newer published config.
+  if (pathname === '/api/pricing/config' && method === 'PUT') {
+    if (!isAdmin(req)) { send401(res); return true; }
+    const body = await readBody(req);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      sendJson(res, 400, { success: false, error: 'ข้อมูลที่ส่งมาไม่ถูกต้อง', code: 'INVALID_CONFIG' });
+      return true;
+    }
+    try {
+      const saved = await pricingConfig.publishConfig(serverPricingStore, body, req.headers['x-admin-user'] || 'admin');
+      sendJson(res, 200, Object.assign({ success: true }, saved));
+    } catch (err) {
+      console.error('Failed to publish pricing config:', err);
+      sendPricingError(res, err);
+    }
+    return true;
+  }
+
+  // Admin history / rollback source.
+  if (pathname === '/api/pricing/config/history' && method === 'GET') {
+    if (!isAdmin(req)) { send401(res); return true; }
+    try {
+      const history = await pricingConfig.listHistory(serverPricingStore, url.searchParams.get('limit'));
+      sendJson(res, 200, { success: true, history });
+    } catch (err) {
+      console.error('Failed to list pricing history:', err);
+      sendPricingError(res, err);
+    }
+    return true;
+  }
+
+  // Admin restore publishes an old version as a new version (never rewrites history).
+  if (pathname === '/api/pricing/config/restore' && method === 'POST') {
+    if (!isAdmin(req)) { send401(res); return true; }
+    const body = await readBody(req);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      sendJson(res, 400, { success: false, error: 'ข้อมูลที่ส่งมาไม่ถูกต้อง', code: 'INVALID_CONFIG' });
+      return true;
+    }
+    try {
+      const saved = await pricingConfig.restoreConfig(serverPricingStore, body, req.headers['x-admin-user'] || 'admin');
+      sendJson(res, 200, Object.assign({ success: true, restored: true }, saved));
+    } catch (err) {
+      console.error('Failed to restore pricing config:', err);
+      sendPricingError(res, err);
+    }
+    return true;
+  }
+
+  // Public trusted catalog. This is the catalog the server will price from in
+  // P2; browser-supplied prices are never part of this response.
+  if (pathname === '/api/pricing/catalog' && method === 'GET') {
+    try {
+      const config = await pricingConfig.loadConfig(serverPricingStore);
+      const storefront = (await fsGetDoc('settings', 'storefront')) || {};
+      const catalog = pricingConfig.buildCatalog(config, {
+        customProducts: Array.isArray(storefront.custom_products) ? storefront.custom_products : [],
+        categories: Array.isArray(storefront.categories) ? storefront.categories : []
+      });
+      sendJson(res, 200, Object.assign({ success: true }, catalog));
+    } catch (err) {
+      console.error('Failed to build pricing catalog:', err);
+      sendPricingError(res, err);
+    }
     return true;
   }
 

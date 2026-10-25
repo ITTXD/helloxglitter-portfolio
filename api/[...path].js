@@ -15,6 +15,7 @@ const {
   parseLineUserFromRequest,
 } = require('../coupon-service');
 const { sendCouponFlexMessage, sendOrderReceiptFlexMessage } = require('../line-service');
+const pricingConfig = require('../pricing-config');
 const {
   getSlipLockKey,
   acquireSlipLock,
@@ -22,7 +23,7 @@ const {
   markTransRefUsed,
 } = require('../slip-lock');
 const { initializeApp } = require('firebase/app');
-const { getFirestore, collection, addDoc, getDocs, query, orderBy, doc, getDoc, updateDoc, setDoc, deleteDoc, where, limit } = require('firebase/firestore');
+const { getFirestore, collection, addDoc, getDocs, query, orderBy, doc, getDoc, updateDoc, setDoc, deleteDoc, where, limit, runTransaction } = require('firebase/firestore');
 
 const firebaseConfig = {
   apiKey: process.env.FIREBASE_API_KEY,
@@ -82,6 +83,54 @@ function isAdmin(req) {
     return true;
   }
   return false;
+}
+
+// ==================== PRICING CONFIG STORE (PRODUCTION) ====================
+function pricingVersionConflict(currentVersion) {
+  const err = new Error('ข้อมูลราคาบน Cloud ถูกแก้ไขจากเครื่องอื่น กรุณาโหลดเวอร์ชันล่าสุดแล้วลองใหม่');
+  err.code = 'VERSION_CONFLICT';
+  err.current_version = currentVersion;
+  return err;
+}
+
+const firestorePricingStore = {
+  cacheKey: 'vercel-api',
+  async loadConfigDoc() {
+    const snap = await getDoc(doc(db, 'settings', 'pricing'));
+    return snap.exists() ? snap.data() : null;
+  },
+  async publish(expectedVersion, configDoc, historyDoc) {
+    await runTransaction(db, async (tx) => {
+      const ref = doc(db, 'settings', 'pricing');
+      const snap = await tx.get(ref);
+      const currentVersion = snap.exists() ? (Number(snap.data().version) || 0) : 0;
+      if (currentVersion !== expectedVersion) {
+        throw pricingVersionConflict(currentVersion);
+      }
+      tx.set(ref, configDoc);
+      tx.set(doc(db, 'pricing_config_history', String(configDoc.version)), historyDoc);
+    });
+    return configDoc;
+  },
+  async getHistory(version) {
+    const snap = await getDoc(doc(db, 'pricing_config_history', String(version)));
+    return snap.exists() ? snap.data() : null;
+  },
+  async listHistory(maxRows) {
+    const snap = await getDocs(query(
+      collection(db, 'pricing_config_history'),
+      orderBy('version', 'desc'),
+      limit(maxRows)
+    ));
+    const rows = [];
+    snap.forEach((d) => rows.push(Object.assign({ _docId: d.id }, d.data())));
+    return rows;
+  }
+};
+
+function sendPricingError(res, err) {
+  const mapped = pricingConfig.httpError(err);
+  sendJson(res, mapped.status, mapped.body);
 }
 
 function generateOrderId() {
@@ -280,6 +329,81 @@ module.exports = async (req, res) => {
     // GET /api/check-auth
     if (pathname === '/api/check-auth' && method === 'GET') {
       sendJson(res, 200, { authenticated: isAdmin(req) });
+      return;
+    }
+
+    // ==================== PRICING CONFIG / TRUSTED CATALOG ====================
+    if (pathname === '/api/pricing/config' && method === 'GET') {
+      try {
+        const config = await pricingConfig.loadConfig(firestorePricingStore);
+        sendJson(res, 200, Object.assign({ success: true }, config));
+      } catch (err) {
+        console.error('Failed to load pricing config:', err);
+        sendPricingError(res, err);
+      }
+      return;
+    }
+
+    if (pathname === '/api/pricing/config' && method === 'PUT') {
+      if (!isAdmin(req)) { send401(res); return; }
+      const body = await readBody(req);
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        sendJson(res, 400, { success: false, error: 'ข้อมูลที่ส่งมาไม่ถูกต้อง', code: 'INVALID_CONFIG' });
+        return;
+      }
+      try {
+        const saved = await pricingConfig.publishConfig(firestorePricingStore, body, req.headers['x-admin-user'] || 'admin');
+        sendJson(res, 200, Object.assign({ success: true }, saved));
+      } catch (err) {
+        console.error('Failed to publish pricing config:', err);
+        sendPricingError(res, err);
+      }
+      return;
+    }
+
+    if (pathname === '/api/pricing/config/history' && method === 'GET') {
+      if (!isAdmin(req)) { send401(res); return; }
+      try {
+        const history = await pricingConfig.listHistory(firestorePricingStore, url.searchParams.get('limit'));
+        sendJson(res, 200, { success: true, history });
+      } catch (err) {
+        console.error('Failed to list pricing history:', err);
+        sendPricingError(res, err);
+      }
+      return;
+    }
+
+    if (pathname === '/api/pricing/config/restore' && method === 'POST') {
+      if (!isAdmin(req)) { send401(res); return; }
+      const body = await readBody(req);
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        sendJson(res, 400, { success: false, error: 'ข้อมูลที่ส่งมาไม่ถูกต้อง', code: 'INVALID_CONFIG' });
+        return;
+      }
+      try {
+        const saved = await pricingConfig.restoreConfig(firestorePricingStore, body, req.headers['x-admin-user'] || 'admin');
+        sendJson(res, 200, Object.assign({ success: true, restored: true }, saved));
+      } catch (err) {
+        console.error('Failed to restore pricing config:', err);
+        sendPricingError(res, err);
+      }
+      return;
+    }
+
+    if (pathname === '/api/pricing/catalog' && method === 'GET') {
+      try {
+        const config = await pricingConfig.loadConfig(firestorePricingStore);
+        const storefrontSnap = await getDoc(doc(db, 'settings', 'storefront'));
+        const storefront = storefrontSnap.exists() ? storefrontSnap.data() : {};
+        const catalog = pricingConfig.buildCatalog(config, {
+          customProducts: Array.isArray(storefront.custom_products) ? storefront.custom_products : [],
+          categories: Array.isArray(storefront.categories) ? storefront.categories : []
+        });
+        sendJson(res, 200, Object.assign({ success: true }, catalog));
+      } catch (err) {
+        console.error('Failed to build pricing catalog:', err);
+        sendPricingError(res, err);
+      }
       return;
     }
 

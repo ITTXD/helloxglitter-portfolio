@@ -178,3 +178,34 @@ function getStickerByName(name) {
   var list = (typeof window !== 'undefined' && window.STICKER_PATTERNS) || STICKER_PATTERNS;
   return list.find(function(x) { return x.name === name; });
 }
+
+// Node/server access to the trusted built-in catalog. The browser keeps using
+// the global `var` declarations above; this block is intentionally inert there.
+if (typeof module === 'object' && module.exports) {
+  module.exports = {
+    NORMAL_PATTERNS: NORMAL_PATTERNS,
+    LARGE_PATTERNS: LARGE_PATTERNS,
+    EASY_PATTERNS: EASY_PATTERNS,
+    MAXI_PATTERNS: MAXI_PATTERNS,
+    ALL_PATTERNS: ALL_PATTERNS,
+    WP_PATTERNS: WP_PATTERNS,
+    STICKER_PATTERNS: STICKER_PATTERNS,
+    BASE_SHIPPING: BASE_SHIPPING,
+    REMOTE_SHIPPING: REMOTE_SHIPPING,
+    REMOTE_PROVINCES: REMOTE_PROVINCES,
+    STATUS_LABELS: STATUS_LABELS,
+    STATUS_ICONS: STATUS_ICONS,
+    FLASH_SALE_DISCOUNT: FLASH_SALE_DISCOUNT,
+    FLASH_SALE_END_TIME: FLASH_SALE_END_TIME,
+    STICKER_PRICE: STICKER_PRICE,
+    STICKER_SHIPPING: STICKER_SHIPPING,
+    STICKER_FREE_SHIPPING_QTY: STICKER_FREE_SHIPPING_QTY,
+    isFlashSaleActive: isFlashSaleActive,
+    computePromoPrice: computePromoPrice,
+    isRemoteArea: isRemoteArea,
+    getShippingCost: getShippingCost,
+    getPatternByName: getPatternByName,
+    computeStickerPrice: computeStickerPrice,
+    getStickerByName: getStickerByName
+  };
+}

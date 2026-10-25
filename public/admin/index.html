@@ -18,6 +18,25 @@
   .hlg-config label { display: block; margin: 8px 0; font-size: 13px; }
   .hlg-config input:not([type=checkbox]), .hlg-config select, .hlg-config textarea { width: 100%; box-sizing: border-box; border: 1px solid #e3c1cf; border-radius: 9px; padding: 9px; margin-top: 5px; font: inherit; background: #fff; }
   .hlg-config button { border: 0; border-radius: 9px; background: #ba4a79; color: #fff; padding: 9px 15px; font: inherit; cursor: pointer; }
+  .hlg-cloud { background: linear-gradient(135deg,#fff7fb 0%,#f8f2ff 100%); border: 1px solid #e5c8e9; border-radius: 17px; padding: 18px; margin: 12px 0; color: #60465e; box-shadow: 0 7px 24px #8651a31a; }
+  .hlg-cloud h3 { margin: 0 0 8px; color: #8e3e79; font-size: 18px; }
+  .hlg-cloud p { font-size: 12px; line-height: 1.65; color: #7c6579; margin: 6px 0; }
+  .hlg-cloud-stats { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin: 12px 0; }
+  .hlg-cloud-stat { background: #fff; border: 1px solid #eadcf0; border-radius: 12px; padding: 11px 13px; font-size: 12px; line-height: 1.6; }
+  .hlg-cloud-stat b { display: block; color: #8d3f76; font-size: 13px; margin-bottom: 4px; }
+  .hlg-cloud-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .hlg-cloud-actions button { border: 1px solid #d8b8e2; border-radius: 10px; background: #fff; color: #8b3c75; padding: 9px 13px; font: inherit; font-weight: 800; cursor: pointer; }
+  .hlg-cloud-actions button.primary { background: #a94786; border-color: #a94786; color: #fff; }
+  .hlg-cloud-actions button:disabled { opacity: .55; cursor: wait; }
+  .hlg-cloud-status { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: #fff; border: 1px solid #eadcf0; font-size: 12px; line-height: 1.55; white-space: pre-wrap; }
+  .hlg-cloud-status.error { background: #fff1f3; border-color: #f1b9c4; color: #a52f4d; }
+  .hlg-cloud-status.ok { background: #f1fff6; border-color: #b9e6c8; color: #257747; }
+  .hlg-cloud-history { margin-top: 12px; border-top: 1px dashed #dcc6e5; padding-top: 10px; }
+  .hlg-cloud-history h4 { margin: 0 0 8px; color: #8e3e79; font-size: 13px; }
+  .hlg-cloud-version { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #f0e5f4; font-size: 12px; }
+  .hlg-cloud-version:last-child { border-bottom: 0; }
+  .hlg-cloud-version button { border: 1px solid #d8b8e2; border-radius: 8px; background: #fff; color: #8b3c75; padding: 6px 10px; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
+  @media (max-width: 650px) { .hlg-cloud-stats { grid-template-columns: 1fr; } }
   .hlg-tier-card { border: 1px solid #f1d8e3; border-radius: 12px; padding: 11px; margin: 9px 0; background: #fffafd; }
   .hlg-tier-card h4 { margin: 0 0 8px; color: #a74970; }
   .hlg-font-preview { padding: 18px; margin: 12px 0; border: 1px dashed #d78cae; border-radius: 12px; background: #fff6fa; font-size: 17px; }
@@ -237,6 +256,10 @@
     <div style="padding:20px;max-width:1000px;margin:0 auto">
       <h2><i class="ti ti-box"></i> จัดการสินค้าและโปรโมชั่น</h2>
       <p style="color:#807078;margin-top:8px">สร้างหมวดหมู่ใหม่, เพิ่มสินค้า, ตั้งการ์ดพรีวิวหน้าแรก, โปรตามจำนวน, ลดราคาชิ้นเดียว ข้อมูลจะซิงค์ขึ้นระบบออนไลน์และบันทึกอัตโนมัติ</p>
+      <section class="promo-editor-section">
+        <h3><i class="ti ti-cloud-upload"></i> ราคากลางบน Cloud</h3>
+        <div id="cloudPricingManagerContainer"></div>
+      </section>
       <section class="promo-editor-section">
         <h3><i class="ti ti-category"></i> หมวดหมู่สินค้า</h3>
         <div id="categoryManagerContainer"></div>

@@ -31,8 +31,19 @@
 | Stock | `hlg_inventory_v1` — key is the same JSON array the storefront guard uses: `JSON.stringify([type||'bag', name, variant])` |
 | Orders (stock math) | IndexedDB `HLG_ORDERS_DB_V1` / `state` / `'orders'`, fallback localStorage `hlg_orders_v2` |
 | Receipt design | `hlg_receipt_design_v1` (GIF blob in IndexedDB `HLG_RECEIPT_ASSETS_V1` / `assets` / `'thankyou'`) |
+| Published pricing config | Firestore `settings/pricing` + `pricing_config_history/{version}` |
+| Local cloud-config meta | `hlg_pricing_cloud_version_v1`, `hlg_pricing_cloud_updated_at_v1` |
+| Disable hydration on a device | `hlg_pricing_cloud_optout_v1=1` |
 
-Products/promos stay **local-only** for now (decided with user). Cloud sync is a separate future ticket.
+> **P1 pricing update (2026-10-25):** pricing, tier promo and shipping now have a published
+> Cloud source of truth. The editors in `/admin/` still save the local keys above first; press
+> **“เผยแพร่ขึ้น Cloud”** in the *ราคากลางบน Cloud* card to make them live. The storefront loads
+> `/data/pricing-cloud.js`, hydrates the three local keys from `GET /api/pricing/config`, then
+> reloads once. Admin sessions skip hydration (use `?hlg_cloud=1` to force a preview).
+>
+> Dynamic products added through `/api/products` are Cloud-backed and included in the server
+> catalog. Products that exist only in `hlg_collections_v1` remain local-only and are **not** in
+> the server catalog yet. Checkout/order totals are still client-supplied until P3.
 
 - **Ticket 03 (Extract Coupon Management)** — DONE.
   - `/admin/` gained a **คูปอง** tab (`data-view="coupons"` → `#viewCoupons` → `window.hlgRenderCoupons`).
@@ -57,6 +68,6 @@ The storefront still contains unreachable editor bodies and their dead CSS:
 Their panels, triggers and callers are gone, so none of them run — Ticket 05 deletes them.
 
 ## 🧪 Verification
-- `npm test` (all suites green) including `test/admin-product-promo-migration.test.js`, `test/admin-coupon-migration.test.js`, `test/admin-cms-mode.test.js`, `test/admin-stock-receipt-migration.test.js` and `test/admin-cms-lazy-load.test.js`.
+- `npm test` (all suites green) including `test/admin-product-promo-migration.test.js`, `test/admin-coupon-migration.test.js`, `test/admin-cms-mode.test.js`, `test/admin-stock-receipt-migration.test.js`, `test/admin-cms-lazy-load.test.js`, `test/pricing-engine.test.js` and `test/pricing-cloud.test.js`.
 - All inline scripts in `public/index.html` parse (82 executable + 2 deferred, both deferred blocks also parse); `node --check public/admin/admin.js` passes.
 - Not verified in a real browser (no Chrome available in this environment) — do a manual pass on `/admin/` Products & Promos and the storefront gallery/cart before deploy.

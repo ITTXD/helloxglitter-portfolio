@@ -2,7 +2,7 @@
 
 Branch: `feat/shared-pricing-engine`
 Last updated: 2026-10-25
-Status: **P0 complete — shared engine + tests only; live checkout is not wired yet**
+Status: **P1 complete — trusted catalog + published Cloud pricing config are live; checkout is still not wired to the server quote yet**
 
 ---
 
@@ -19,8 +19,10 @@ Status: **P0 complete — shared engine + tests only; live checkout is not wired
 - คูปอง (ส่วนลดตามหมวด)
 - ยอดรวมสุดท้าย
 
-P0 ใน branch นี้ทำเฉพาะ engine กลาง + test ยังไม่เปลี่ยน flow ขายจริง
-เพื่อให้เราเปลี่ยนฝั่ง server และ browser ทีละขั้นได้โดยไม่ทำให้ยอดลูกค้าเพี้ยนระหว่างทาง
+P0 ทำ engine กลาง + test
+P1 ทำ trusted catalog, pricing config บน Cloud, admin publish/history/restore และ storefront hydration
+ยังไม่เปลี่ยน flow ขายจริง: `/api/orders`, การตรวจสลิป, sticker/wallpaper ยังเชื่อยอดจาก client จนกว่าจะถึง P2/P3
+
 
 ---
 
@@ -103,9 +105,9 @@ engine กลางใช้ **canonical pipe format** เป็นหลัก 
 
 ---
 
-## 4. P0 ที่ทำเสร็จแล้วใน branch นี้
+## 4. P0 + P1 ที่ทำเสร็จแล้วใน branch นี้
 
-### 4.1 ไฟล์ใหม่
+### 4.1 ไฟล์ใหม่ (P0)
 
 | ไฟล์ | หน้าที่ |
 |---|---|
@@ -265,6 +267,172 @@ node test/pricing-engine.test.js
 - [x] ยังไม่เปลี่ยน behavior การขายจริง
 - [x] ยังไม่ wire เข้า checkout (ตั้งใจ)
 
+### 4.8 P1 — Trusted catalog + published pricing config (เสร็จแล้ว)
+
+#### ไฟล์ที่เพิ่ม/แก้
+
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `pricing-config.js` | validation, cache, publish/history/restore, trusted catalog builder |
+| `public/data/pricing-cloud.js` | storefront hydration จาก published config |
+| `test/pricing-cloud.test.js` | P1 tests 32 เคส |
+| `server.js` | local API + in-memory/Firestore adapter + serialized publish queue |
+| `api/[...path].js` | production API + Firestore transaction publish |
+| `public/data/patterns.js` | เพิ่ม inert CommonJS export ให้ Node ใช้ built-in catalog |
+| `public/admin/admin.js` | cloud publish/pull/history/restore panel |
+| `public/admin/index.html` | container + styles สำหรับ cloud panel |
+| `public/index.html` | โหลด `/data/pricing-cloud.js` หนึ่งครั้งด้วย `defer` |
+
+#### Storage
+
+- `settings/pricing` — config ปัจจุบัน `{schema_version, version, pricing, tier, shipping, updated_at, updated_by, published_at}`
+- `pricing_config_history/{version}` — snapshot เต็มของทุกเวอร์ชันที่เผยแพร่ พร้อม `restored_from` ถ้าเป็นการย้อนกลับ
+- `settings/storefront.custom_products` + `settings/storefront.categories` — แหล่งสินค้า/หมวดที่แอดมินเพิ่มเอง
+- ไม่เก็บ secret ใด ๆ ใน `settings/pricing`
+
+#### Endpoints ที่ใช้จริง
+
+```
+GET /api/pricing/config            (public)
+→ {
+    success: true,
+    schema_version: 1,
+    version: 3,
+    published: true,
+    pricing: { base, promos },
+    tier, shipping,
+    updated_at, updated_by, published_at
+  }
+```
+
+```
+PUT /api/pricing/config            (admin)
+body: { version, pricing, tier, shipping }
+→ { success: true, ...config ที่ publish แล้ว }
+
+400 INVALID_CONFIG      → { success:false, code, error, details:[{field,message}] }
+401                     → Unauthorized
+409 VERSION_CONFLICT    → { success:false, code, error, current_version }
+```
+
+```
+GET /api/pricing/config/history?limit=15   (admin, default 20, max 50)
+→ { success:true, history:[{
+      version, updated_at, updated_by, published_at, restored_from,
+      summary: {
+        base_prices, promos, tier_enabled,
+        tier_selected_groups, tier_product_rules,
+        shipping_base, shipping_extra, shipping_rules
+      }
+    }] }
+```
+
+```
+POST /api/pricing/config/restore           (admin)
+body: { version, current_version }
+→ { success:true, restored:true, ...config เวอร์ชันใหม่ }
+```
+
+- restore ไม่เขียนทับ history เดิม แต่ publish ค่าเก่าเป็นเวอร์ชันใหม่
+- ถ้า `current_version` ไม่ตรงกับ Cloud → `409 VERSION_CONFLICT` เหมือน publish
+
+```
+GET /api/pricing/catalog           (public)
+→ {
+    success: true,
+    schema_version: 1,
+    catalog_version: 1,
+    pricing_version: 3,
+    generated_at,
+    categories: [...],
+    count,
+    duplicates: [],
+    items: [{
+      sku, legacy_sku, aliases, type, name, variant,
+      size_key, category_id, product_id, image, download_url,
+      catalog_price, base_price, price, promo
+    }]
+  }
+```
+
+- `catalog_price` = ราคาปกติจาก catalog
+- `base_price` = ราคาหลัง base override (ถ้ามี)
+- `price` = ราคาหลัง promo ชิ้นเดียว (ถ้ามี)
+- ถ้า catalog จริงมี SKU ซ้ำ → `409 DUPLICATE_SKU` พร้อม `details.duplicates`
+
+#### Validation / concurrency / cache
+
+- ราคาเป็นจำนวนเต็ม 0–1,000,000; promo percent 0–100; shipping postcode ต้องเป็นเลข 5 หลัก
+- ตรวจช่วงวันที่แบบเวลาไทย, `selected` promo ต้องมี SKU, ปฏิเสธ `__proto__` / `prototype` / `constructor`
+- จำกัดจำนวน base prices, promos, shipping rules, SKU ต่อรายการ
+- `version` เป็น optimistic concurrency: publish ต้องส่งเวอร์ชันที่อ่านล่าสุด
+- `server.js` ใช้ promise queue กัน publish พร้อมกันใน process เดียว
+- `api/[...path].js` ใช้ Firestore transaction อ่าน version + เขียน config + history พร้อมกัน
+- config cache 60 วินาทีต่อ process; publish/restore ล้าง cache ของ instance นั้น
+- instance อื่นอาจเห็นค่าเก่าได้ไม่เกิน 60 วินาที (ยอมรับได้ใน P1)
+
+#### Admin flow
+
+- แท็บ **สินค้าและโปรโมชั่น** มีการ์ด **“ราคากลางบน Cloud”**
+- **เผยแพร่ขึ้น Cloud** ส่ง pricing/tier/shipping จากเครื่องนี้ + `version` ที่โหลดมา
+- ถ้าส่วนไหนยังไม่มีในเครื่อง จะใช้ค่าจาก Cloud ที่โหลดมาล่าสุด ไม่ส่ง default ว่างทับ
+- **ดึงจาก Cloud** เขียนทับ `hlg_pricing_v1`, `hlg_quantity_promo_v1`, `hlg_shipping_v1` แล้ว re-render editor
+- **ประวัติเวอร์ชัน** แสดง summary และปุ่มย้อนกลับ
+- editor เดิมยังบันทึก localStorage ก่อน; ต้องกดเผยแพร่ขึ้น Cloud เพื่อให้ลูกค้าเห็น
+- `x-admin-user` เป็น optional actor label; ถ้าไม่ส่งจะเป็น `admin`
+
+#### Storefront hydration
+
+- `pricing-cloud.js` โหลดครั้งเดียวจาก `index.html`
+- ข้าม admin session (`hlg_admin_session_v2=1` ใน localStorage/sessionStorage) เพื่อไม่ทับ draft ในเครื่องแอดมิน
+- `?hlg_cloud=1` บังคับ preview บน admin session ได้
+- `hlg_pricing_cloud_optout_v1=1` ปิด hydration บนเครื่องนั้น
+- รับเฉพาะ config ที่ published แล้ว (`version > 0`)
+- เปรียบเทียบ JSONแบบ stable key order; ถ้าเท่ากันไม่เขียนซ้ำ
+- ถ้าเปลี่ยน: เขียน 3 keys + `hlg_shipping_flash_image_20260928_v1=1` + meta version แล้ว reload หนึ่งครั้งต่อเวอร์ชัน
+- แสดงผลเฉพาะฝั่ง browser; ยังไม่ใช่การป้องกันการแก้ราคา
+
+#### Test
+
+```bash
+node test/pricing-cloud.test.js   # 32/32
+```
+
+ครอบคลุม:
+
+- Node import ของ `patterns.js` และจำนวน 46 bag + 10 sticker
+- default config, validation, dangerous key, invalid price/percent/postcode
+- publish v1, stale publish conflict, history summary, restore เป็นเวอร์ชันใหม่
+- catalog 57 built-ins, custom bag alias `custom|bag|productId`, base override, duplicate SKU
+- server endpoints: public config, auth, invalid 400, publish, conflict 409, history, restore, custom product catalog, duplicate 409
+- storefront hydration: เขียน keys, reload ครั้งเดียว, second load ไม่ reload, key-order stable, unpublished, admin skip, force, opt-out
+- admin UI strings, script inclusion, server/Vercel route parity
+
+#### Acceptance
+
+- [x] server สร้าง trusted catalog จาก built-in + Firestore custom products ได้
+- [x] admin publish แล้ว config อยู่บน Cloud และมี version
+- [x] client publish version เก่าไม่ได้ (409)
+- [x] history + restore ทำงาน และ restore สร้าง version ใหม่
+- [x] storefront เครื่องอื่นโหลด published config มาใช้ได้
+- [x] duplicate SKU / invalid price ถูก reject
+- [x] config ไม่มี secret
+- [x] ไม่มีราคา/โปรจาก client ใน request ของ pricing endpoints
+- [ ] ยังไม่มีการใช้ catalog/config นี้ใน `/api/quotes` หรือ `/api/orders` (P2/P3)
+
+#### Known limitations (P1)
+
+- **ช่องโหว่ราคายังอยู่**: checkout/order/slip/sticker/wallpaper ยังเชื่อยอดจาก client จนถึง P3
+- สินค้าที่อยู่ใน `hlg_collections_v1` (local-only) ยังไม่ถูกใส่ใน server catalog
+- ยังไม่มีสคริปต์ migrate localStorage → Firestore แบบอัตโนมัติ; ใช้ publish จากหน้า admin
+- version guard กัน publish ซ้อนจากสองเครื่อง แต่ไม่ detect ว่า local editor เก่ากว่า Cloud หลังมีคนอื่น publish; ควรเทียบตัวเลข local/Cloud ก่อน publish และระวังการ publish ค่าว่างทับราคาที่มีอยู่
+- cache 60 วินาทีต่อ instance; หลัง publish เครื่องอื่นอาจเห็นค่าเก่าชั่วคราว
+- hydration ครั้งแรกอาจ reload หนึ่งครั้ง ทำให้หน้าวาบหรือข้อมูลที่เพิ่งกรอกหาย; เป็นข้อจำกัดของ P1
+- `?hlg_cloud=1` บน admin session จะเขียน config จาก Cloud ทับ local keys (เหมือนกด “ดึงจาก Cloud”); ควรสำรอง draft ก่อนถ้าไม่ต้องการให้หาย
+- history เก็บ snapshot เต็มทุกเวอร์ชัน ยังไม่มี retention/pruning
+- admin actor เป็น label จาก header/localStorage ไม่ใช่ identity ที่ตรวจสอบจาก server
+- ยังไม่ทดสอบใน browser จริง; test เป็น Node/VM + static checks
+
 ---
 
 ## 5. Target architecture
@@ -368,7 +536,7 @@ node test/pricing-engine.test.js
 - custom หมวด bag/sticker ใช้ type `bag` / `sticker` ตามสินค้าเดิม
 - สินค้าที่มี `productId` จะมี alias `custom|categoryId|productId` เพื่อรองรับ SKU ที่แอดมินเคยสร้างไว้
 - ค้นหาสินค้าได้จาก `sku`, `productId`, `id` หรือ legacy JSON key
-- ห้ามมี SKU ซ้ำกันใน catalog จริง (P1 ต้องเพิ่ม validation)
+- ห้ามมี SKU ซ้ำกันใน catalog จริง — `pricing-config.buildCatalog()` ตรวจและคืน `DUPLICATE_SKU` (P1 ทำแล้ว)
 - ระหว่าง migrate อ่าน legacy JSON key ได้ แต่เขียนใหม่ให้เป็น canonical
 
 ### 6.2 Single-item promo
@@ -444,18 +612,23 @@ couponQuote(items, tier, {
 
 ---
 
-## 7. API contracts (เป้าหมาย)
+## 7. API contracts
 
-### 7.1 Pricing config (P1)
+> 7.1 และ 7.2 เป็นสัญญาที่ implement แล้วใน P1 (ดู response เต็มใน §4.8)
+
+### 7.1 Pricing config (P1 — implemented)
 
 ```
 GET /api/pricing/config
 → {
+    success: true,
+    schema_version: 1,
     version,
+    published,
     pricing: { base, promos },
     tier,
     shipping,
-    updated_at
+    updated_at, updated_by, published_at
   }
 ```
 
@@ -465,38 +638,42 @@ body: {
   version,                    // optimistic concurrency
   pricing, tier, shipping
 }
-→ { version: version + 1, updated_at }
+→ { success: true, ...config ที่ publish แล้ว }
 ```
 
-- เก็บใน Firestore `settings/pricing` หรือ `pricing_config/current`
+- เก็บใน Firestore `settings/pricing`
+- history เก็บที่ `pricing_config_history/{version}` (snapshot เต็ม)
 - admin session cookie + role check
-- validate schema ก่อน save
-- เก็บ audit log: ใครแก้, เวลา, ค่าเก่า/ใหม่
-- cache ฝั่ง server 30–60 วินาที
-- ลดโอกาส read Firestore ทุก request
+- validate schema ก่อน save; invalid → `400 INVALID_CONFIG`
+- stale version → `409 VERSION_CONFLICT` + `current_version`
+- cache ฝั่ง server 60 วินาที; publish/restore invalidate cache
+- `server.js` serialized queue; production ใช้ Firestore transaction
 
-### 7.2 Server catalog (P1)
+### 7.2 Server catalog (P1 — implemented)
 
 ```
 GET /api/pricing/catalog
 → {
-    version,
-    patterns: [...],
-    stickers: [...],
-    custom_products: [...],
-    categories: [...]
+    success: true,
+    schema_version: 1,
+    catalog_version: 1,
+    pricing_version,
+    generated_at,
+    categories: [...],
+    count,
+    duplicates: [],
+    items: [{
+      sku, legacy_sku, aliases, type, name, variant,
+      size_key, category_id, product_id, image, download_url,
+      catalog_price, base_price, price, promo
+    }]
   }
 ```
 
-หรือ server รวม catalog ให้เลย:
-
-```
-GET /api/catalog
-→ { version, items: [{ sku, type, name, variant, sizeKey, price, ... }] }
-```
-
-ข้อสำคัญ: server ต้องสร้าง catalog จากข้อมูลที่เชื่อถือได้เอง
-ไม่รับ catalog จาก client ใน `/api/quotes` หรือ `/api/orders`
+- server สร้าง catalog จาก built-in patterns/stickers/wallpaper + `settings/storefront.custom_products` เอง
+- ไม่รับ catalog จาก client ใน `/api/quotes` หรือ `/api/orders`
+- SKU ซ้ำ → `409 DUPLICATE_SKU` + `details.duplicates`
+- ยังไม่รวมสินค้าที่อยู่แค่ `hlg_collections_v1` (local-only)
 
 ### 7.3 Quote (P2)
 
@@ -757,31 +934,37 @@ Flow:
 
 **Acceptance:** test ผ่าน, ราคา client ถูก ignore, ไม่กระทบยอดขายจริง
 
-### P1 — Trusted catalog + pricing config บน server
+### P1 — Trusted catalog + pricing config บน server (เสร็จแล้ว)
 
 งาน:
 
-1. ทำ `patterns.js` ให้ server import ได้ (UMD หรือ data module)
-2. สร้าง server catalog loader:
-   - built-in patterns
-   - stickers
-   - wallpaper
-   - custom products จาก Firestore
-   - categories
-3. เพิ่ม schema validation ของ pricing/tier/shipping
-4. เพิ่ม Firestore config doc + version
-5. เพิ่ม admin API สำหรับ publish/read config
-6. เพิ่ม admin UI ให้บันทึกขึ้น cloud แทน localStorage
-7. migration script: localStorage → Firestore
-8. cache config ฝั่ง server
-9. เพิ่ม duplicate SKU / invalid price validation
+- [x] ทำ `patterns.js` ให้ server import ได้ (inert CommonJS export)
+- [x] สร้าง server catalog loader:
+  - [x] built-in patterns
+  - [x] stickers
+  - [x] wallpaper
+  - [x] custom products จาก `settings/storefront.custom_products`
+  - [x] categories
+- [x] เพิ่ม schema validation ของ pricing/tier/shipping
+- [x] เพิ่ม Firestore config doc + version (`settings/pricing`)
+- [x] เพิ่ม admin API สำหรับ publish/read/history/restore
+- [x] เพิ่ม admin UI cloud panel (publish / pull / history / restore)
+- [ ] migration script อัตโนมัติ localStorage → Firestore (ใช้ publish จาก admin แทน)
+- [x] cache config ฝั่ง server 60 วินาที
+- [x] เพิ่ม duplicate SKU / invalid price validation
+- [x] storefront hydration จาก published config
+- [ ] ใช้ catalog/config ใน quote/order (P2/P3)
 
 **Acceptance:**
 
-- server สร้าง catalog ได้เหมือน storefront
-- admin publish แล้วลูกค้าคนละเครื่องเห็นตรงกัน
-- config version bump และ rollback ได้
-- ไม่มีราคา/โปรจาก client ใน request
+- [x] server สร้าง catalog ได้เหมือน storefront (57 built-ins + custom products)
+- [x] admin publish แล้วลูกค้าคนละเครื่องเห็น config เดียวกันหลัง hydration
+- [x] config version bump, history และ rollback ได้
+- [x] ไม่มีราคา/โปรจาก client ใน request ของ pricing endpoints
+- [ ] ยอด checkout ยังไม่ถูกบังคับจาก server (P3)
+- [x] test `test/pricing-cloud.test.js` ผ่าน 32/32
+
+> หมายเหตุ: P1 ยังไม่ปิดช่องโหว่ราคาใน checkout และยังไม่รวม collection products ที่อยู่เฉพาะ localStorage
 
 ### P2 — Quote API + browser preview
 
@@ -854,15 +1037,16 @@ Flow:
 5. เพิ่ม test ว่า key เก่ายังใช้ได้
 6. หลังยืนยันแล้วลบ legacy path
 
-### 10.2 Pricing config
+### 10.2 Pricing config (P1 ทำแล้ว)
 
-1. export `hlg_pricing_v1`, `hlg_quantity_promo_v1`, `hlg_shipping_v1` จากเครื่องแอดมิน
-2. validate ด้วย schema
-3. เขียนลง Firestore เป็น version 1
-4. เปิดให้ storefront อ่าน cloud ก่อน
-5. admin ยังเขียน local ได้ชั่วคราว แต่ต้องมีปุ่ม publish
-6. เมื่อ cloud พร้อม ให้ local เป็น cache/สำรองเท่านั้น
-7. ปิด local write แล้วลบภายหลัง
+1. [x] admin โหลดค่าจาก `hlg_pricing_v1`, `hlg_quantity_promo_v1`, `hlg_shipping_v1` แล้ว publish ผ่าน cloud panel
+2. [x] validate ด้วย schema ฝั่ง server
+3. [x] เขียนลง Firestore `settings/pricing` เป็น version 1 (ครั้งแรกที่ publish)
+4. [x] เปิดให้ storefront hydrate จาก cloud
+5. [x] admin ยังเขียน local ได้ แต่ต้องกด publish
+6. [x] cloud เป็นแหล่งความจริง; local เป็น cache/สำรอง
+7. [ ] ปิด local write และลบภายหลัง (P4)
+8. [ ] สคริปต์ import อัตโนมัติจากเครื่องแอดมิน (ยังใช้ publish/pull ใน UI)
 
 ### 10.3 Order totals
 
@@ -895,7 +1079,7 @@ Flow:
 ลำดับ:
 
 1. deploy P0 (ไม่มี behavior change)
-2. P1 config cloud + admin dual-write
+2. P1 config cloud + admin publish (ทำแล้ว)
 3. P2 quote shadow mode
 4. เปิด quote สำหรับ % ผู้ใช้
 5. P3 order server-authoritative
@@ -917,7 +1101,10 @@ Rollback:
 - [ ] `/api/orders/confirm` ไม่รับราคา/ยอดเงินจาก client
 - [ ] `/api/orders/verify-slip` ใช้ยอดจาก order
 - [ ] `/api/sticker/order` และ `/api/wallpaper/order` ใช้ราคาจาก server
-- [ ] server โหลด catalog/config เอง ไม่รับจาก request
+- [x] server โหลด catalog/config เอง ไม่รับจาก request (P1 endpoints)
+- [x] pricing config ถูก validate + sanitize ก่อน save และปฏิเสธ dangerous keys
+- [x] public อ่าน pricing config ได้อย่างเดียว; publish/history/restore ต้องเป็น admin
+- [ ] จำกัดขนาด request body / rate limit ของ admin config endpoint
 - [ ] validate qty เป็นจำนวนเต็มบวก + max
 - [ ] จำกัดจำนวน items ต่อ quote/order
 - [ ] rate limit `/api/quotes`
@@ -925,7 +1112,7 @@ Rollback:
 - [ ] coupon reservation ทำใน transaction
 - [ ] quote มี TTL + used flag + owner binding
 - [ ] verify token ผูก order + amount + slip hash
-- [ ] admin API ต้องมี session + role
+- [ ] admin API ต้องมี session + role (P1 ใช้ session cookie; ยังไม่มี role แยก)
 - [ ] Firestore rules ไม่อนุญาตให้ client เขียน order/quotes/config โดยตรง
 - [ ] log ไม่เก็บข้อมูลบัตร/สลิปเต็ม
 - [ ] ไม่ log token/coupon code แบบละเอียดเกินจำเป็น
@@ -938,6 +1125,18 @@ Rollback:
 
 - engine: catalog, promo, tier, shipping, coupon, invalid input, UMD
 - fixture เดียวกันต้องให้ผลเท่ากันทั้ง browser และ Node
+
+### Integration (P1 — มีแล้ว)
+
+- `pricing-config.js`: default, validation, dangerous keys, invalid price/percent/postcode
+- publish v1, stale conflict, history summary, restore เป็น version ใหม่
+- trusted catalog: 57 built-ins, custom alias, base override, duplicate SKU
+- server endpoints: public config, admin auth, invalid 400, publish, conflict 409, history, restore
+- custom product จาก `/api/products` ปรากฏใน `/api/pricing/catalog`
+- storefront hydration: เขียน keys, reload ครั้งเดียว, stable key order, admin skip, force, opt-out
+- static parity ระหว่าง `server.js`, `api/[...path].js`, admin UI และ storefront script
+
+รัน: `node test/pricing-cloud.test.js` (32/32)
 
 ### Integration (P2/P3)
 
@@ -1014,26 +1213,35 @@ Rollback:
 |---|---|
 | `public/data/pricing-engine.js` | shared engine (P0) |
 | `test/pricing-engine.test.js` | engine tests (P0) |
-| `public/index.html` | storefront pricing/checkout/slip flow |
-| `api/[...path].js` | production API (Vercel) |
+| `pricing-config.js` | config validation/cache/publish/history/restore + trusted catalog (P1) |
+| `test/pricing-cloud.test.js` | P1 config/catalog/hydration/API tests |
+| `public/data/pricing-cloud.js` | storefront hydration จาก published config (P1) |
+| `public/index.html` | storefront pricing/checkout/slip flow + hydration script |
+| `api/[...path].js` | production API (Vercel) + transactional publish |
 | `server.js` | local API — ต้อง keep parity กับ `api/[...path].js` |
 | `coupon-service.js` | coupon validation / mark used |
-| `public/admin/admin.js` | admin pricing/tier/shipping editors |
-| `public/data/patterns.js` | built-in catalog + legacy promo/shipping constants |
-| `HANDOVER.md` | admin unification notes; products/promos still local-only |
+| `public/admin/admin.js` | admin pricing/tier/shipping editors + cloud panel |
+| `public/admin/index.html` | admin containers/styles รวม cloud panel |
+| `public/data/patterns.js` | built-in catalog + legacy promo/shipping constants; Node export |
+| `HANDOVER.md` | admin unification notes; pricing config now Cloud-backed |
 | `docs/PLAN-shop-builder.md` | future shop/product plan; also requires server pricing |
 
 ---
 
 ## 15. Next step
 
-ขั้นถัดไปที่แนะนำ: **P1 — trusted catalog + pricing config บน server**
+ขั้นถัดไปที่แนะนำ: **P2 — Quote API + browser preview**
 
 ลำดับย่อย:
 
-1. ทำ `patterns.js` ให้ import จาก Node ได้
-2. สร้าง server catalog loader + validation
-3. เพิ่ม pricing config ใน Firestore + admin publish API
-4. เพิ่ม admin UI dual-write/publish
-5. เขียน integration test ว่า server สร้าง catalog/quote ได้จาก config จริง
-6. ยังไม่เปลี่ยน `/api/orders` จนกว่า P2 quote จะนิ่ง
+1. ออกแบบ schema ของ quote doc + TTL + owner binding
+2. เพิ่ม `POST /api/quotes` โดยโหลด catalog/config จาก P1
+3. ให้ browser เรียก quote แทนการคำนวณยอดสุดท้ายเอง (เริ่มแบบ shadow mode)
+4. log ความต่างระหว่าง browser preview กับ server quote
+5. เพิ่ม rate limit / max items
+6. ค่อยเปลี่ยน `/api/orders` ใน P3 เมื่อ quote นิ่งแล้ว
+
+ก่อนเริ่ม P2 ควรตรวจสองเรื่อง:
+
+- deploy P1 preview และกด publish config จริงจาก `/admin/` หนึ่งครั้ง
+- ตรวจว่า collection products ที่ยัง local-only ต้องย้ายขึ้น Firestore หรือยอมรับว่า quote ยังไม่รองรับ

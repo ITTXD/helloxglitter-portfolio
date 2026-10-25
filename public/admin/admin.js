@@ -710,6 +710,7 @@ function switchView(view) {
       renderPreviewManager();
       if (typeof window.hlgRenderTiers === 'function') window.hlgRenderTiers();
       if (typeof window.hlgRenderPricing === 'function') window.hlgRenderPricing();
+      if (typeof window.hlgRenderCloudPricing === 'function') window.hlgRenderCloudPricing();
       if (typeof window.hlgRenderFonts === 'function') window.hlgRenderFonts();
     });
   }
@@ -2223,7 +2224,7 @@ async function deletePreviewCard(idx) {
       products: products,
       grouped: groups
     };
-    p.innerHTML = `<div class="hlg-config"><h3>โปรตามจำนวน / ของแถม</h3><p><b>แท็บนี้:</b> ตั้งราคาเมื่อซื้อครบ 1/2/3 ชิ้น ของแถม และส่งฟรี หากต้องการให้ลูกค้าเห็นโปร เลือกหมวดที่ร่วมโปรแล้วกด “บันทึกและเปิดโปร” ส่วนป้ายลดราคาชิ้นเดียวอยู่ในแท็บ “ลดราคาชิ้นเดียว”</p>${v.needsProductPrices ? '<p style="color:#a42f62">โปรแบบเก่าพักไว้ก่อน เลือกสินค้าและบันทึกใหม่ค่ะ</p>' : ''}<p>กด “เลือกทั้งหมวด” ได้ทันที หรือเปิดหมวดแล้วค้นหาชื่อเพื่อเลือกเฉพาะบางสินค้า หากเลือกทั้งหมวดแล้ว ก็ยกเว้นบางชิ้นได้โดยเอาติ๊กออก</p><p>ข้อมูลโปรในไฟล์นี้เก็บอยู่บนเบราว์เซอร์เครื่องนี้ หากต้องการให้ลูกค้าทุกเครื่องเห็นโปรเดียวกัน ต้องเชื่อมฐานข้อมูลออนไลน์ก่อนค่ะ</p><label><input id="hltEnabled" type="checkbox" ${v.enabled ? 'checked' : ''}> เปิดใช้โปรนี้</label><div class="hlg-grid"><label>ชื่อโปร<input id="hltName" maxlength="70" value="${esc(v.name)}"></label><label>เริ่ม (เวลาไทย)<input id="hltStart" type="datetime-local" value="${esc(v.start)}"></label><label>สิ้นสุด (เวลาไทย)<input id="hltEnd" type="datetime-local" value="${esc(v.end)}"></label></div><h3>สินค้าในโปร</h3><p>เลือกทั้งหมวดแล้วตั้งส่วนลดเป็น % หรือบาทต่อชิ้น โดยคิดจากราคาของสินค้าแต่ละชิ้น หรือเปิดรายการสินค้าเพื่อตั้งราคาเป็นบาท/ชิ้นเฉพาะตัว</p><div id="hltGroups"></div><h3>ของแถมและส่งฟรี</h3>${[1, 2, 3].map(function(n) { return `<label>ซื้อครบ ${n}${n === 3 ? ' ชิ้นขึ้นไป' : ' ชิ้น'} ได้ของแถมอะไร<input id="hltGift${n}" maxlength="180" value="${esc((v.tiers[n] || {}).gifts || '')}" placeholder="เว้นว่างหากไม่มี"></label>`; }).join('')}<div class="hlg-grid"><label>ส่งฟรีเมื่อซื้อครบ<select id="hltFree"><option value="0" ${!v.freeFrom ? 'selected' : ''}>ไม่ส่งฟรี</option>${[1, 2, 3].map(function(n) { return `<option value="${n}" ${Number(v.freeFrom) === n ? 'selected' : ''}>${n} ชิ้นขึ้นไป</option>`; }).join('')}</select></label><label><input id="hltRemote" type="checkbox" ${v.coverRemote ? 'checked' : ''}> ส่งฟรีรวมพื้นที่ห่างไกลด้วย</label></div><p>ช่องราคาสินค้าที่ระบุเป็นบาทจะใช้แทนส่วนลด % ของหมวดนั้น ราคาจริงจะไม่สูงกว่าราคาปัจจุบันในตะกร้า</p><button id="hltSave">บันทึกและเปิดโปร</button><button id="hltDisable" type="button">ปิดโปร</button><div id="hlgTierNote"></div></div>`;
+    p.innerHTML = `<div class="hlg-config"><h3>โปรตามจำนวน / ของแถม</h3><p><b>แท็บนี้:</b> ตั้งราคาเมื่อซื้อครบ 1/2/3 ชิ้น ของแถม และส่งฟรี หากต้องการให้ลูกค้าเห็นโปร เลือกหมวดที่ร่วมโปรแล้วกด “บันทึกและเปิดโปร” ส่วนป้ายลดราคาชิ้นเดียวอยู่ในแท็บ “ลดราคาชิ้นเดียว”</p>${v.needsProductPrices ? '<p style="color:#a42f62">โปรแบบเก่าพักไว้ก่อน เลือกสินค้าและบันทึกใหม่ค่ะ</p>' : ''}<p>กด “เลือกทั้งหมวด” ได้ทันที หรือเปิดหมวดแล้วค้นหาชื่อเพื่อเลือกเฉพาะบางสินค้า หากเลือกทั้งหมวดแล้ว ก็ยกเว้นบางชิ้นได้โดยเอาติ๊กออก</p><p>ข้อมูลโปรในเครื่องนี้จะยังไม่ถึงลูกค้าจนกว่าจะกด “เผยแพร่ขึ้น Cloud” ในการ์ด “ราคากลางบน Cloud” ด้านบนค่ะ</p><label><input id="hltEnabled" type="checkbox" ${v.enabled ? 'checked' : ''}> เปิดใช้โปรนี้</label><div class="hlg-grid"><label>ชื่อโปร<input id="hltName" maxlength="70" value="${esc(v.name)}"></label><label>เริ่ม (เวลาไทย)<input id="hltStart" type="datetime-local" value="${esc(v.start)}"></label><label>สิ้นสุด (เวลาไทย)<input id="hltEnd" type="datetime-local" value="${esc(v.end)}"></label></div><h3>สินค้าในโปร</h3><p>เลือกทั้งหมวดแล้วตั้งส่วนลดเป็น % หรือบาทต่อชิ้น โดยคิดจากราคาของสินค้าแต่ละชิ้น หรือเปิดรายการสินค้าเพื่อตั้งราคาเป็นบาท/ชิ้นเฉพาะตัว</p><div id="hltGroups"></div><h3>ของแถมและส่งฟรี</h3>${[1, 2, 3].map(function(n) { return `<label>ซื้อครบ ${n}${n === 3 ? ' ชิ้นขึ้นไป' : ' ชิ้น'} ได้ของแถมอะไร<input id="hltGift${n}" maxlength="180" value="${esc((v.tiers[n] || {}).gifts || '')}" placeholder="เว้นว่างหากไม่มี"></label>`; }).join('')}<div class="hlg-grid"><label>ส่งฟรีเมื่อซื้อครบ<select id="hltFree"><option value="0" ${!v.freeFrom ? 'selected' : ''}>ไม่ส่งฟรี</option>${[1, 2, 3].map(function(n) { return `<option value="${n}" ${Number(v.freeFrom) === n ? 'selected' : ''}>${n} ชิ้นขึ้นไป</option>`; }).join('')}</select></label><label><input id="hltRemote" type="checkbox" ${v.coverRemote ? 'checked' : ''}> ส่งฟรีรวมพื้นที่ห่างไกลด้วย</label></div><p>ช่องราคาสินค้าที่ระบุเป็นบาทจะใช้แทนส่วนลด % ของหมวดนั้น ราคาจริงจะไม่สูงกว่าราคาปัจจุบันในตะกร้า</p><button id="hltSave">บันทึกและเปิดโปร</button><button id="hltDisable" type="button">ปิดโปร</button><div id="hlgTierNote"></div></div>`;
     var root = $('#hltGroups');
     var bagGifts = document.createElement('div');
     bagGifts.className = 'hlg-tier-card';
@@ -2550,7 +2551,7 @@ async function deletePreviewCard(idx) {
     var root = document.getElementById('pricingManagerContainer');
     if (!root) return;
     var v = loadPricing(), opts = optionsP();
-    root.innerHTML = `<div class="hp-intro"><h3>ลดราคาชิ้นเดียว ♡</h3><p><b>แท็บนี้:</b> ลดราคาแต่ละสินค้า เช่น จาก 399 เหลือ 299 บาท พร้อมป้ายลดราคา ส่วนแท็บ “โปรตามจำนวน / ของแถม” ใช้ตั้งราคาเมื่อซื้อครบ 1/2/3 ชิ้น ของแถม และส่งฟรี ทั้งสองแบบเปิดพร้อมกันได้ โดยโปรจำนวนจะคิดจากราคาที่ลูกค้าเห็นในตะกร้า</p><p>ตั้งราคาปกติด้านล่าง แล้วสร้างโปรโดยเลือกว่าใช้กับสินค้าชิ้นเดียว กระเป๋าไซส์หนึ่ง หรือสินค้าทั้งหมวด เลือก “ลดเหลือราคา” ได้ทันที เช่น Normal จาก 399 เหลือ 299 บาท ตั้งวันเริ่มและวันสิ้นสุดตามเวลาไทยได้ หากไม่ใส่วันจะเริ่มทันทีหรือใช้จนกว่าจะปิดโปร</p><p>ขณะนี้ข้อมูลโปรเก็บในเบราว์เซอร์เครื่องนี้เท่านั้น ต้องเชื่อมฐานข้อมูลออนไลน์ก่อน ลูกค้าคนละเครื่องจึงจะเห็นโปรเดียวกัน</p></div>
+    root.innerHTML = `<div class="hp-intro"><h3>ลดราคาชิ้นเดียว ♡</h3><p><b>แท็บนี้:</b> ลดราคาแต่ละสินค้า เช่น จาก 399 เหลือ 299 บาท พร้อมป้ายลดราคา ส่วนแท็บ “โปรตามจำนวน / ของแถม” ใช้ตั้งราคาเมื่อซื้อครบ 1/2/3 ชิ้น ของแถม และส่งฟรี ทั้งสองแบบเปิดพร้อมกันได้ โดยโปรจำนวนจะคิดจากราคาที่ลูกค้าเห็นในตะกร้า</p><p>ตั้งราคาปกติด้านล่าง แล้วสร้างโปรโดยเลือกว่าใช้กับสินค้าชิ้นเดียว กระเป๋าไซส์หนึ่ง หรือสินค้าทั้งหมวด เลือก “ลดเหลือราคา” ได้ทันที เช่น Normal จาก 399 เหลือ 299 บาท ตั้งวันเริ่มและวันสิ้นสุดตามเวลาไทยได้ หากไม่ใส่วันจะเริ่มทันทีหรือใช้จนกว่าจะปิดโปร</p><p>แก้ค่าในเครื่องนี้แล้วกด “เผยแพร่ขึ้น Cloud” ในการ์ด “ราคากลางบน Cloud” ด้านบน ลูกค้าทุกเครื่องจึงจะเห็นราคาและโปรเดียวกันค่ะ</p></div>
  <div class="hp-section"><h3>＋ สร้างโปร</h3><div class="hp-grid">
  <label>ใช้กับสินค้า<select id="hpTarget">${opts.map(function(o) { return `<option value="${esc(o[0])}">${esc(o[1])}</option>`; }).join('')}<option value="selected">เฉพาะสินค้าที่เลือก...</option></select></label>
  <div class="hp-selected" id="hpSelected" hidden><b>เลือกสินค้าที่ร่วมโปร</b><div id="hpSkuRows"></div></div><label>วิธีลด<select id="hpMode"><option value="fixed">ลดเหลือราคา (บาท/ชิ้น)</option><option value="amount">ลดจำนวนเงิน (บาท/ชิ้น)</option><option value="percent">ลดเปอร์เซ็นต์ (%)</option></select></label>
@@ -3027,3 +3028,334 @@ async function deletePreviewCard(idx) {
   else applyFont();
 })();
 
+
+/* ==================== CLOUD PRICING CONFIG (P1) ==================== */
+(function () {
+  'use strict';
+
+  var PRICING_KEY = 'hlg_pricing_v1';
+  var TIER_KEY = 'hlg_quantity_promo_v1';
+  var SHIPPING_KEY = 'hlg_shipping_v1';
+  var SHIPPING_MIGRATION_KEY = 'hlg_shipping_flash_image_20260928_v1';
+  var CLOUD_VERSION_KEY = 'hlg_pricing_cloud_version_v1';
+  var CLOUD_UPDATED_KEY = 'hlg_pricing_cloud_updated_at_v1';
+
+  var state = {
+    config: null,
+    history: [],
+    historyError: '',
+    loading: false,
+    error: '',
+    notice: null,
+    seq: 0
+  };
+
+  function esc(value) {
+    if (typeof escapeHtml === 'function') return escapeHtml(value);
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function storageGet(key) {
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+  }
+
+  function storageSet(key, value) {
+    localStorage.setItem(key, value);
+  }
+
+  function readJSON(key, fallback) {
+    try {
+      var value = JSON.parse(storageGet(key) || 'null');
+      return value && typeof value === 'object' && !Array.isArray(value) ? value : fallback;
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  function hasLocal(key) {
+    return storageGet(key) != null;
+  }
+
+  function localSnapshot() {
+    var cloud = state.config || {};
+    return {
+      pricing: hasLocal(PRICING_KEY) ? readJSON(PRICING_KEY, { base: {}, promos: [] }) : (cloud.pricing || { base: {}, promos: [] }),
+      tier: hasLocal(TIER_KEY) ? readJSON(TIER_KEY, {}) : (cloud.tier || {}),
+      shipping: hasLocal(SHIPPING_KEY) ? readJSON(SHIPPING_KEY, { base: 40, extra: 25, rules: [] }) : (cloud.shipping || { base: 40, extra: 25, rules: [] })
+    };
+  }
+
+  function summary(config) {
+    var pricing = (config && config.pricing) || {};
+    var tier = (config && config.tier) || {};
+    var shipping = (config && config.shipping) || {};
+    return {
+      base: pricing.base && typeof pricing.base === 'object' ? Object.keys(pricing.base).length : 0,
+      promos: Array.isArray(pricing.promos) ? pricing.promos.length : 0,
+      tier: tier.enabled === true,
+      groups: Array.isArray(tier.selectedGroups) ? tier.selectedGroups.length : 0,
+      rules: tier.productRules && typeof tier.productRules === 'object' ? Object.keys(tier.productRules).length : 0,
+      shippingBase: Number(shipping.base) || 0,
+      shippingExtra: Number(shipping.extra) || 0,
+      shippingRules: Array.isArray(shipping.rules) ? shipping.rules.length : 0
+    };
+  }
+
+  function fmtDate(value) {
+    if (!value) return '-';
+    var date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return String(value);
+    try {
+      return date.toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' });
+    } catch (e) {
+      return date.toLocaleString();
+    }
+  }
+
+  function request(url, options) {
+    return fetch(url, Object.assign({ credentials: 'same-origin', cache: 'no-store' }, options || {})).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (data) {
+        if (!res.ok) {
+          var err = new Error(data.error || ('HTTP ' + res.status));
+          err.status = res.status;
+          err.code = data.code || '';
+          err.data = data;
+          throw err;
+        }
+        return data;
+      });
+    });
+  }
+
+  function setNotice(type, text) {
+    state.notice = text ? { type: type, text: text } : null;
+  }
+
+  function paintLoading(statusText) {
+    var root = document.getElementById('cloudPricingManagerContainer');
+    if (!root) return;
+    root.innerHTML = '<div class="hlg-cloud"><h3>☁️ ราคากลางบน Cloud</h3>'
+      + '<p>' + esc(statusText || 'กำลังตรวจสอบข้อมูลล่าสุด...') + '</p></div>';
+  }
+
+  function renderRows(items, currentVersion) {
+    if (!items.length) {
+      return '<div class="hlg-cloud-version"><span>ยังไม่มีประวัติเวอร์ชันที่เผยแพร่</span></div>';
+    }
+    return items.map(function (row) {
+      var s = row.summary || {};
+      var summaryText = (s.base_prices || 0) + ' ราคา · ' + (s.promos || 0) + ' โปร · '
+        + 'โปรตามจำนวน ' + (s.tier_enabled ? 'เปิด' : 'ปิด') + ' · '
+        + (s.shipping_rules || 0) + ' กฎค่าส่ง';
+      var disabled = Number(row.version) === Number(currentVersion) ? ' disabled' : '';
+      return '<div class="hlg-cloud-version">'
+        + '<div><b>v' + esc(row.version) + '</b> · ' + esc(fmtDate(row.published_at || row.updated_at))
+        + '<br><small>' + esc(summaryText) + (row.restored_from ? ' · ย้อนจาก v' + esc(row.restored_from) : '') + '</small></div>'
+        + '<button type="button" data-action="restore" data-version="' + esc(row.version) + '"' + disabled + '>ย้อนกลับ</button>'
+        + '</div>';
+    }).join('');
+  }
+
+  function paint() {
+    var root = document.getElementById('cloudPricingManagerContainer');
+    if (!root) return;
+    if (state.loading) { paintLoading(); return; }
+    if (state.error) {
+      root.innerHTML = '<div class="hlg-cloud"><h3>☁️ ราคากลางบน Cloud</h3>'
+        + '<div class="hlg-cloud-status error">' + esc(state.error) + '</div>'
+        + '<div class="hlg-cloud-actions"><button type="button" class="primary" data-action="refresh">↻ ลองอีกครั้ง</button></div></div>';
+      return;
+    }
+    if (!state.config) { paintLoading('ยังไม่ได้โหลดข้อมูล'); return; }
+
+    var cloud = state.config;
+    var local = localSnapshot();
+    var cloudSummary = summary(cloud);
+    var localSummary = summary(local);
+    var localMetaVersion = Number(storageGet(CLOUD_VERSION_KEY)) || 0;
+    var published = cloud.published === true || Number(cloud.version) > 0;
+    var missingLocal = [PRICING_KEY, TIER_KEY, SHIPPING_KEY].some(function (key) { return !hasLocal(key); });
+    var noticeClass = state.notice ? (state.notice.type === 'error' ? ' error' : ' ok') : '';
+
+    var note = state.notice ? '<div class="hlg-cloud-status' + noticeClass + '">' + esc(state.notice.text) + '</div>' : '';
+    var historyRows = renderRows(state.history || [], cloud.version);
+
+    root.innerHTML = '<div class="hlg-cloud">'
+      + '<h3>☁️ ราคากลางบน Cloud</h3>'
+      + '<p><b>วิธีใช้:</b> แก้ราคา/โปรในแท็บด้านล่างของเครื่องนี้ แล้วกด <b>เผยแพร่ขึ้น Cloud</b> ลูกค้าทุกเครื่องจะใช้เวอร์ชันที่เผยแพร่ ไม่ใช้ราคาที่ฝังมากับหน้าเว็บ</p>'
+      + '<div class="hlg-cloud-stats">'
+      + '<div class="hlg-cloud-stat"><b>Cloud' + (published ? ' · v' + esc(cloud.version) : ' · ยังไม่เผยแพร่') + '</b>'
+      + 'ราคา ' + cloudSummary.base + ' รายการ · โปร ' + cloudSummary.promos + ' รายการ<br>'
+      + 'โปรตามจำนวน ' + (cloudSummary.tier ? 'เปิด' : 'ปิด') + ' · ค่าส่ง ' + cloudSummary.shippingBase + ' + ' + cloudSummary.shippingExtra + ' · ' + cloudSummary.shippingRules + ' กฎ<br>'
+      + 'อัปเดต ' + esc(fmtDate(cloud.updated_at || cloud.published_at)) + (cloud.updated_by ? ' โดย ' + esc(cloud.updated_by) : '') + '</div>'
+      + '<div class="hlg-cloud-stat"><b>เครื่องนี้</b>'
+      + 'ราคา ' + localSummary.base + ' รายการ · โปร ' + localSummary.promos + ' รายการ<br>'
+      + 'โปรตามจำนวน ' + (localSummary.tier ? 'เปิด' : 'ปิด') + ' · ค่าส่ง ' + localSummary.shippingBase + ' + ' + localSummary.shippingExtra + ' · ' + localSummary.shippingRules + ' กฎ<br>'
+      + 'ประวัติที่เครื่องนี้เคยใช้ v' + esc(localMetaVersion) + '</div>'
+      + '</div>'
+      + (missingLocal ? '<p>ℹ️ บางส่วนยังไม่มีข้อมูลในเครื่องนี้ ระบบจะใช้ค่าจาก Cloud ล่าสุดเมื่อกดเผยแพร่ (แนะนำให้กด “ดึงจาก Cloud” ก่อนแก้ไข)</p>' : '')
+      + note
+      + '<div class="hlg-cloud-actions">'
+      + '<button type="button" class="primary" data-action="publish">⬆ เผยแพร่ขึ้น Cloud</button>'
+      + '<button type="button" data-action="pull"' + (published ? '' : ' disabled') + '>⬇ ดึงจาก Cloud</button>'
+      + '<button type="button" data-action="refresh">↻ ตรวจสอบใหม่</button>'
+      + '</div>'
+      + '<div class="hlg-cloud-history"><h4>ประวัติเวอร์ชัน (ย้อนกลับได้)</h4>'
+      + (state.historyError ? '<p>' + esc(state.historyError) + '</p>' : historyRows)
+      + '</div>'
+      + '</div>';
+
+    root.querySelectorAll('button[data-action]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        var action = button.getAttribute('data-action');
+        if (action === 'publish') publish();
+        else if (action === 'pull') pull();
+        else if (action === 'refresh') refresh();
+        else if (action === 'restore') restore(Number(button.getAttribute('data-version')));
+      });
+    });
+  }
+
+  function refresh() {
+    var seq = ++state.seq;
+    state.loading = true;
+    state.error = '';
+    paint();
+    return request('/api/pricing/config').then(function (config) {
+      if (seq !== state.seq) return;
+      state.config = config;
+      return request('/api/pricing/config/history?limit=15').then(function (data) {
+        state.history = Array.isArray(data.history) ? data.history : [];
+        state.historyError = '';
+      }).catch(function (err) {
+        state.history = [];
+        state.historyError = 'โหลดประวัติเวอร์ชันไม่ได้: ' + (err.message || 'ไม่ทราบสาเหตุ');
+      }).then(function () {
+        if (seq !== state.seq) return;
+        state.loading = false;
+        state.error = '';
+        paint();
+      });
+    }).catch(function (err) {
+      if (seq !== state.seq) return;
+      state.loading = false;
+      state.config = null;
+      state.error = 'โหลดราคากลางไม่สำเร็จ: ' + (err.message || 'ไม่ทราบสาเหตุ');
+      paint();
+    });
+  }
+
+  function publish() {
+    if (!state.config) { refresh(); return; }
+    var version = Number(state.config.version) || 0;
+    if (!confirm('เผยแพร่ราคา/โปร/ค่าส่งจากเครื่องนี้ขึ้น Cloud เป็นเวอร์ชัน ' + (version + 1) + ' ใช่ไหมคะ?\nลูกค้าทุกเครื่องจะใช้เวอร์ชันนี้')) return;
+
+    var local = localSnapshot();
+    var body = {
+      version: version,
+      pricing: local.pricing,
+      tier: local.tier,
+      shipping: local.shipping
+    };
+    state.notice = null;
+    setNotice('ok', 'กำลังเผยแพร่...');
+    paint();
+    disableActions(true);
+    request('/api/pricing/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function (saved) {
+      try {
+        storageSet(CLOUD_VERSION_KEY, String(saved.version));
+        storageSet(CLOUD_UPDATED_KEY, saved.updated_at || new Date().toISOString());
+        storageSet(SHIPPING_MIGRATION_KEY, '1');
+      } catch (e) { /* quota errors are surfaced by the next publish/pull */ }
+      setNotice('ok', 'เผยแพร่เวอร์ชัน ' + saved.version + ' แล้ว ✓ ลูกค้าจะได้รับเมื่อโหลดหน้าเว็บครั้งถัดไป');
+      if (typeof showToast === 'function') showToast('success', 'เผยแพร่ราคากลาง v' + saved.version + ' แล้ว ✓');
+      refresh();
+    }).catch(function (err) {
+      var text = 'เผยแพร่ไม่สำเร็จ: ' + (err.message || 'ไม่ทราบสาเหตุ');
+      if (err.code === 'VERSION_CONFLICT') {
+        text = 'มีคนอื่นเผยแพร่เวอร์ชันใหม่ก่อนแล้ว (Cloud v' + (err.data && err.data.current_version) + ') กรุณาตรวจสอบและดึงค่าล่าสุดก่อนเผยแพร่';
+      } else if (err.data && err.data.details && err.data.details.length) {
+        text += '\n' + err.data.details.map(function (d) { return '• ' + (d.field ? d.field + ': ' : '') + d.message; }).join('\n');
+      }
+      setNotice('error', text);
+      refresh();
+    });
+  }
+
+  function pull() {
+    if (!state.config) { refresh(); return; }
+    var version = Number(state.config.version) || 0;
+    if (!version) { setNotice('error', 'Cloud ยังไม่มีเวอร์ชันที่เผยแพร่'); paint(); return; }
+    if (!confirm('ดึงราคากลางเวอร์ชัน ' + version + ' จาก Cloud มาเขียนทับค่าในเครื่องนี้ ใช่ไหมคะ?')) return;
+
+    try {
+      storageSet(PRICING_KEY, JSON.stringify(state.config.pricing || { base: {}, promos: [] }));
+      storageSet(TIER_KEY, JSON.stringify(state.config.tier || {}));
+      storageSet(SHIPPING_KEY, JSON.stringify(state.config.shipping || { base: 40, extra: 25, rules: [] }));
+      storageSet(SHIPPING_MIGRATION_KEY, '1');
+      storageSet(CLOUD_VERSION_KEY, String(version));
+      storageSet(CLOUD_UPDATED_KEY, state.config.updated_at || '');
+    } catch (err) {
+      setNotice('error', 'เขียนค่าลงเครื่องไม่สำเร็จ: ' + (err.message || 'พื้นที่เก็บข้อมูลอาจเต็ม'));
+      paint();
+      return;
+    }
+
+    if (typeof window.hlgRenderTiers === 'function') window.hlgRenderTiers();
+    if (typeof window.hlgRenderPricing === 'function') window.hlgRenderPricing();
+    setNotice('ok', 'ดึงเวอร์ชัน ' + version + ' มาใช้ในเครื่องนี้แล้ว ✓ ตรวจสอบค่าในแท็บด้านล่างก่อนเผยแพร่ครั้งถัดไป');
+    if (typeof showToast === 'function') showToast('success', 'ดึงราคากลาง v' + version + ' แล้ว ✓');
+    paint();
+  }
+
+  function restore(version) {
+    if (!state.config || !version) return;
+    var currentVersion = Number(state.config.version) || 0;
+    if (version === currentVersion) return;
+    if (!confirm('ย้อนกลับ Cloud ไปใช้ค่าเวอร์ชัน ' + version + ' ใช่ไหมคะ?\nระบบจะสร้างเวอร์ชันใหม่ (v' + (currentVersion + 1) + ') จากค่านั้น ไม่ได้ลบประวัติเดิม')) return;
+
+    setNotice('ok', 'กำลังย้อนกลับเวอร์ชัน...');
+    paint();
+    disableActions(true);
+    request('/api/pricing/config/restore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ version: version, current_version: currentVersion })
+    }).then(function (saved) {
+      setNotice('ok', 'ย้อนกลับสำเร็จ สร้างเวอร์ชัน ' + saved.version + ' จาก v' + version + ' แล้ว ✓');
+      if (typeof showToast === 'function') showToast('success', 'ย้อนกลับราคากลางเป็น v' + saved.version + ' แล้ว ✓');
+      refresh();
+    }).catch(function (err) {
+      var text = 'ย้อนกลับไม่สำเร็จ: ' + (err.message || 'ไม่ทราบสาเหตุ');
+      if (err.code === 'VERSION_CONFLICT') {
+        text = 'Cloud ถูกแก้ไขก่อนแล้ว กรุณาตรวจสอบเวอร์ชันล่าสุด';
+      }
+      setNotice('error', text);
+      refresh();
+    });
+  }
+
+  function disableActions(disabled) {
+    var root = document.getElementById('cloudPricingManagerContainer');
+    if (!root) return;
+    root.querySelectorAll('button[data-action]').forEach(function (button) { button.disabled = disabled; });
+  }
+
+  window.hlgRenderCloudPricing = function () {
+    refresh();
+  };
+
+  window.hlgCloudPricing = {
+    refresh: refresh,
+    publish: publish,
+    pull: pull,
+    restore: restore,
+    summary: summary
+  };
+})();
