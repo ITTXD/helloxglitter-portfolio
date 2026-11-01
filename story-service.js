@@ -31,7 +31,7 @@ const MAX_RESPONSE_BYTES = 3 * 1024 * 1024;
 const MAX_STORIES = 40;
 const MAX_ITEMS = 60;
 const ID_RE = /^[a-z0-9][a-z0-9_-]{7,63}$/i;
-const MIME_RE = /^(image\/(jpeg|png|webp|gif)|video\/(mp4|webm|quicktime))$/;
+const MIME_RE = /^(image\/(jpeg|png|webp|gif)|video\/(mp4|webm|quicktime)|font\/(woff2|woff|ttf|otf))$/;
 
 function chunkId(id, i) { return metaKey(id) + '__' + i; }
 
