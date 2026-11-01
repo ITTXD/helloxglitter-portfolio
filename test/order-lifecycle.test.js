@@ -26,7 +26,26 @@ async function test(name, fn) {
     assert.strictEqual(L.isExpired({ ...bill, payment_deadline: '2026-11-01T10:30:00.000Z' }, now), false);
     assert.strictEqual(L.isExpired({ ...bill, slip_verified: true }, now), false);
     assert.strictEqual(L.isExpired({ ...bill, payment_state: L.PAID }, now), false);
-    assert.strictEqual(L.isExpired({ status: 0, created_at: '2020-01-01' }, now), false, 'legacy orders are never purged');
+    assert.strictEqual(L.isExpired({ status: 1, created_at: '2020-01-01' }, now), false, 'confirmed orders are never purged');
+  });
+
+  await test('old unpaid orders (no slip, status 0) expire one hour after they were created', () => {
+    const old = { id: 'O', status: 0, created_at: '2026-11-01T08:00:00Z' };
+    assert.strictEqual(L.isLegacyUnpaid(old), true);
+    assert.strictEqual(L.isExpired(old, now), true);
+    assert.strictEqual(L.isExpired({ ...old, created_at: '2026-11-01T09:30:00Z' }, now), false, 'still inside its hour');
+    // anything that could be a real payment or a hand-handled order is left alone
+    assert.strictEqual(L.isExpired({ ...old, slip_data: 'data:image/jpeg;base64,x' }, now), false);
+    assert.strictEqual(L.isExpired({ ...old, payment_slip: 'x' }, now), false);
+    assert.strictEqual(L.isExpired({ ...old, slip_verified: true }, now), false);
+    assert.strictEqual(L.isExpired({ ...old, channel: 'shopee' }, now), false);
+    assert.strictEqual(L.isExpired({ ...old, tracking_number: 'TH1' }, now), false);
+    assert.strictEqual(L.isExpired({ ...old, status: 1 }, now), false);
+  });
+
+  await test('a purged bill keeps a copy of the order but not its images', async () => {
+    const copy = L.archiveCopy({ _docId: 'd', id: 'O', total_price: 1, slip_data: 'BIG', payment_slip: 'BIG', items: [{ name: 'x' }] });
+    assert.deepStrictEqual(copy, { id: 'O', total_price: 1, items: [{ name: 'x' }] });
   });
 
   await test('paid detection keeps legacy and Shopee orders', () => {
