@@ -13609,7 +13609,10 @@ function statusInfo(o){
   const statuses=Array.isArray(window.HLG_STATUSES) && window.HLG_STATUSES.length
     ? window.HLG_STATUSES
     : ['รับออเดอร์แล้ว','กำลังเตรียมงาน','กำลังผลิต','เตรียมจัดส่ง','จัดส่งแล้ว'];
-  const idx=Math.max(0,Math.min(Number(o.status)||0,statuses.length-1));
+  // The admin (/admin/) marks "จัดส่งแล้ว" as status 3 and a parcel number means it has left,
+  // so both count as the last step (100%) rather than "พร้อมจัดส่ง" (80%).
+  const last=statuses.length-1,s=Number(o.status)||0;
+  const idx=(s>=3||String(o.tracking_number||'').trim())?last:Math.max(0,Math.min(s,last));
   return {idx,name:statuses[idx]||'กำลังดำเนินการ',total:statuses.length};
 }
 function carrierInfo(o){
@@ -13645,23 +13648,27 @@ function latestFirst(a){
 function currentActiveOrder(rows){
   /* Prefer newest not-yet-completed order; otherwise newest order. */
   const sorted=latestFirst(rows);
-  return sorted.find(o=>Number(o.status||0)<4) || sorted[0] || null;
+  return sorted.find(o=>Number(o.status||0)<3&&!String(o.tracking_number||'').trim()) || sorted[0] || null;
 }
 function itemList(o){
-  const items=Array.isArray(o.items)?o.items:[];
+  let items=Array.isArray(o.items)?o.items:[];
+  if(!items.length&&Array.isArray(o.patterns)){
+    const q=o.pattern_qtys||{};
+    items=o.patterns.map(name=>({name,qty:q[name]||o.qty||1}));
+  }
   if(!items.length)return '';
   return `<div class="v8track-items">
     <div class="v8track-items-title">รายการที่สั่ง ♡</div>
     ${items.map(raw=>{
       const item=raw&&typeof raw==='object'?raw:{name:String(raw||'สินค้า')};
       const image=String(item.image||item.img||item.image_url||'').trim();
-      const safeImage=/^(https?:\/\/|data:image\/(?:png|jpe?g|webp|gif);base64,)/i.test(image);
+      const safeImage=/^(https?:\/\/|\/(?!\/)|\.\/|data:image\/(?:png|jpe?g|webp|gif);base64,)/i.test(image);
       const qty=Number(item.qty||item.quantity||1);
       return `<div class="v8track-item">
         ${safeImage?`<img class="v8track-item-image" src="${esc(image)}" alt="${esc(item.name||'สินค้า')}" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'v8track-item-placeholder',textContent:'♡'}))">`:'<span class="v8track-item-placeholder">♡</span>'}
         <div class="v8track-item-details"><b>${esc(item.name||'สินค้า')}</b>
           ${item.variant?`<small>${esc(item.variant)}</small>`:''}
-          <small>จำนวน ${Number.isFinite(qty)&&qty>0?esc(qty):1} ชิ้น</small>
+          <small>จำนวน ${Number.isFinite(qty)&&qty>0?esc(qty):1} ชิ้น${item.sponge?' · 🧽 + ฟองน้ำ':''}</small>
         </div>
       </div>`;
     }).join('')}

@@ -2232,6 +2232,7 @@ module.exports = async (req, res) => {
           status: o.status,
           patterns: o.patterns,
           pattern_qtys: o.pattern_qtys || null,
+          items: o.items || [],
           qty: o.qty,
           total_bags: o.total_bags,
           total_price: o.total_price,
