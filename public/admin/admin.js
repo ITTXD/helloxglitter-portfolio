@@ -2032,7 +2032,7 @@ function renderProductsView() {
 
   const categoryOptions = adminCategories.map(c => {
     const icon = c.id === 'bag' ? '👜' : c.id === 'sticker' ? '✨' : c.id === 'wallpaper' ? '🎨' : '🎀';
-    return `<option value="${c.id}">${icon} ${esc(c.name)}</option>`;
+    return `<option value="${escapeHtmlAttr(c.id)}">${icon} ${escapeHtml(c.name)}</option>`;
   }).join('');
 
   p.innerHTML = `
