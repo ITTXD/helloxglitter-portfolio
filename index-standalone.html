@@ -1991,13 +1991,13 @@ function wpCheckDownload() {
 var bgMusic = null;
 function getAudio() {
   if (!bgMusic) {
-    bgMusic = new Audio(CDN_BASE + '/music/song.mp3');
+    bgMusic = new Audio(CDN_BASE + '/music/dereks-tune.mp3');
     bgMusic.loop = true;
     bgMusic.volume = 0.5;
     bgMusic.onerror = function() {
       if (!this.dataset.triedLocal) {
         this.dataset.triedLocal = '1';
-        this.src = './music/song.mp3';
+        this.src = './music/dereks-tune.mp3';
       }
     };
   }
