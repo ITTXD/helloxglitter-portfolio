@@ -1052,6 +1052,11 @@ module.exports = async (req, res) => {
       const order = {
         id: orderId,
         created_at: new Date().toISOString(),
+        // Paid on arrival (the slip is verified before saving), so it takes the next queue number now.
+        queue_no: await getNextQueueNo(),
+        queue_assigned_at: new Date().toISOString(),
+        payment_state: lifecycle.PAID,
+        paid_at: new Date().toISOString(),
         type: 'wallpaper',
         customer_info: body.email || '',
         email: body.email || '',
@@ -1708,6 +1713,11 @@ module.exports = async (req, res) => {
       const order = {
         id: orderId,
         created_at: new Date().toISOString(),
+        // Paid on arrival (the slip is verified before saving), so it takes the next queue number now.
+        queue_no: await getNextQueueNo(),
+        queue_assigned_at: new Date().toISOString(),
+        payment_state: lifecycle.PAID,
+        paid_at: new Date().toISOString(),
         type: 'sticker',
         customer_name: cust.customer_name,
         customer_phone: cust.customer_phone,

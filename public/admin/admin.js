@@ -1004,8 +1004,10 @@ function printDeselectAll() {
 
 function printUpdateCount() {
   var count = Object.keys(printSelectedOrders).length;
-  document.getElementById('printSelectedCount').textContent = count;
-  document.getElementById('printBtn').disabled = count === 0;
+  var label = document.getElementById('printSelectedCount');
+  if (label) label.textContent = count;
+  var btn = document.getElementById('printBtn');
+  if (btn) btn.disabled = count === 0;
 }
 
 function buildLabelHTML(order) {
@@ -1095,9 +1097,10 @@ async function generateLabelsPDF() {
     console.error('PDF error:', err);
     showToast('error', 'สร้าง PDF ไม่สำเร็จ กรุณาลองใหม่');
   } finally {
+    // Put the label back first: it holds the counter that printUpdateCount() writes to.
+    btn.innerHTML = '<i class="ti ti-printer"></i> พิมพ์ที่เลือก (<span id="printSelectedCount">' + Object.keys(printSelectedOrders).length + '</span>)';
     btn.disabled = false;
     printUpdateCount();
-    btn.innerHTML = '<i class="ti ti-printer"></i> พิมพ์ที่เลือก (<span id="printSelectedCount">' + Object.keys(printSelectedOrders).length + '</span>)';
   }
 }
 
@@ -1135,12 +1138,14 @@ function hasSponge(order, patternName) {
 }
 
 function escapeHtml(s) {
-  if (!s) return '';
+  if (s == null) return '';
+  s = String(s);
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function escapeHtmlAttr(s) {
-  if (!s) return '';
+  if (s == null) return '';
+  s = String(s);
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
