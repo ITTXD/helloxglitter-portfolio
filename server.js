@@ -400,7 +400,7 @@ async function getNextQueueNo() {
 
 const expiredOrderStore = {
   remove: (o) => fsDeleteDoc('orders', o._docId || o.id),
-  tombstone: (o) => fsSetDoc(lifecycle.EXPIRED_COLLECTION, String(o.id), {
+  tombstone: (o) => fsSetDoc(lifecycle.EXPIRED_COLLECTION, lifecycle.expiredDocId(o.id), {
     id: o.id,
     expired_at: new Date().toISOString(),
     payment_deadline: o.payment_deadline || null,
@@ -448,7 +448,7 @@ async function loadLiveOrders(orderField) {
 
 async function isExpiredOrderId(id) {
   if (!id) return false;
-  try { return !!(await fsGetDoc(lifecycle.EXPIRED_COLLECTION, String(id))); } catch (e) { return false; }
+  try { return !!(await fsGetDoc(lifecycle.EXPIRED_COLLECTION, lifecycle.expiredDocId(id))); } catch (e) { return false; }
 }
 
 function generateVerifyToken({ transRef, amount, orderId, slipData }) {

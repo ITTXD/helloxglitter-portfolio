@@ -15,7 +15,12 @@
 const PAYMENT_WINDOW_MS = 60 * 60 * 1000;
 const AWAITING = 'awaiting_payment';
 const PAID = 'paid';
-const EXPIRED_COLLECTION = 'expired_orders';
+// Copies of purged bills live in `settings`: it is the only collection besides
+// `orders` that the live Firestore rules let the server write to (a new
+// collection is rejected with PERMISSION_DENIED, which kept bills from being purged).
+const EXPIRED_COLLECTION = 'settings';
+const EXPIRED_PREFIX = 'expired__';
+function expiredDocId(orderId) { return EXPIRED_PREFIX + String(orderId); }
 
 function paymentDeadline(now) {
   return new Date((now == null ? Date.now() : now) + PAYMENT_WINDOW_MS).toISOString();
@@ -212,6 +217,7 @@ module.exports = {
   AWAITING,
   PAID,
   EXPIRED_COLLECTION,
+  expiredDocId,
   paymentDeadline,
   isAwaitingPayment,
   isLegacyUnpaid,

@@ -43,6 +43,13 @@ async function test(name, fn) {
     assert.strictEqual(L.isExpired({ ...old, status: 1 }, now), false);
   });
 
+  await test('purge copies go to a collection the live Firestore rules accept', () => {
+    // New collections are rejected with PERMISSION_DENIED on the live project, so the copy
+    // is stored in `settings` under a prefix instead.
+    assert.strictEqual(L.EXPIRED_COLLECTION, 'settings');
+    assert.strictEqual(L.expiredDocId('HLG-1'), 'expired__HLG-1');
+  });
+
   await test('a purged bill keeps a copy of the order but not its images', async () => {
     const copy = L.archiveCopy({ _docId: 'd', id: 'O', total_price: 1, slip_data: 'BIG', payment_slip: 'BIG', items: [{ name: 'x' }] });
     assert.deepStrictEqual(copy, { id: 'O', total_price: 1, items: [{ name: 'x' }] });

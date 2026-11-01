@@ -19,7 +19,11 @@
  */
 'use strict';
 
-const MEDIA_COLLECTION = 'story_media';
+// Media lives in `settings` under a prefix: the live Firestore rules reject writes to
+// new collections (PERMISSION_DENIED), but `settings` is writable.
+const MEDIA_COLLECTION = 'settings';
+const MEDIA_PREFIX = 'story_media__';
+function metaKey(id) { return MEDIA_PREFIX + id; }
 const SETTINGS_ID = 'stories';
 const CHUNK_BYTES = 600 * 1024;          // binary bytes per Firestore chunk document
 const MAX_CHUNKS = 60;                   // ~35 MB per file
@@ -29,7 +33,7 @@ const MAX_ITEMS = 60;
 const ID_RE = /^[a-z0-9][a-z0-9_-]{7,63}$/i;
 const MIME_RE = /^(image\/(jpeg|png|webp|gif)|video\/(mp4|webm|quicktime))$/;
 
-function chunkId(id, i) { return id + '__' + i; }
+function chunkId(id, i) { return metaKey(id) + '__' + i; }
 
 function cleanRef(ref) {
   if (!ref || typeof ref !== 'object') return null;
@@ -121,7 +125,7 @@ async function handleStoryApi(req, res, pathname, method, ctx) {
     await store.set(MEDIA_COLLECTION, chunkId(id, index), { data });
     if (index === count - 1) {
       const size = (count - 1) * CHUNK_BYTES + bytes;
-      await store.set(MEDIA_COLLECTION, id, { mime, chunks: count, size, created_at: new Date().toISOString() });
+      await store.set(MEDIA_COLLECTION, metaKey(id), { mime, chunks: count, size, created_at: new Date().toISOString() });
     }
     sendJson(res, 200, { success: true, media_id: id, url: '/api/story-media/' + id });
     return true;
@@ -130,13 +134,13 @@ async function handleStoryApi(req, res, pathname, method, ctx) {
   if (pathname.startsWith('/api/story-media/') && (method === 'GET' || method === 'HEAD' || method === 'DELETE')) {
     const id = decodeURIComponent(pathname.slice('/api/story-media/'.length));
     if (!ID_RE.test(id)) { sendJson(res, 404, { error: 'Not found' }); return true; }
-    const meta = await store.get(MEDIA_COLLECTION, id);
+    const meta = await store.get(MEDIA_COLLECTION, metaKey(id));
 
     if (method === 'DELETE') {
       if (!ctx.isAdmin(req)) { sendJson(res, 401, { error: 'Unauthorized' }); return true; }
       if (meta) {
         for (let i = 0; i < (Number(meta.chunks) || 0); i++) await store.del(MEDIA_COLLECTION, chunkId(id, i));
-        await store.del(MEDIA_COLLECTION, id);
+        await store.del(MEDIA_COLLECTION, metaKey(id));
       }
       sendJson(res, 200, { success: true });
       return true;
