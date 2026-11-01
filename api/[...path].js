@@ -305,12 +305,45 @@ const expiredOrderStore = {
   }),
 };
 
+// The server owns queue numbers: renumbers once, then repairs gaps/duplicates.
+// Checked at most every few minutes per instance once the first renumber is done.
+let queueMigrated = false, queueCheckedAt = 0;
+async function ensureQueueNumbers(rows) {
+  if (queueMigrated && Date.now() - queueCheckedAt < 5 * 60 * 1000) return;
+  queueCheckedAt = Date.now();
+  const collectionOf = new Map(rows.map(o => [o, 'orders']));
+  const all = rows.slice();
+  try {
+    const snapStickers = await getDocs(collection(db, 'sticker_orders'));
+    snapStickers.forEach(d => {
+      if (all.some(o => o.id === d.data().id)) return;
+      const s = { _docId: d.id, ...d.data() };
+      all.push(s);
+      collectionOf.set(s, 'sticker_orders');
+    });
+  } catch (e) {}
+  try {
+    const result = await lifecycle.syncQueueNumbers(all, {
+      isMigrated: async () => queueMigrated || (await getDoc(doc(db, 'settings', 'queue_migration'))).exists(),
+      markMigrated: total => setDoc(doc(db, 'settings', 'queue_migration'), { renumbered_at: new Date().toISOString(), total }),
+      setCounter: last => setDoc(doc(db, 'settings', 'queue_counter'), { last, updated_at: new Date().toISOString() }),
+      update: (o, fields) => updateDoc(doc(db, collectionOf.get(o), o._docId), fields),
+    });
+    queueMigrated = true;
+    if (result.changed) console.log('[queue]', result.renumbered ? 'renumbered' : 'repaired', result.changed, 'orders; last', result.last);
+  } catch (err) {
+    console.warn('[queue] numbering check failed:', err.message);
+  }
+}
+
 // All orders, with unpaid bills past their 1-hour deadline removed.
 async function loadLiveOrders(ordered) {
   const snap = await getDocs(ordered ? query(collection(db, 'orders'), orderBy('created_at', 'desc')) : collection(db, 'orders'));
   const rows = [];
   snap.forEach(d => rows.push({ _docId: d.id, ...d.data() }));
-  return lifecycle.purgeExpired(rows, expiredOrderStore);
+  const live = await lifecycle.purgeExpired(rows, expiredOrderStore);
+  await ensureQueueNumbers(live);
+  return live;
 }
 
 async function isExpiredOrderId(id) {
@@ -1471,6 +1504,7 @@ module.exports = async (req, res) => {
       const order = {
         id: orderId,
         queue_no,
+        queue_assigned_at: new Date().toISOString(),
         channel: 'shopee',
         shopee_order_sn,
         customer_name,
@@ -1949,6 +1983,7 @@ module.exports = async (req, res) => {
         status: 1, // 1 = ยืนยันคิวแล้ว
         type: lifecycle.deriveOrderType(orderData.items, orderData.type || (existing && existing.type)),
         payment_state: lifecycle.PAID,
+        queue_assigned_at: (existing && existing.queue_assigned_at && existing.queue_no === queue_no) ? existing.queue_assigned_at : new Date().toISOString(),
         payment_deadline: null,
         paid_at: new Date().toISOString(),
         note: orderData.note || '',
@@ -2033,7 +2068,8 @@ module.exports = async (req, res) => {
       const plan = lifecycle.planRenumber(rows);
       const changes = plan.changes.map(c => ({ id: c.order.id, from: c.from, to: c.to }));
       if (!body.dry_run) {
-        for (const c of plan.changes) await updateDoc(doc(db, c.order._collection, c.order._docId), { queue_no: c.to });
+        const assignedAt = new Date().toISOString();
+        for (const c of plan.changes) await updateDoc(doc(db, c.order._collection, c.order._docId), { queue_no: c.to, queue_assigned_at: assignedAt });
         // The next paid order continues straight after the renumbered ones.
         await setDoc(doc(db, 'settings', 'queue_counter'), { last: plan.last, updated_at: new Date().toISOString() });
       }
