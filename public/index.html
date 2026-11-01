@@ -18730,6 +18730,52 @@ function inLineApp(){
   try{if(window.liff?.isInClient?.())return true}catch(e){}
   return /\bLine\//i.test(navigator.userAgent||'')
 }
+function isPhone(){
+  const ua=navigator.userAgent||'';
+  return /Android|iPhone|iPad|iPod/i.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1)
+}
+// On a phone, logging in from Safari/Chrome/IG hops to the LINE app and back, and the
+// return often opens in a different browser, so the login is lost. Opening the shop
+// inside LINE instead signs the customer in automatically. The cart travels in the URL.
+const CART_KEY='hlg_unified_cart_v1';
+function openShopInLine(liffId){
+  const u=new URL('https://liff.line.me/'+liffId);
+  try{
+    const cart=JSON.parse(localStorage.getItem(CART_KEY)||'[]');
+    if(Array.isArray(cart)&&cart.length){
+      const slim=cart.map(x=>({type:x.type,name:x.name,variant:x.variant,qty:x.qty,price:x.price,image:x.image,sponge:x.sponge,requiresEmail:x.requiresEmail,id:x.id,download_url:x.download_url}));
+      const packed=btoa(unescape(encodeURIComponent(JSON.stringify(slim)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+      if(packed.length<1800)u.searchParams.set('hlg_cart',packed);
+    }
+  }catch(e){}
+  if(document.getElementById('page-cart')?.classList.contains('active'))u.searchParams.set('page','cart');
+  location.href=u.toString()
+}
+function restoreCartFromUrl(){
+  const params=new URLSearchParams(location.search),packed=params.get('hlg_cart');
+  if(!packed)return;
+  try{
+    const json=decodeURIComponent(escape(atob(packed.replace(/-/g,'+').replace(/_/g,'/'))));
+    const incoming=JSON.parse(json),cart=JSON.parse(localStorage.getItem(CART_KEY)||'[]');
+    const key=x=>[x.type,x.name,x.variant||''].join('|');
+    (Array.isArray(incoming)?incoming:[]).forEach(x=>{if(x&&x.name&&!cart.some(y=>key(y)===key(x)))cart.push(x)});
+    localStorage.setItem(CART_KEY,JSON.stringify(cart));
+    // Bag lines are rebuilt from the pattern picker on every page, so restore the picks too
+    // (and the sponge choices, which are remembered by bag name).
+    const sponge=(()=>{try{return JSON.parse(localStorage.getItem('hlg_sponge_v1')||'{}')||{}}catch(e){return {}}})();
+    cart.filter(x=>x.type==='bag').forEach(x=>{
+      if(window.picked)window.picked[x.name]=Math.max(Number(x.qty)||1,Number(window.picked[x.name])||0);
+      if(x.sponge)sponge[x.name]=true;
+    });
+    try{localStorage.setItem('hlg_sponge_v1',JSON.stringify(sponge))}catch(e){}
+    try{window.buildGallery?.()}catch(e){}
+    window.v8UpdateCartFloat?.();
+    window.showToast?.('นำสินค้าในตะกร้ามาด้วยแล้วค่ะ ♡');
+  }catch(e){console.warn('[LINE] cart restore failed',e)}
+  params.delete('hlg_cart');
+  const q=params.toString();
+  try{history.replaceState(history.state,'',location.pathname+(q?'?'+q:'')+location.hash)}catch(e){}
+}
 function refreshLineUi(){
   try{if(typeof renderDrawerMenu==='function')renderDrawerMenu()}catch(e){}
   try{if(typeof hlgRenderAccountCard==='function')hlgRenderAccountCard()}catch(e){}
@@ -18757,6 +18803,7 @@ async function linkLineProfile(){
 let liffReadyResolve;
 window._hlgLiffReady=new Promise(res=>{liffReadyResolve=res});
 async function initLineLiff(){
+  if(!new URLSearchParams(location.search).has('liff.state'))restoreCartFromUrl();
   const returning=new URLSearchParams(window.location.search).has('liffClientId')||new URLSearchParams(window.location.search).has('code');
   let data={};
   try{data=await fetch('/api/auth/line/me',{credentials:'include'}).then(r=>r.json())}catch(e){}
@@ -18769,6 +18816,11 @@ async function initLineLiff(){
     liffReadyResolve(true);
     if(window.liff.isLoggedIn()){
       await linkLineProfile();
+    }else if(returning){
+      // Came back from LINE but LINE did not finish the login (usually: it reopened in another browser).
+      window.showToast?.(isPhone()&&!inLineApp()
+        ?'ล็อกอิน LINE ไม่สำเร็จ ลองกดเข้าสู่ระบบอีกครั้ง ระบบจะเปิดร้านในแอป LINE ให้ค่ะ'
+        :'ล็อกอิน LINE ไม่สำเร็จ กรุณากดเข้าสู่ระบบอีกครั้งค่ะ');
     }else if(inLineApp()&&!getLineUser()&&sessionStorage.getItem(LINE_AUTO_TRIED)!=='1'){
       // Inside LINE the login is a silent hop through the app, so do it for the customer.
       sessionStorage.setItem(LINE_AUTO_TRIED,'1');
@@ -18777,8 +18829,9 @@ async function initLineLiff(){
     }
   }catch(err){
     liffReadyResolve(false);
-    console.warn('[LINE LIFF] Init status:',err.message);
-    if(returning)window.showToast?.('เชื่อมบัญชี LINE ไม่สำเร็จ กรุณากด LOGIN อีกครั้งค่ะ');
+    console.warn('[LINE LIFF] Init status:',err.code,err.message);
+    // Show LINE's own error code so a screenshot is enough to diagnose it.
+    if(returning)window.showToast?.('เชื่อมบัญชี LINE ไม่สำเร็จ ('+(err.code||err.message||'unknown')+') กรุณากดเข้าสู่ระบบอีกครั้งค่ะ');
   }finally{
     if(returning)cleanLineLoginUrl()
   }
@@ -18794,6 +18847,7 @@ window.hlgLineLogin=async function(){
   if(ready&&window.liff){
     try{
       if(window.liff.isLoggedIn()){await linkLineProfile();document.getElementById('lineAccountModal')?.remove();return}
+      if(isPhone()&&!inLineApp()){openShopInLine(window._hxgLiffId||'2011786627-NobuH2ua');return}
       window.liff.login({redirectUri:lineLoginRedirectUri()});return
     }catch(e){console.warn('[LINE LIFF] login',e)}
   }
