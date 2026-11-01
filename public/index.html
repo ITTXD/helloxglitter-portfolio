@@ -10664,7 +10664,8 @@ window.v8CFconfirm=function(){
        customer_info:order.recipient_info,
        patterns:order.items.map(x=>x.name+(x.variant?' ('+x.variant+')':'')),
        items:order.items,
-       total_price:order.total_price,
+       // The server keeps total_price as the goods total and adds shipping_cost itself.
+       total_price:Math.max(0,Number(order.total_price||0)-Number(order.shipping_cost||0)),
        shipping_cost:order.shipping_cost,
        line_user_id:order.line_user_id||undefined,
        type:order.type
