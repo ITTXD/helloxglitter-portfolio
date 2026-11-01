@@ -18753,6 +18753,8 @@ async function linkLineProfile(){
   if(isNew)window.showToast?.('เชื่อมบัญชี LINE แล้ว สวัสดีคุณ '+(profile.displayName||'')+' ♡');
   return authData.user
 }
+let liffReadyResolve;
+window._hlgLiffReady=new Promise(res=>{liffReadyResolve=res});
 async function initLineLiff(){
   const returning=new URLSearchParams(window.location.search).has('liffClientId')||new URLSearchParams(window.location.search).has('code');
   let data={};
@@ -18760,9 +18762,10 @@ async function initLineLiff(){
   if(data.authenticated&&data.user&&!getLineUser()){setLineUser(data.user);refreshLineUi()}
   const liffId=data.liff_id||'2011786627-NobuH2ua';
   window._hxgLiffId=liffId;
-  if(!window.liff)return;
+  if(!window.liff){liffReadyResolve(false);return}
   try{
     await window.liff.init({liffId:liffId});
+    liffReadyResolve(true);
     if(window.liff.isLoggedIn()){
       await linkLineProfile();
     }else if(inLineApp()&&!getLineUser()&&sessionStorage.getItem(LINE_AUTO_TRIED)!=='1'){
@@ -18772,16 +18775,24 @@ async function initLineLiff(){
       return
     }
   }catch(err){
+    liffReadyResolve(false);
     console.warn('[LINE LIFF] Init status:',err.message);
     if(returning)window.showToast?.('เชื่อมบัญชี LINE ไม่สำเร็จ กรุณากด LOGIN อีกครั้งค่ะ');
   }finally{
     if(returning)cleanLineLoginUrl()
   }
 }
-window.hlgLineLogin=function(){
-  if(window.liff){
+// LINE only returns to the LIFF endpoint registered in LINE Developers; any other
+// domain gets "400 Bad Request". Visitors on another domain are sent there first.
+const LINE_HOME_ORIGIN='https://helloxglitterstore.vercel.app';
+window.hlgLineLogin=async function(){
+  if(location.hostname.endsWith('.vercel.app')&&location.origin!==LINE_HOME_ORIGIN){
+    location.href=LINE_HOME_ORIGIN+location.pathname+location.search+location.hash;return
+  }
+  const ready=await Promise.race([window._hlgLiffReady,new Promise(r=>setTimeout(()=>r(false),6000))]);
+  if(ready&&window.liff){
     try{
-      if(window.liff.isLoggedIn())return linkLineProfile().then(()=>{document.getElementById('lineAccountModal')?.remove()});
+      if(window.liff.isLoggedIn()){await linkLineProfile();document.getElementById('lineAccountModal')?.remove();return}
       window.liff.login({redirectUri:lineLoginRedirectUri()});return
     }catch(e){console.warn('[LINE LIFF] login',e)}
   }
