@@ -18,6 +18,32 @@
   .hlg-config label { display: block; margin: 8px 0; font-size: 13px; }
   .hlg-config input:not([type=checkbox]), .hlg-config select, .hlg-config textarea { width: 100%; box-sizing: border-box; border: 1px solid #e3c1cf; border-radius: 9px; padding: 9px; margin-top: 5px; font: inherit; background: #fff; }
   .hlg-config button { border: 0; border-radius: 9px; background: #ba4a79; color: #fff; padding: 9px 15px; font: inherit; cursor: pointer; }
+  .hlg-cloud { background: linear-gradient(135deg,#fff7fb 0%,#f8f2ff 100%); border: 1px solid #e5c8e9; border-radius: 17px; padding: 18px; margin: 12px 0; color: #60465e; box-shadow: 0 7px 24px #8651a31a; }
+  .hlg-cloud h3 { margin: 0 0 8px; color: #8e3e79; font-size: 18px; }
+  .hlg-cloud p { font-size: 12px; line-height: 1.65; color: #7c6579; margin: 6px 0; }
+  .hlg-cloud-stats { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin: 12px 0; }
+  .hlg-cloud-stat { background: #fff; border: 1px solid #eadcf0; border-radius: 12px; padding: 11px 13px; font-size: 12px; line-height: 1.6; }
+  .hlg-cloud-stat b { display: block; color: #8d3f76; font-size: 13px; margin-bottom: 4px; }
+  .hlg-cloud-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .hlg-cloud-actions button { border: 1px solid #d8b8e2; border-radius: 10px; background: #fff; color: #8b3c75; padding: 9px 13px; font: inherit; font-weight: 800; cursor: pointer; }
+  .hlg-cloud-actions button.primary { background: #a94786; border-color: #a94786; color: #fff; }
+  .hlg-cloud-actions button:disabled { opacity: .55; cursor: wait; }
+  .hlg-cloud-status { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: #fff; border: 1px solid #eadcf0; font-size: 12px; line-height: 1.55; white-space: pre-wrap; }
+  .hlg-cloud-status.error { background: #fff1f3; border-color: #f1b9c4; color: #a52f4d; }
+  .hlg-cloud-status.ok { background: #f1fff6; border-color: #b9e6c8; color: #257747; }
+  .hlg-cloud-history { margin-top: 12px; border-top: 1px dashed #dcc6e5; padding-top: 10px; }
+  .hlg-cloud-history h4 { margin: 0 0 8px; color: #8e3e79; font-size: 13px; }
+  .hlg-cloud-version { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #f0e5f4; font-size: 12px; }
+  .hlg-cloud-version:last-child { border-bottom: 0; }
+  .hlg-cloud-version button { border: 1px solid #d8b8e2; border-radius: 8px; background: #fff; color: #8b3c75; padding: 6px 10px; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
+  .hlg-cloud-feature { margin: 12px 0; padding: 12px 14px; border: 1px solid #eadcf0; border-radius: 12px; background: #fff; font-size: 12px; }
+  .hlg-cloud-feature h4 { margin: 0 0 8px; color: #8e3e79; font-size: 13px; }
+  .hlg-cloud-feature-check { display: flex; align-items: center; gap: 7px; font-weight: 800; margin-bottom: 9px; }
+  .hlg-cloud-feature-row { display: grid; grid-template-columns: 100px 1fr; align-items: center; gap: 8px; margin: 7px 0; }
+  .hlg-cloud-feature-row select, .hlg-cloud-feature-row input[type="text"] { width: 100%; box-sizing: border-box; border: 1px solid #dfc8e7; border-radius: 8px; padding: 7px 9px; font: inherit; color: #5f4560; background: #fff; }
+  .hlg-cloud-feature-help { margin: 8px 0 0; font-size: 10px; line-height: 1.6; color: #8d7890; }
+  .hlg-cloud-feature-help code { background: #f6eff9; border-radius: 4px; padding: 1px 4px; }
+  @media (max-width: 650px) { .hlg-cloud-stats { grid-template-columns: 1fr; } .hlg-cloud-feature-row { grid-template-columns: 1fr; gap: 4px; } }
   .hlg-tier-card { border: 1px solid #f1d8e3; border-radius: 12px; padding: 11px; margin: 9px 0; background: #fffafd; }
   .hlg-tier-card h4 { margin: 0 0 8px; color: #a74970; }
   .hlg-font-preview { padding: 18px; margin: 12px 0; border: 1px dashed #d78cae; border-radius: 12px; background: #fff6fa; font-size: 17px; }
@@ -186,18 +212,14 @@
       <button class="ftab" data-filter="1">ยืนยันแล้ว <span class="ftab-count">0</span></button>
       <button class="ftab" data-filter="2">กำลังผลิต <span class="ftab-count">0</span></button>
       <button class="ftab" data-filter="3">จัดส่งแล้ว <span class="ftab-count">0</span></button>
+      <button class="ftab ftab-unpaid" data-filter="unpaid" title="บิลที่ยังไม่ชำระ จะถูกยกเลิกอัตโนมัติเมื่อครบ 1 ชั่วโมง">⏰ รอชำระ <span class="ftab-count">0</span></button>
     </div>
     <div class="filter-channel-tabs" id="filterChannelTabs" style="display:inline-flex;gap:4px">
       <button class="chtab active" data-channel="all" onclick="switchChannelFilter('all')">ทั้งหมด</button>
       <button class="chtab" data-channel="web" onclick="switchChannelFilter('web')">🌐 เว็บไซต์</button>
       <button class="chtab" data-channel="shopee" onclick="switchChannelFilter('shopee')">🧡 Shopee</button>
     </div>
-    <div class="filter-date-tabs" id="filterDateTabs">
-      <button class="dftab active" data-dfilter="all">ทั้งหมด</button>
-      <button class="dftab" data-dfilter="upto19">ถึง 19 มิ.ย.</button>
-      <button class="dftab" data-dfilter="20to25">20–25 มิ.ย.</button>
-      <button class="dftab" data-dfilter="after25">หลัง 25 มิ.ย.</button>
-    </div>
+    <div class="date-range" id="ordersDateRange" data-range="orders"></div>
     <div class="refresh-bar">
       <button class="refresh-btn" id="refreshBtn" onclick="refreshData()"><i class="ti ti-refresh"></i> รีเฟรช</button>
       <div class="filter-search">
@@ -207,17 +229,30 @@
     </div>
   </div>
 
+  <!-- Bulk actions -->
+  <div class="bulk-bar" id="bulkBar">
+    <div class="bulk-info"><span id="bulkCount">0</span> รายการที่เลือก</div>
+    <div class="bulk-actions">
+      <select id="bulkStatus" aria-label="สถานะใหม่"></select>
+      <button type="button" class="bulk-btn" id="bulkStatusBtn" onclick="bulkChangeStatus()" disabled><i class="ti ti-switch-horizontal"></i> เปลี่ยนสถานะที่เลือก</button>
+      <button type="button" class="bulk-btn bulk-danger" id="bulkDeleteBtn" onclick="bulkDeleteSelected()" disabled><i class="ti ti-trash"></i> ลบที่เลือก</button>
+      <button type="button" class="bulk-btn bulk-danger-outline" onclick="bulkDeleteAllShown()"><i class="ti ti-trash-x"></i> ลบทั้งหมดในรายการนี้</button>
+      <button type="button" class="bulk-btn bulk-export" onclick="exportAddressesExcel()"><i class="ti ti-file-spreadsheet"></i> Export ที่อยู่ (Excel)</button>
+    </div>
+  </div>
+
   <!-- Orders Table -->
   <div class="table-wrap">
     <table class="order-table" id="orderTable">
       <thead>
         <tr>
+          <th class="th-check"><input type="checkbox" id="selectAllOrders" onchange="toggleSelectAllOrders(this.checked)" aria-label="เลือกทั้งหมด"/></th>
           <th>รหัส</th>
           <th>ลูกค้า</th>
           <th>ลาย</th>
           <th>ใบ</th>
           <th>ยอดรวม</th>
-          <th>tracking</th>
+          <th>เลขพัสดุ (packing)</th>
           <th>สถานะ</th>
           <th>วันที่</th>
           <th></th>
@@ -237,6 +272,10 @@
     <div style="padding:20px;max-width:1000px;margin:0 auto">
       <h2><i class="ti ti-box"></i> จัดการสินค้าและโปรโมชั่น</h2>
       <p style="color:#807078;margin-top:8px">สร้างหมวดหมู่ใหม่, เพิ่มสินค้า, ตั้งการ์ดพรีวิวหน้าแรก, โปรตามจำนวน, ลดราคาชิ้นเดียว ข้อมูลจะซิงค์ขึ้นระบบออนไลน์และบันทึกอัตโนมัติ</p>
+      <section class="promo-editor-section">
+        <h3><i class="ti ti-cloud-upload"></i> ราคากลางบน Cloud</h3>
+        <div id="cloudPricingManagerContainer"></div>
+      </section>
       <section class="promo-editor-section">
         <h3><i class="ti ti-category"></i> หมวดหมู่สินค้า</h3>
         <div id="categoryManagerContainer"></div>
@@ -294,12 +333,8 @@
   <!-- VIEW: SUMMARY -->
   <div id="viewSummary" class="admin-view hidden">
     <div class="summary-page">
-      <div class="date-filter-bar">
-        <button class="dtab active" data-drange="all" onclick="switchDateFilter('all')">ทั้งหมด</button>
-        <button class="dtab" data-drange="before19" onclick="switchDateFilter('before19')">ชำระก่อน 19 มิ.ย.</button>
-        <button class="dtab" data-drange="19to23" onclick="switchDateFilter('19to23')">รอบ 21-23 มิ.ย.</button>
-        <button class="dtab" data-drange="24to25" onclick="switchDateFilter('24to25')">24-25 มิ.ย.</button>
-      </div>
+      <div class="date-range" id="summaryDateRange" data-range="summary"></div>
+      <div class="summary-totals" id="summaryTotals"></div>
       <div class="summary-wrap" id="productSummary"></div>
     </div>
   </div>
@@ -310,7 +345,7 @@
       <div class="print-toolbar">
         <div class="print-toolbar-left">
           <h2 class="print-title"><i class="ti ti-printer"></i> พิมพ์ใบแปะหน้าพัสดุ</h2>
-          <span class="print-sub">ขนาด 150 × 100 mm — เฉพาะออเดอร์ที่ยืนยันแล้ว</span>
+          <span class="print-sub">ขนาด 150 × 100 mm — เฉพาะออเดอร์ที่ชำระเงินและยืนยันแล้ว</span>
         </div>
         <div class="print-toolbar-right">
           <button class="print-action-btn" onclick="printSelectAll()"><i class="ti ti-checkbox"></i> เลือกทั้งหมด</button>
@@ -343,15 +378,7 @@
     <div class="tracking-page">
       <div class="tracking-toolbar">
         <h2 class="tracking-title"><i class="ti ti-truck"></i> ใส่เลขพัสดุ</h2>
-        <div class="filter-date-tabs" id="trackingDateTabs">
-          <button class="dftab active" data-tfilter="all" onclick="switchTrackingDateFilter('all')">ทั้งหมด</button>
-          <button class="dftab" data-tfilter="before19" onclick="switchTrackingDateFilter('before19')">ก่อน 19 มิ.ย.</button>
-          <button class="dftab" data-tfilter="upto19" onclick="switchTrackingDateFilter('upto19')">ถึง 19 มิ.ย.</button>
-          <button class="dftab" data-tfilter="20to23" onclick="switchTrackingDateFilter('20to23')">20–23 มิ.ย.</button>
-          <button class="dftab" data-tfilter="20to25" onclick="switchTrackingDateFilter('20to25')">20–25 มิ.ย.</button>
-          <button class="dftab" data-tfilter="after23" onclick="switchTrackingDateFilter('after23')">หลัง 23 มิ.ย.</button>
-          <button class="dftab" data-tfilter="after25" onclick="switchTrackingDateFilter('after25')">หลัง 25 มิ.ย.</button>
-        </div>
+        <div class="date-range" id="trackingDateRange" data-range="tracking"></div>
         <div class="tracking-search">
           <i class="ti ti-search"></i>
           <input id="trackingSearch" placeholder="ค้นหา รหัส / ชื่อลูกค้า..." oninput="renderTrackingView()"/>
@@ -394,7 +421,7 @@
 
 <!-- TOAST -->
 <div id="toastContainer" class="toast-container"></div>
-<datalist id="carrierOptions"><option value="Flash Express"/><option value="Shopee"/></datalist>
+<datalist id="carrierOptions"><option value="Flash Express"/><option value="SPX Express"/><option value="J&amp;T Express"/><option value="Kerry Express"/><option value="ไปรษณีย์ไทย"/><option value="Shopee"/></datalist>
 
 <!-- LIGHTBOX -->
 <div id="lightbox" class="lightbox hidden" onclick="closeLightbox()">

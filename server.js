@@ -17,6 +17,10 @@ const {
   parseLineUserFromRequest,
 } = require('./coupon-service');
 const { sendCouponFlexMessage, sendOrderReceiptFlexMessage } = require('./line-service');
+const pricingConfig = require('./pricing-config');
+const quoteService = require('./quote-service');
+const lifecycle = require('./order-lifecycle');
+const storyService = require('./story-service');
 const {
   getSlipLockKey,
   acquireSlipLock,
@@ -55,7 +59,8 @@ if (process.env.FIREBASE_PROJECT_ID) {
 const localMemStore = {
   orders: [],
   settings: [],
-  coupons: []
+  coupons: [],
+  quotes: []
 };
 
 async function fsAddDoc(collectionName, data) {
@@ -144,6 +149,71 @@ async function fsFindByField(collectionName, fieldName, fieldValue) {
   if (snap.empty) return null;
   const d = snap.docs[0];
   return { _docId: d.id, ...d.data() };
+}
+
+// ==================== PRICING CONFIG STORE ====================
+let pricingPublishQueue = Promise.resolve();
+
+function pricingVersionConflict(currentVersion) {
+  const err = new Error('ข้อมูลราคาบน Cloud ถูกแก้ไขจากเครื่องอื่น กรุณาโหลดเวอร์ชันล่าสุดแล้วลองใหม่');
+  err.code = 'VERSION_CONFLICT';
+  err.current_version = currentVersion;
+  return err;
+}
+
+const serverPricingStore = {
+  cacheKey: 'server',
+  async loadConfigDoc() {
+    return fsGetDoc('settings', 'pricing');
+  },
+  publish(expectedVersion, configDoc, historyDoc) {
+    const run = pricingPublishQueue.then(async () => {
+      const existing = await fsGetDoc('settings', 'pricing');
+      const currentVersion = Number(existing && existing.version) || 0;
+      if (currentVersion !== expectedVersion) {
+        throw pricingVersionConflict(currentVersion);
+      }
+      await fsSetDoc('settings', 'pricing', configDoc);
+      await fsSetDoc('pricing_config_history', String(configDoc.version), historyDoc);
+      return configDoc;
+    });
+    pricingPublishQueue = run.catch(() => {});
+    return run;
+  },
+  async getHistory(version) {
+    return fsGetDoc('pricing_config_history', String(version));
+  },
+  async listHistory(limit) {
+    const rows = await fsGetDocs('pricing_config_history', 'version');
+    return rows
+      .sort((a, b) => Number(b.version) - Number(a.version))
+      .slice(0, limit);
+  }
+};
+
+const serverQuoteStore = {
+  async saveQuote(doc) {
+    await fsSetDoc('quotes', doc.quote_id, doc);
+    return doc;
+  },
+  async getQuote(quoteId) {
+    return fsGetDoc('quotes', quoteId);
+  }
+};
+
+const quoteRateLimiter = quoteService.createRateLimiter({ max: 30, windowMs: 60 * 1000 });
+
+function sendPricingError(res, err) {
+  const mapped = pricingConfig.httpError(err);
+  sendJson(res, mapped.status, mapped.body);
+}
+
+function sendQuoteError(res, err) {
+  const mapped = quoteService.httpError(err);
+  if (mapped.body.retry_after != null && typeof res.setHeader === 'function') {
+    res.setHeader('Retry-After', String(mapped.body.retry_after));
+  }
+  sendJson(res, mapped.status, mapped.body);
 }
 
 async function findOrderRecord(id) {
@@ -292,21 +362,58 @@ function extractCustomerFields(data) {
   };
 }
 
-async function getNextQueueNo() {
-  const allOrders = await fsGetDocs('orders');
-  let maxQueue = 0;
-  allOrders.forEach(o => {
-    const m = String(o.queue_no || '').match(/(\d+)/);
-    if (m) maxQueue = Math.max(maxQueue, parseInt(m[1], 10) || 0);
-  });
+let memQueueCounter = 0;
+
+async function scanMaxQueueNo() {
+  let maxQueue = lifecycle.maxQueueNumber(await fsGetDocs('orders'));
   try {
-    const stickers = await fsGetDocs('sticker_orders');
-    stickers.forEach(o => {
-      const m = String(o.queue_no || '').match(/(\d+)/);
-      if (m) maxQueue = Math.max(maxQueue, parseInt(m[1], 10) || 0);
-    });
+    maxQueue = Math.max(maxQueue, lifecycle.maxQueueNumber(await fsGetDocs('sticker_orders')));
   } catch (e) {}
-  return 'HLG-' + String(maxQueue + 1).padStart(3, '0');
+  return maxQueue;
+}
+
+// Allocates the next HLG-XXX. The counter document is updated in a transaction
+// so two payments confirmed at the same moment never share a queue number.
+async function getNextQueueNo() {
+  const scanMax = await scanMaxQueueNo();
+  if (!db) {
+    memQueueCounter = lifecycle.nextQueueNumber(scanMax, memQueueCounter);
+    return lifecycle.formatQueueNo(memQueueCounter);
+  }
+  const { doc, runTransaction } = require('firebase/firestore');
+  try {
+    const next = await runTransaction(db, async (tx) => {
+      const ref = doc(db, 'settings', 'queue_counter');
+      const snap = await tx.get(ref);
+      const n = lifecycle.nextQueueNumber(scanMax, snap.exists() ? snap.data().last : 0);
+      tx.set(ref, { last: n, updated_at: new Date().toISOString() });
+      return n;
+    });
+    return lifecycle.formatQueueNo(next);
+  } catch (err) {
+    // Never block a paid order on the counter; the scan alone is still correct without races.
+    console.warn('[queue] counter transaction failed, using scan:', err.message);
+    return lifecycle.formatQueueNo(lifecycle.nextQueueNumber(scanMax, 0));
+  }
+}
+
+const expiredOrderStore = {
+  remove: (o) => fsDeleteDoc('orders', o._docId || o.id),
+  tombstone: (o) => fsSetDoc(lifecycle.EXPIRED_COLLECTION, String(o.id), {
+    id: o.id,
+    expired_at: new Date().toISOString(),
+    payment_deadline: o.payment_deadline || null,
+  }),
+};
+
+// All orders, with unpaid bills past their 1-hour deadline removed.
+async function loadLiveOrders(orderField) {
+  return lifecycle.purgeExpired(await fsGetDocs('orders', orderField), expiredOrderStore);
+}
+
+async function isExpiredOrderId(id) {
+  if (!id) return false;
+  try { return !!(await fsGetDoc(lifecycle.EXPIRED_COLLECTION, String(id))); } catch (e) { return false; }
 }
 
 function generateVerifyToken({ transRef, amount, orderId, slipData }) {
@@ -346,6 +453,13 @@ async function handleApi(req, res) {
   const pathname = url.pathname;
   const method = req.method;
 
+  const storyStore = {
+    get: (c, id) => fsGetDoc(c, id),
+    set: (c, id, data) => fsSetDoc(c, id, data),
+    del: (c, id) => fsDeleteDoc(c, id),
+  };
+  if (await storyService.handleStoryApi(req, res, pathname, method, { isAdmin, readBody, sendJson, store: storyStore })) return true;
+
   // POST /api/login
   if (pathname === '/api/login' && method === 'POST') {
     const body = await readBody(req);
@@ -375,6 +489,136 @@ async function handleApi(req, res) {
   // GET /api/check-auth
   if (pathname === '/api/check-auth' && method === 'GET') {
     sendJson(res, 200, { authenticated: isAdmin(req) });
+    return true;
+  }
+
+  // ==================== PRICING CONFIG / TRUSTED CATALOG ====================
+  // Public, read-only config. Secrets must never be stored in settings/pricing.
+  if (pathname === '/api/pricing/config' && method === 'GET') {
+    try {
+      const config = await pricingConfig.loadConfig(serverPricingStore);
+      sendJson(res, 200, Object.assign({ success: true }, config));
+    } catch (err) {
+      console.error('Failed to load pricing config:', err);
+      sendPricingError(res, err);
+    }
+    return true;
+  }
+
+  // Admin publish. `version` is the version the admin last read, so a stale
+  // browser cannot silently overwrite a newer published config.
+  if (pathname === '/api/pricing/config' && method === 'PUT') {
+    if (!isAdmin(req)) { send401(res); return true; }
+    const body = await readBody(req);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      sendJson(res, 400, { success: false, error: 'ข้อมูลที่ส่งมาไม่ถูกต้อง', code: 'INVALID_CONFIG' });
+      return true;
+    }
+    try {
+      const saved = await pricingConfig.publishConfig(serverPricingStore, body, req.headers['x-admin-user'] || 'admin');
+      sendJson(res, 200, Object.assign({ success: true }, saved));
+    } catch (err) {
+      console.error('Failed to publish pricing config:', err);
+      sendPricingError(res, err);
+    }
+    return true;
+  }
+
+  // Admin history / rollback source.
+  if (pathname === '/api/pricing/config/history' && method === 'GET') {
+    if (!isAdmin(req)) { send401(res); return true; }
+    try {
+      const history = await pricingConfig.listHistory(serverPricingStore, url.searchParams.get('limit'));
+      sendJson(res, 200, { success: true, history });
+    } catch (err) {
+      console.error('Failed to list pricing history:', err);
+      sendPricingError(res, err);
+    }
+    return true;
+  }
+
+  // Admin restore publishes an old version as a new version (never rewrites history).
+  if (pathname === '/api/pricing/config/restore' && method === 'POST') {
+    if (!isAdmin(req)) { send401(res); return true; }
+    const body = await readBody(req);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      sendJson(res, 400, { success: false, error: 'ข้อมูลที่ส่งมาไม่ถูกต้อง', code: 'INVALID_CONFIG' });
+      return true;
+    }
+    try {
+      const saved = await pricingConfig.restoreConfig(serverPricingStore, body, req.headers['x-admin-user'] || 'admin');
+      sendJson(res, 200, Object.assign({ success: true, restored: true }, saved));
+    } catch (err) {
+      console.error('Failed to restore pricing config:', err);
+      sendPricingError(res, err);
+    }
+    return true;
+  }
+
+  // Public trusted catalog. This is the catalog the server will price from in
+  // P2; browser-supplied prices are never part of this response.
+  if (pathname === '/api/pricing/catalog' && method === 'GET') {
+    try {
+      const config = await pricingConfig.loadConfig(serverPricingStore);
+      const storefront = (await fsGetDoc('settings', 'storefront')) || {};
+      const catalog = pricingConfig.buildCatalog(config, {
+        customProducts: Array.isArray(storefront.custom_products) ? storefront.custom_products : [],
+        categories: Array.isArray(storefront.categories) ? storefront.categories : []
+      });
+      sendJson(res, 200, Object.assign({ success: true }, catalog));
+    } catch (err) {
+      console.error('Failed to build pricing catalog:', err);
+      sendPricingError(res, err);
+    }
+    return true;
+  }
+
+  // POST /api/quotes — server-authoritative quote preview (P2).
+  // The quote API remains callable even when the browser feature flag is off;
+  // the flag only controls storefront shadow/live display.
+  if (pathname === '/api/quotes' && method === 'POST') {
+    if (typeof res.setHeader === 'function') res.setHeader('Cache-Control', 'no-store');
+    const rate = quoteRateLimiter.check(quoteService.clientKey(req));
+    if (!rate.allowed) {
+      const limited = quoteService.quoteError('RATE_LIMITED', 'ตรวจสอบราคาบ่อยเกินไป กรุณาลองใหม่ภายหลัง');
+      limited.retry_after = rate.retry_after;
+      sendQuoteError(res, limited);
+      return true;
+    }
+
+    const body = await readBody(req);
+    try {
+      const now = Date.now();
+      const config = await pricingConfig.loadConfig(serverPricingStore);
+      const storefront = (await fsGetDoc('settings', 'storefront')) || {};
+      const built = pricingConfig.buildCatalogContext(config, {
+        customProducts: Array.isArray(storefront.custom_products) ? storefront.custom_products : [],
+        categories: Array.isArray(storefront.categories) ? storefront.categories : []
+      }, { now: now });
+      const cookieUser = parseLineUserFromRequest(req);
+      const bodyLineUserId = body && typeof body === 'object' && !Array.isArray(body) ? body.line_user_id : '';
+      const result = await quoteService.issueQuote({
+        body: body,
+        config: config,
+        pricing: built.pricing,
+        tier: config.tier,
+        shipping: config.shipping,
+        catalog: built.engine,
+        store: serverQuoteStore,
+        couponValidator: validateCouponForCheckout,
+        db: db,
+        lineUserId: cookieUser ? cookieUser.line_user_id : bodyLineUserId,
+        now: now
+      });
+      sendJson(res, 200, result.response);
+    } catch (err) {
+      if (err && err.code && err.code !== 'QUOTE_ERROR') {
+        console.warn('[quote] rejected:', err.code);
+      } else {
+        console.error('Failed to create quote:', err);
+      }
+      sendQuoteError(res, err);
+    }
     return true;
   }
 
@@ -972,14 +1216,15 @@ async function handleApi(req, res) {
 
     const order = {
       id: orderId,
-      queue_no: body.queue_no || (typeof getNextQueueNo === 'function' ? await getNextQueueNo() : ''),
+      // Storefront bills stay unpaid (no queue number) until the slip is confirmed.
+      queue_no: isAdminUser ? (body.queue_no || await getNextQueueNo()) : '',
       created_at: new Date().toISOString(),
       customer_name: cust.customer_name,
       customer_phone: cust.customer_phone,
       customer_address: cust.customer_address,
       customer_email: (body.customer_email || cust.customer_email || '').trim(),
       customer_info: cust.customer_info,
-      type: body.type || 'bag',
+      type: lifecycle.deriveOrderType(body.items, body.type),
       items: body.items || [],
       line_user_id: lineUserId || null,
       patterns: patterns,
@@ -1002,6 +1247,10 @@ async function handleApi(req, res) {
       slip_verified: isAdminUser ? !!body.slip_verified : false,
       slip_uploaded_at: body.slip_data ? new Date().toISOString() : null,
     };
+    if (!isAdminUser) {
+      order.payment_state = lifecycle.AWAITING;
+      order.payment_deadline = lifecycle.paymentDeadline();
+    }
 
     if (validatedCoupon) {
       await markCouponAsUsed(db, validatedCoupon.code, orderId);
@@ -1673,6 +1922,11 @@ async function handleApi(req, res) {
     // Dynamic sequential queue number (HLG-XXX)
     // Security: Check existing database record; allocate next queue_no server-side to prevent client spoofing
     const existing = await fsFindByField('orders', 'id', orderId);
+    if (lifecycle.isExpired(existing) || (!existing && await isExpiredOrderId(orderId))) {
+      if (existing) await lifecycle.purgeExpired([existing], expiredOrderStore);
+      sendJson(res, 410, { error: 'บิลนี้หมดเวลาชำระแล้ว (เกิน 1 ชั่วโมง) ออเดอร์ถูกยกเลิกอัตโนมัติ หากโอนเงินแล้ว กรุณาติดต่อร้านพร้อมสลิปค่ะ', expired: true });
+      return true;
+    }
     let queue_no = (existing && existing.queue_no) ? existing.queue_no : await getNextQueueNo();
 
     // Pattern qtys
@@ -1738,6 +1992,10 @@ async function handleApi(req, res) {
       shipping_cost: shippingCost,
       is_remote: orderData.is_remote || false,
       status: 1, // 1 = ยืนยันคิวแล้ว
+      type: lifecycle.deriveOrderType(orderData.items, orderData.type || (existing && existing.type)),
+      payment_state: lifecycle.PAID,
+      payment_deadline: null,
+      paid_at: new Date().toISOString(),
       note: orderData.note || '',
       note_status: orderData.note ? 'on' : 'off',
       slip_data: slipData,
@@ -1793,7 +2051,7 @@ async function handleApi(req, res) {
   // GET /api/orders — ดึงทุกออเดอร์ (ต้อง auth)
   if (pathname === '/api/orders' && method === 'GET') {
     if (!isAdmin(req)) { send401(res); return true; }
-    const orders = await fsGetDocs('orders', 'created_at');
+    const orders = await loadLiveOrders('created_at');
     try {
       const stickers = await fsGetDocs('sticker_orders');
       stickers.forEach(s => {
@@ -1803,6 +2061,34 @@ async function handleApi(req, res) {
       });
     } catch (e) {}
     sendJson(res, 200, orders);
+    return true;
+  }
+
+  // POST /api/orders/bulk — admin: change status of / delete many orders at once
+  if (pathname === '/api/orders/bulk' && method === 'POST') {
+    if (!isAdmin(req)) { send401(res); return true; }
+    const body = await readBody(req);
+    const ids = Array.isArray(body.ids) ? body.ids.map(String).filter(Boolean).slice(0, 500) : [];
+    const action = body.action;
+    const status = Number(body.status);
+    if (!ids.length || !['delete', 'status'].includes(action) || (action === 'status' && !(Number.isInteger(status) && status >= 0 && status <= 3))) {
+      sendJson(res, 400, { error: 'ข้อมูลไม่ถูกต้อง' });
+      return true;
+    }
+    const done = [], failed = [];
+    for (const id of ids) {
+      try {
+        const record = await findOrderRecord(id);
+        if (!record) { failed.push(id); continue; }
+        if (action === 'delete') await fsDeleteDoc(record.collectionName, record.docId);
+        else await fsUpdateDoc(record.collectionName, record.docId, { status, updated_at: new Date().toISOString() });
+        done.push(id);
+      } catch (err) {
+        console.warn('[orders/bulk]', action, id, err.message);
+        failed.push(id);
+      }
+    }
+    sendJson(res, 200, { success: failed.length === 0, done, failed });
     return true;
   }
 
@@ -1902,7 +2188,7 @@ async function handleApi(req, res) {
   // GET /api/stats
   if (pathname === '/api/stats' && method === 'GET') {
     if (!isAdmin(req)) { send401(res); return true; }
-    const orders = await fsGetDocs('orders');
+    const orders = (await loadLiveOrders()).filter(lifecycle.isPaid);
     const stats = {
       total_orders: orders.length,
       total_bags: orders.reduce((s, o) => s + (o.total_bags || 0), 0),
@@ -1925,7 +2211,7 @@ async function handleApi(req, res) {
       sendJson(res, 400, { error: 'กรุณาระบุเบอร์โทรศัพท์ที่ถูกต้อง' });
       return true;
     }
-    const allOrders = await fsGetDocs('orders');
+    const allOrders = await loadLiveOrders();
     try {
       const stickers = await fsGetDocs('sticker_orders');
       stickers.forEach(s => {
@@ -1972,6 +2258,8 @@ async function handleApi(req, res) {
         admin_note: o.admin_note || o.note || '',
         tracking_number: o.tracking_number || '',
         tracking_carrier: o.tracking_carrier || '',
+      payment_state: o.payment_state || '',
+      payment_deadline: o.payment_deadline || null,
         customer_name: o.customer_name || (o.customer_info || '').split('\n')[0] || '',
         customer_phone: o.customer_phone || (o.customer_info || '').split('\n')[1] || '',
         customer_address: o.customer_address || ((o.customer_info || '').split('\n').slice(2).join('\n')) || '',
@@ -1992,7 +2280,7 @@ async function handleApi(req, res) {
       sendJson(res, 400, { error: 'กรุณาระบุ Email ที่ถูกต้อง' });
       return true;
     }
-    const allOrders = await fsGetDocs('orders');
+    const allOrders = await loadLiveOrders();
     try {
       const stickers = await fsGetDocs('sticker_orders');
       stickers.forEach(s => {
@@ -2030,6 +2318,8 @@ async function handleApi(req, res) {
         admin_note: o.admin_note || o.note || '',
         tracking_number: o.tracking_number || '',
         tracking_carrier: o.tracking_carrier || '',
+      payment_state: o.payment_state || '',
+      payment_deadline: o.payment_deadline || null,
         customer_email: o.customer_email || searchEmail,
         customer_name: o.customer_name || (o.customer_info || '').split('\n')[0] || '',
         customer_phone: o.customer_phone || (o.customer_info || '').split('\n')[1] || '',
@@ -2061,12 +2351,18 @@ async function handleApi(req, res) {
         }
       } catch (e) {}
     }
+    if (lifecycle.isExpired(order)) {
+      await lifecycle.purgeExpired([order], expiredOrderStore);
+      order = null;
+    }
     if (!order) {
       send404(res);
       return true;
     }
     sendJson(res, 200, {
       id: order.id,
+      payment_state: order.payment_state || '',
+      payment_deadline: order.payment_deadline || null,
       queue_no: order.queue_no || '',
       channel: order.channel || 'web',
       shopee_order_sn: order.shopee_order_sn || '',

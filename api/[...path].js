@@ -15,6 +15,10 @@ const {
   parseLineUserFromRequest,
 } = require('../coupon-service');
 const { sendCouponFlexMessage, sendOrderReceiptFlexMessage } = require('../line-service');
+const pricingConfig = require('../pricing-config');
+const quoteService = require('../quote-service');
+const lifecycle = require('../order-lifecycle');
+const storyService = require('../story-service');
 const {
   getSlipLockKey,
   acquireSlipLock,
@@ -22,7 +26,7 @@ const {
   markTransRefUsed,
 } = require('../slip-lock');
 const { initializeApp } = require('firebase/app');
-const { getFirestore, collection, addDoc, getDocs, query, orderBy, doc, getDoc, updateDoc, setDoc, deleteDoc, where, limit } = require('firebase/firestore');
+const { getFirestore, collection, addDoc, getDocs, query, orderBy, doc, getDoc, updateDoc, setDoc, deleteDoc, where, limit, runTransaction, Timestamp } = require('firebase/firestore');
 
 const firebaseConfig = {
   apiKey: process.env.FIREBASE_API_KEY,
@@ -82,6 +86,80 @@ function isAdmin(req) {
     return true;
   }
   return false;
+}
+
+// ==================== PRICING CONFIG STORE (PRODUCTION) ====================
+function pricingVersionConflict(currentVersion) {
+  const err = new Error('ข้อมูลราคาบน Cloud ถูกแก้ไขจากเครื่องอื่น กรุณาโหลดเวอร์ชันล่าสุดแล้วลองใหม่');
+  err.code = 'VERSION_CONFLICT';
+  err.current_version = currentVersion;
+  return err;
+}
+
+const firestorePricingStore = {
+  cacheKey: 'vercel-api',
+  async loadConfigDoc() {
+    const snap = await getDoc(doc(db, 'settings', 'pricing'));
+    return snap.exists() ? snap.data() : null;
+  },
+  async publish(expectedVersion, configDoc, historyDoc) {
+    await runTransaction(db, async (tx) => {
+      const ref = doc(db, 'settings', 'pricing');
+      const snap = await tx.get(ref);
+      const currentVersion = snap.exists() ? (Number(snap.data().version) || 0) : 0;
+      if (currentVersion !== expectedVersion) {
+        throw pricingVersionConflict(currentVersion);
+      }
+      tx.set(ref, configDoc);
+      tx.set(doc(db, 'pricing_config_history', String(configDoc.version)), historyDoc);
+    });
+    return configDoc;
+  },
+  async getHistory(version) {
+    const snap = await getDoc(doc(db, 'pricing_config_history', String(version)));
+    return snap.exists() ? snap.data() : null;
+  },
+  async listHistory(maxRows) {
+    const snap = await getDocs(query(
+      collection(db, 'pricing_config_history'),
+      orderBy('version', 'desc'),
+      limit(maxRows)
+    ));
+    const rows = [];
+    snap.forEach((d) => rows.push(Object.assign({ _docId: d.id }, d.data())));
+    return rows;
+  }
+};
+
+const firestoreQuoteStore = {
+  async saveQuote(quoteDoc) {
+    // `expires_at_ts` is a Firestore Timestamp so a TTL policy can remove old
+    // quotes automatically. App-level expiry still uses expires_at_ms.
+    const stored = Object.assign({}, quoteDoc, {
+      expires_at_ts: Timestamp.fromMillis(Number(quoteDoc.expires_at_ms) || Date.now())
+    });
+    await setDoc(doc(db, 'quotes', quoteDoc.quote_id), stored);
+    return quoteDoc;
+  },
+  async getQuote(quoteId) {
+    const snap = await getDoc(doc(db, 'quotes', quoteId));
+    return snap.exists() ? snap.data() : null;
+  }
+};
+
+const quoteRateLimiter = quoteService.createRateLimiter({ max: 30, windowMs: 60 * 1000 });
+
+function sendPricingError(res, err) {
+  const mapped = pricingConfig.httpError(err);
+  sendJson(res, mapped.status, mapped.body);
+}
+
+function sendQuoteError(res, err) {
+  const mapped = quoteService.httpError(err);
+  if (mapped.body.retry_after != null && typeof res.setHeader === 'function') {
+    res.setHeader('Retry-After', String(mapped.body.retry_after));
+  }
+  sendJson(res, mapped.status, mapped.body);
 }
 
 function generateOrderId() {
@@ -185,25 +263,59 @@ function send404(res) { sendJson(res, 404, { error: 'Not found' }); }
 function send401(res) { sendJson(res, 401, { error: 'Unauthorized' }); }
 function send500(res, msg) { sendJson(res, 500, { error: msg || 'Server error' }); }
 
-async function getNextQueueNo() {
+async function scanMaxQueueNo() {
   let maxQueue = 0;
+  for (const name of ['orders', 'sticker_orders']) {
+    try {
+      const snap = await getDocs(collection(db, name));
+      const rows = [];
+      snap.forEach(d => rows.push(d.data()));
+      maxQueue = Math.max(maxQueue, lifecycle.maxQueueNumber(rows));
+    } catch (e) {}
+  }
+  return maxQueue;
+}
+
+// Allocates the next HLG-XXX. The counter document is updated in a transaction
+// so two payments confirmed at the same moment never share a queue number.
+async function getNextQueueNo() {
+  const scanMax = await scanMaxQueueNo();
   try {
-    const ordersSnap = await getDocs(collection(db, 'orders'));
-    ordersSnap.forEach(d => {
-      const data = d.data();
-      const m = String(data.queue_no || '').match(/(\d+)/);
-      if (m) maxQueue = Math.max(maxQueue, parseInt(m[1], 10) || 0);
+    const next = await runTransaction(db, async (tx) => {
+      const ref = doc(db, 'settings', 'queue_counter');
+      const snap = await tx.get(ref);
+      const n = lifecycle.nextQueueNumber(scanMax, snap.exists() ? snap.data().last : 0);
+      tx.set(ref, { last: n, updated_at: new Date().toISOString() });
+      return n;
     });
-  } catch (e) {}
-  try {
-    const stickersSnap = await getDocs(collection(db, 'sticker_orders'));
-    stickersSnap.forEach(d => {
-      const data = d.data();
-      const m = String(data.queue_no || '').match(/(\d+)/);
-      if (m) maxQueue = Math.max(maxQueue, parseInt(m[1], 10) || 0);
-    });
-  } catch (e) {}
-  return 'HLG-' + String(maxQueue + 1).padStart(3, '0');
+    return lifecycle.formatQueueNo(next);
+  } catch (err) {
+    // Never block a paid order on the counter; the scan alone is still correct without races.
+    console.warn('[queue] counter transaction failed, using scan:', err.message);
+    return lifecycle.formatQueueNo(lifecycle.nextQueueNumber(scanMax, 0));
+  }
+}
+
+const expiredOrderStore = {
+  remove: (o) => deleteDoc(doc(db, 'orders', o._docId)),
+  tombstone: (o) => setDoc(doc(db, lifecycle.EXPIRED_COLLECTION, String(o.id)), {
+    id: o.id,
+    expired_at: new Date().toISOString(),
+    payment_deadline: o.payment_deadline || null,
+  }),
+};
+
+// All orders, with unpaid bills past their 1-hour deadline removed.
+async function loadLiveOrders(ordered) {
+  const snap = await getDocs(ordered ? query(collection(db, 'orders'), orderBy('created_at', 'desc')) : collection(db, 'orders'));
+  const rows = [];
+  snap.forEach(d => rows.push({ _docId: d.id, ...d.data() }));
+  return lifecycle.purgeExpired(rows, expiredOrderStore);
+}
+
+async function isExpiredOrderId(id) {
+  if (!id) return false;
+  try { return (await getDoc(doc(db, lifecycle.EXPIRED_COLLECTION, String(id)))).exists(); } catch (e) { return false; }
 }
 
 function generateVerifyToken({ transRef, amount, orderId, slipData }) {
@@ -251,6 +363,13 @@ module.exports = async (req, res) => {
 
     if (!db) { send500(res, 'Firestore not ready'); return; }
 
+    const storyStore = {
+      get: async (c, id) => { const d = await getDoc(doc(db, c, id)); return d.exists() ? d.data() : null; },
+      set: (c, id, data) => setDoc(doc(db, c, id), data),
+      del: (c, id) => deleteDoc(doc(db, c, id)),
+    };
+    if (await storyService.handleStoryApi(req, res, pathname, method, { isAdmin, readBody, sendJson, store: storyStore })) return;
+
     // POST /api/login
     if (pathname === '/api/login' && method === 'POST') {
       const body = await readBody(req);
@@ -280,6 +399,129 @@ module.exports = async (req, res) => {
     // GET /api/check-auth
     if (pathname === '/api/check-auth' && method === 'GET') {
       sendJson(res, 200, { authenticated: isAdmin(req) });
+      return;
+    }
+
+    // ==================== PRICING CONFIG / TRUSTED CATALOG ====================
+    if (pathname === '/api/pricing/config' && method === 'GET') {
+      try {
+        const config = await pricingConfig.loadConfig(firestorePricingStore);
+        sendJson(res, 200, Object.assign({ success: true }, config));
+      } catch (err) {
+        console.error('Failed to load pricing config:', err);
+        sendPricingError(res, err);
+      }
+      return;
+    }
+
+    if (pathname === '/api/pricing/config' && method === 'PUT') {
+      if (!isAdmin(req)) { send401(res); return; }
+      const body = await readBody(req);
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        sendJson(res, 400, { success: false, error: 'ข้อมูลที่ส่งมาไม่ถูกต้อง', code: 'INVALID_CONFIG' });
+        return;
+      }
+      try {
+        const saved = await pricingConfig.publishConfig(firestorePricingStore, body, req.headers['x-admin-user'] || 'admin');
+        sendJson(res, 200, Object.assign({ success: true }, saved));
+      } catch (err) {
+        console.error('Failed to publish pricing config:', err);
+        sendPricingError(res, err);
+      }
+      return;
+    }
+
+    if (pathname === '/api/pricing/config/history' && method === 'GET') {
+      if (!isAdmin(req)) { send401(res); return; }
+      try {
+        const history = await pricingConfig.listHistory(firestorePricingStore, url.searchParams.get('limit'));
+        sendJson(res, 200, { success: true, history });
+      } catch (err) {
+        console.error('Failed to list pricing history:', err);
+        sendPricingError(res, err);
+      }
+      return;
+    }
+
+    if (pathname === '/api/pricing/config/restore' && method === 'POST') {
+      if (!isAdmin(req)) { send401(res); return; }
+      const body = await readBody(req);
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        sendJson(res, 400, { success: false, error: 'ข้อมูลที่ส่งมาไม่ถูกต้อง', code: 'INVALID_CONFIG' });
+        return;
+      }
+      try {
+        const saved = await pricingConfig.restoreConfig(firestorePricingStore, body, req.headers['x-admin-user'] || 'admin');
+        sendJson(res, 200, Object.assign({ success: true, restored: true }, saved));
+      } catch (err) {
+        console.error('Failed to restore pricing config:', err);
+        sendPricingError(res, err);
+      }
+      return;
+    }
+
+    if (pathname === '/api/pricing/catalog' && method === 'GET') {
+      try {
+        const config = await pricingConfig.loadConfig(firestorePricingStore);
+        const storefrontSnap = await getDoc(doc(db, 'settings', 'storefront'));
+        const storefront = storefrontSnap.exists() ? storefrontSnap.data() : {};
+        const catalog = pricingConfig.buildCatalog(config, {
+          customProducts: Array.isArray(storefront.custom_products) ? storefront.custom_products : [],
+          categories: Array.isArray(storefront.categories) ? storefront.categories : []
+        });
+        sendJson(res, 200, Object.assign({ success: true }, catalog));
+      } catch (err) {
+        console.error('Failed to build pricing catalog:', err);
+        sendPricingError(res, err);
+      }
+      return;
+    }
+
+    // POST /api/quotes — server-authoritative quote preview (P2).
+    if (pathname === '/api/quotes' && method === 'POST') {
+      if (typeof res.setHeader === 'function') res.setHeader('Cache-Control', 'no-store');
+      const rate = quoteRateLimiter.check(quoteService.clientKey(req));
+      if (!rate.allowed) {
+        const limited = quoteService.quoteError('RATE_LIMITED', 'ตรวจสอบราคาบ่อยเกินไป กรุณาลองใหม่ภายหลัง');
+        limited.retry_after = rate.retry_after;
+        sendQuoteError(res, limited);
+        return;
+      }
+
+      const body = await readBody(req);
+      try {
+        const now = Date.now();
+        const config = await pricingConfig.loadConfig(firestorePricingStore);
+        const storefrontSnap = await getDoc(doc(db, 'settings', 'storefront'));
+        const storefront = storefrontSnap.exists() ? storefrontSnap.data() : {};
+        const built = pricingConfig.buildCatalogContext(config, {
+          customProducts: Array.isArray(storefront.custom_products) ? storefront.custom_products : [],
+          categories: Array.isArray(storefront.categories) ? storefront.categories : []
+        }, { now: now });
+        const cookieUser = parseLineUserFromRequest(req);
+        const bodyLineUserId = body && typeof body === 'object' && !Array.isArray(body) ? body.line_user_id : '';
+        const result = await quoteService.issueQuote({
+          body: body,
+          config: config,
+          pricing: built.pricing,
+          tier: config.tier,
+          shipping: config.shipping,
+          catalog: built.engine,
+          store: firestoreQuoteStore,
+          couponValidator: validateCouponForCheckout,
+          db: db,
+          lineUserId: cookieUser ? cookieUser.line_user_id : bodyLineUserId,
+          now: now
+        });
+        sendJson(res, 200, result.response);
+      } catch (err) {
+        if (err && err.code && err.code !== 'QUOTE_ERROR') {
+          console.warn('[quote] rejected:', err.code);
+        } else {
+          console.error('Failed to create quote:', err);
+        }
+        sendQuoteError(res, err);
+      }
       return;
     }
 
@@ -1123,14 +1365,15 @@ module.exports = async (req, res) => {
 
       const order = {
         id: orderId,
-        queue_no: body.queue_no || (typeof getNextQueueNo === 'function' ? await getNextQueueNo() : ''),
+        // Storefront bills stay unpaid (no queue number) until the slip is confirmed.
+        queue_no: isAdminUser ? (body.queue_no || await getNextQueueNo()) : '',
         created_at: new Date().toISOString(),
         customer_name: cust.customer_name,
         customer_phone: cust.customer_phone,
         customer_address: cust.customer_address,
         customer_email: (body.customer_email || cust.customer_email || '').trim(),
         customer_info: cust.customer_info,
-        type: body.type || 'bag',
+        type: lifecycle.deriveOrderType(body.items, body.type),
         items: body.items || [],
         line_user_id: lineUserId || null,
         patterns: patterns,
@@ -1153,6 +1396,10 @@ module.exports = async (req, res) => {
         slip_verified: isAdminUser ? !!body.slip_verified : false,
         slip_uploaded_at: body.slip_data ? new Date().toISOString() : null,
       };
+      if (!isAdminUser) {
+        order.payment_state = lifecycle.AWAITING;
+        order.payment_deadline = lifecycle.paymentDeadline();
+      }
 
       if (validatedCoupon) {
         await markCouponAsUsed(db, validatedCoupon.code, orderId);
@@ -1627,7 +1874,12 @@ module.exports = async (req, res) => {
         const snapOrder = await getDocs(qOrder);
         if (!snapOrder.empty) existingDoc = snapOrder.docs[0];
       } catch (e) {}
-      const existing = existingDoc ? existingDoc.data() : null;
+      const existing = existingDoc ? { _docId: existingDoc.id, ...existingDoc.data() } : null;
+      if (lifecycle.isExpired(existing) || (!existing && await isExpiredOrderId(orderId))) {
+        if (existing) await lifecycle.purgeExpired([existing], expiredOrderStore);
+        sendJson(res, 410, { error: 'บิลนี้หมดเวลาชำระแล้ว (เกิน 1 ชั่วโมง) ออเดอร์ถูกยกเลิกอัตโนมัติ หากโอนเงินแล้ว กรุณาติดต่อร้านพร้อมสลิปค่ะ', expired: true });
+        return;
+      }
       let queue_no = (existing && existing.queue_no) ? existing.queue_no : await getNextQueueNo();
 
       // Pattern qtys
@@ -1694,6 +1946,10 @@ module.exports = async (req, res) => {
         shipping_cost: shippingCost,
         is_remote: orderData.is_remote || false,
         status: 1, // 1 = ยืนยันคิวแล้ว
+        type: lifecycle.deriveOrderType(orderData.items, orderData.type || (existing && existing.type)),
+        payment_state: lifecycle.PAID,
+        payment_deadline: null,
+        paid_at: new Date().toISOString(),
         note: orderData.note || '',
         note_status: orderData.note ? 'on' : 'off',
         slip_data: slipData,
@@ -1749,10 +2005,7 @@ module.exports = async (req, res) => {
     // GET /api/orders
     if (pathname === '/api/orders' && method === 'GET') {
       if (!isAdmin(req)) { send401(res); return; }
-      const q = query(collection(db, 'orders'), orderBy('created_at', 'desc'));
-      const snap = await getDocs(q);
-      const results = [];
-      snap.forEach(d => results.push({ _docId: d.id, ...d.data() }));
+      const results = await loadLiveOrders(true);
       try {
         const snapStickers = await getDocs(collection(db, 'sticker_orders'));
         snapStickers.forEach(d => {
@@ -1762,6 +2015,34 @@ module.exports = async (req, res) => {
         });
       } catch (e) {}
       sendJson(res, 200, results);
+      return;
+    }
+
+    // POST /api/orders/bulk — admin: change status of / delete many orders at once
+    if (pathname === '/api/orders/bulk' && method === 'POST') {
+      if (!isAdmin(req)) { send401(res); return; }
+      const body = await readBody(req);
+      const ids = Array.isArray(body.ids) ? body.ids.map(String).filter(Boolean).slice(0, 500) : [];
+      const action = body.action;
+      const status = Number(body.status);
+      if (!ids.length || !['delete', 'status'].includes(action) || (action === 'status' && !(Number.isInteger(status) && status >= 0 && status <= 3))) {
+        sendJson(res, 400, { error: 'ข้อมูลไม่ถูกต้อง' });
+        return;
+      }
+      const done = [], failed = [];
+      for (const id of ids) {
+        try {
+          const record = await findOrderRecord(id);
+          if (!record) { failed.push(id); continue; }
+          if (action === 'delete') await deleteDoc(doc(db, record.collectionName, record.docId));
+          else await updateDoc(doc(db, record.collectionName, record.docId), { status, updated_at: new Date().toISOString() });
+          done.push(id);
+        } catch (err) {
+          console.warn('[orders/bulk]', action, id, err.message);
+          failed.push(id);
+        }
+      }
+      sendJson(res, 200, { success: failed.length === 0, done, failed });
       return;
     }
 
@@ -1828,10 +2109,7 @@ module.exports = async (req, res) => {
     // GET /api/stats
     if (pathname === '/api/stats' && method === 'GET') {
       if (!isAdmin(req)) { send401(res); return; }
-      const q = query(collection(db, 'orders'));
-      const snap = await getDocs(q);
-      const orders = [];
-      snap.forEach(d => orders.push({ _docId: d.id, ...d.data() }));
+      const orders = (await loadLiveOrders()).filter(lifecycle.isPaid);
       const stats = {
         total_orders: orders.length,
         total_bags: orders.reduce((s, o) => s + (o.total_bags || 0), 0),
@@ -1854,10 +2132,7 @@ module.exports = async (req, res) => {
         sendJson(res, 400, { error: 'กรุณาระบุเบอร์โทรศัพท์ที่ถูกต้อง' });
         return;
       }
-      const q = query(collection(db, 'orders'), orderBy('created_at', 'desc'));
-      const snap = await getDocs(q);
-      const allOrders = [];
-      snap.forEach(d => allOrders.push({ _docId: d.id, ...d.data() }));
+      const allOrders = await loadLiveOrders(true);
       try {
         const snapStickers = await getDocs(collection(db, 'sticker_orders'));
         snapStickers.forEach(d => {
@@ -1904,6 +2179,8 @@ module.exports = async (req, res) => {
           admin_note: o.admin_note || o.note || '',
           tracking_number: o.tracking_number || '',
           tracking_carrier: o.tracking_carrier || '',
+        payment_state: o.payment_state || '',
+        payment_deadline: o.payment_deadline || null,
           customer_name: o.customer_name || (o.customer_info || '').split('\n')[0] || '',
           customer_phone: o.customer_phone || (o.customer_info || '').split('\n')[1] || '',
           customer_address: o.customer_address || ((o.customer_info || '').split('\n').slice(2).join('\n')) || '',
@@ -1924,10 +2201,7 @@ module.exports = async (req, res) => {
         sendJson(res, 400, { error: 'กรุณาระบุ Email ที่ถูกต้อง' });
         return;
       }
-      const q = query(collection(db, 'orders'), orderBy('created_at', 'desc'));
-      const snap = await getDocs(q);
-      const allOrders = [];
-      snap.forEach(d => allOrders.push({ _docId: d.id, ...d.data() }));
+      const allOrders = await loadLiveOrders(true);
       try {
         const snapStickers = await getDocs(collection(db, 'sticker_orders'));
         snapStickers.forEach(d => {
@@ -1965,6 +2239,8 @@ module.exports = async (req, res) => {
           admin_note: o.admin_note || o.note || '',
           tracking_number: o.tracking_number || '',
           tracking_carrier: o.tracking_carrier || '',
+        payment_state: o.payment_state || '',
+        payment_deadline: o.payment_deadline || null,
           customer_email: o.customer_email || searchEmail,
           customer_name: o.customer_name || (o.customer_info || '').split('\n')[0] || '',
           customer_phone: o.customer_phone || (o.customer_info || '').split('\n')[1] || '',
@@ -1988,8 +2264,12 @@ module.exports = async (req, res) => {
         const q = query(collection(db, 'orders'), where('id', '==', id), limit(1));
         const snap = await getDocs(q);
         if (!snap.empty) {
-          order = snap.docs[0].data();
+          order = { _docId: snap.docs[0].id, ...snap.docs[0].data() };
         }
+      }
+      if (lifecycle.isExpired(order)) {
+        await lifecycle.purgeExpired([order], expiredOrderStore);
+        order = null;
       }
       if (!order) {
         try {
@@ -2006,6 +2286,8 @@ module.exports = async (req, res) => {
       }
       sendJson(res, 200, {
         id: order.id,
+        payment_state: order.payment_state || '',
+        payment_deadline: order.payment_deadline || null,
         queue_no: order.queue_no || '',
         channel: order.channel || 'web',
         shopee_order_sn: order.shopee_order_sn || '',
