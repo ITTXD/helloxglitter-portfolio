@@ -7215,10 +7215,9 @@ function renderDrawerMenu(){
   menu.innerHTML=
     '<button class="mmenu-item" data-page="home" onclick="showPage(\'home\');closeMenu()"><span class="mmenu-icon"><i class="ti ti-home-heart"></i></span><div class="mmenu-text"><div class="mmenu-label">หน้าหลัก</div><div class="mmenu-desc">เลือกหมวดสินค้าและบริการ</div></div><i class="ti ti-chevron-right mmenu-arrow"></i></button>'+ 
     '<button class="mmenu-item" data-page="cart" onclick="v8OpenCart();closeMenu()"><span class="mmenu-icon"><i class="ti ti-shopping-cart"></i></span><div class="mmenu-text"><div class="mmenu-label">ตะกร้าของฉัน</div><div class="mmenu-desc">ดูสินค้าที่เลือกและชำระเงิน</div></div><i class="ti ti-chevron-right mmenu-arrow"></i></button>'+ 
-    '<button class="mmenu-item" onclick="openCoupons();closeMenu()"><span class="mmenu-icon"><i class="ti ti-ticket"></i></span><div class="mmenu-text"><div class="mmenu-label">คูปองของฉัน</div><div class="mmenu-desc">'+(line?'ดูคูปองที่มีอยู่':'เข้าสู่ระบบ LINE เพื่อผูกคูปอง')+'</div></div><i class="ti ti-chevron-right mmenu-arrow"></i></button>'+ 
+    '<button class="mmenu-item" onclick="openCoupons();closeMenu()"><span class="mmenu-icon"><i class="ti ti-ticket"></i></span><div class="mmenu-text"><div class="mmenu-label">คูปองของฉัน</div><div class="mmenu-desc">'+(line?'ดูคูปองที่มีอยู่':'คูปองส่วนลดสำหรับสมาชิก LINE')+'</div></div><i class="ti ti-chevron-right mmenu-arrow"></i></button>'+ 
     '<button class="mmenu-item" data-page="tracking" onclick="showPage(\'tracking\');closeMenu()"><span class="mmenu-icon"><i class="ti ti-package"></i></span><div class="mmenu-text"><div class="mmenu-label">ติดตามคิว / พัสดุ</div><div class="mmenu-desc">กรอกเบอร์โทรเพื่อเช็กสถานะ</div></div><i class="ti ti-chevron-right mmenu-arrow"></i></button>'+ 
     '<button class="mmenu-item shopee-menu-btn" onclick="v8OpenShopeeModal()"><span class="mmenu-icon shopee-icon"><i class="ti ti-brand-shopee"></i></span><div class="mmenu-text"><div class="mmenu-label shopee-label">🧡 ลงทะเบียนออเดอร์ Shopee</div><div class="mmenu-desc">กรอกเลขออเดอร์ Shopee เพื่อรับคิว & เช็กพัสดุ</div></div><i class="ti ti-chevron-right mmenu-arrow"></i></button>'+ 
-    '<button class="mmenu-item line" onclick="openLineAccount();closeMenu()"><span class="mmenu-icon"><i class="ti ti-brand-line"></i></span><div class="mmenu-text"><div class="mmenu-label">'+(line?'บัญชี LINE':'เข้าสู่ระบบด้วย LINE')+'</div></div><i class="ti ti-chevron-right mmenu-arrow"></i></button>'+ 
     (isAdmin()?'<button class="mmenu-item admin-entry" onclick="openAdminDashboard()"><span class="mmenu-icon"><i class="ti ti-layout-dashboard"></i></span><div class="mmenu-text"><div class="mmenu-label">Admin Dashboard</div></div><span class="mmenu-pill">ADMIN</span></button><a class="mmenu-item admin-entry" href="/admin/" target="_blank"><span class="mmenu-icon"><i class="ti ti-external-link"></i></span><div class="mmenu-text"><div class="mmenu-label">Full Admin Portal ↗</div><div class="mmenu-desc">เปิดหน้าจัดการเต็มรูปแบบ</div></div></a><button class="mmenu-item danger" onclick="logoutHLG()"><span class="mmenu-icon"><i class="ti ti-logout-2"></i></span><div class="mmenu-text"><div class="mmenu-label">ออกจากระบบแอดมิน</div></div></button>':'<button class="mmenu-item admin-entry" onclick="openLoginModal()"><span class="mmenu-icon"><i class="ti ti-shield-lock"></i></span><div class="mmenu-text"><div class="mmenu-label">โหมดแอดมิน</div><div class="mmenu-desc">สลับเข้าหน้าจัดการร้าน (PIN/Password)</div></div><i class="ti ti-chevron-right mmenu-arrow"></i></button>');
 }
 function openLoginModal(){closeMenu();var el=document.getElementById('loginOverlay');if(el){el.classList.add('show');setTimeout(function(){var i=document.getElementById('loginPassword');if(i)i.focus()},100)}}
@@ -18880,14 +18879,14 @@ body{overscroll-behavior-y:contain;min-height:100vh;min-height:100dvh;padding-bo
   .pgrid{grid-template-columns:repeat(3,1fr);gap:6px}
 }
 
-/* ===== Login / Logout button in drawer ===== */
-.mmenu-item.nav-login-btn{justify-content:center;border:1.5px solid #f0aecb;background:linear-gradient(135deg,#ffe4ef,#ffd7e8);color:#b13a68;font-weight:900;padding:12px 14px}
-.mmenu-item.nav-login-btn i{font-size:17px}
-.mmenu-item.nav-login-btn:active{transform:scale(.98)}
 
 /* ===== Account card (profile in hamburger menu) ===== */
 .drawer-account.has-photo .drawer-avatar{border:2px solid #f6d8e5}
-.drawer-account.is-guest .drawer-avatar{background:linear-gradient(135deg,#e9d5e0,#c9a8ba)}
+.drawer-account.is-guest{background:linear-gradient(135deg,#06c755,#2bd877)!important;border-color:#06c755!important;box-shadow:0 6px 16px rgba(6,199,85,.28);cursor:pointer}
+.drawer-account.is-guest:active{transform:scale(.98)}
+.drawer-account.is-guest .drawer-avatar{background:rgba(255,255,255,.22);color:#fff}
+.drawer-account.is-guest .drawer-user-name{color:#fff!important;font-weight:900}
+.drawer-account.is-guest .drawer-user-sub{color:rgba(255,255,255,.92)!important;font-size:11px}
 .drawer-verified-pill{font-size:9.5px;font-weight:900;padding:2px 7px;border-radius:99px;background:#eefbf2;color:#159447;margin-left:6px;white-space:nowrap;vertical-align:middle}
 
 /* ===== Profile modal ===== */
@@ -18971,32 +18970,16 @@ function hlgRenderAccountCard(){
       +'</div>';
   }else{
     inner='<div class="drawer-account is-guest" role="button" tabindex="0" aria-label="เข้าสู่ระบบด้วย LINE" onclick="hlgLoginFromMenu()" onkeydown="if(event.key===\'Enter\'){hlgLoginFromMenu()}">'
-      +'<div class="drawer-avatar"><i class="ti ti-user"></i></div>'
+      +'<div class="drawer-avatar"><i class="ti ti-brand-line"></i></div>'
       +'<div class="drawer-user-text">'
-      +'<div class="drawer-user-name">ยังไม่ได้เข้าสู่ระบบ</div>'
-      +'<div class="drawer-user-sub">แตะเพื่อเข้าสู่ระบบด้วย LINE</div>'
-      +'</div><i class="ti ti-chevron-right" style="color:#d0a8b8;font-size:16px"></i>'
+      +'<div class="drawer-user-name">เข้าสู่ระบบด้วย LINE</div>'
+      +'<div class="drawer-user-sub">รับคูปอง · ใบเสร็จเข้า LINE</div>'
+      +'</div><i class="ti ti-chevron-right" style="color:#fff;font-size:16px"></i>'
       +'</div>';
   }
+  // One login entry only: the account card above. Logging out lives in the profile it opens.
   var mi=document.getElementById('drawerMenuItems');
-  if(mi&&!mi.querySelector('.nav-login-btn')){
-    var btn=document.createElement('button');
-    btn.className='mmenu-item nav-login-btn'+(u?' is-logged-in':'');
-    btn.setAttribute('id','navLoginLogoutBtn');
-    btn.innerHTML=u
-      ?'<i class="ti ti-logout"></i>&nbsp;LOGOUT'
-      :'<i class="ti ti-login"></i>&nbsp;LOGIN';
-    btn.onclick=function(){ if(hlgGetLineUserX()){doHlgLogout()}else{hlgLoginFromMenu()} };
-    if(mi.firstChild)mi.insertBefore(btn,mi.firstChild);
-    else mi.appendChild(btn);
-  }else if(mi){
-    var b=mi.querySelector('#navLoginLogoutBtn');
-    if(b){
-      b.className='mmenu-item nav-login-btn'+(u?' is-logged-in':'');
-      b.innerHTML=u?'<i class="ti ti-logout"></i>&nbsp;LOGOUT':'<i class="ti ti-login"></i>&nbsp;LOGIN';
-      b.onclick=function(){ if(hlgGetLineUserX()){doHlgLogout()}else{hlgLoginFromMenu()} };
-    }
-  }
+  mi&&mi.querySelectorAll('.nav-login-btn').forEach(function(x){x.remove()});
   acc.innerHTML=inner;
 }
 
