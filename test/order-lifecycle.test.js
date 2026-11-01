@@ -85,6 +85,7 @@ async function test(name, fn) {
       ['B', '', 'HLG-002'],
       ['C', 'HLG-001', 'HLG-003'],
       ['S', 'HLG-003', 'HLG-004'],
+      ['U', 'HLG-001', ''],
     ]);
   });
 
@@ -104,8 +105,9 @@ async function test(name, fn) {
       { id: 'C', queue_no: 'HLG-002', status: 1, created_at: '2026-10-03T00:00:00Z' },
       { id: 'D', queue_no: '', payment_state: L.PAID, created_at: '2026-10-04T00:00:00Z' },
       { id: 'U', queue_no: '', payment_state: L.AWAITING, created_at: '2026-10-05T00:00:00Z' },
+      { id: 'L', queue_no: 'HLG-001', status: 0, created_at: '2026-09-05T00:00:00Z' },
     ]);
-    assert.deepStrictEqual(plan.changes.map(c => [c.order.id, c.to]), [['C', 'HLG-003'], ['D', 'HLG-004']]);
+    assert.deepStrictEqual(plan.changes.map(c => [c.order.id, c.to]), [['C', 'HLG-003'], ['D', 'HLG-004'], ['L', '']]);
     assert.strictEqual(plan.last, 4);
   });
 

@@ -94,6 +94,9 @@ function planRenumber(orders) {
     const to = formatQueueNo(i + 1);
     if (order.queue_no !== to) changes.push({ order, from: order.queue_no || '', to });
   });
+  (orders || []).forEach(order => {
+    if (!isPaid(order) && order.queue_no) changes.push({ order, from: order.queue_no, to: '' });
+  });
   return { changes, last: paid.length };
 }
 
@@ -118,6 +121,10 @@ function planRepair(orders) {
     taken.add(last);
     changes.push({ order, from: order.queue_no || '', to });
   });
+  // Unpaid orders never hold a number (old ones still carry a client-made HLG-001).
+  (orders || []).forEach(order => {
+    if (!isPaid(order) && order.queue_no) changes.push({ order, from: order.queue_no, to: '' });
+  });
   return { changes, last };
 }
 
@@ -132,9 +139,10 @@ async function syncQueueNumbers(orders, store) {
   const plan = migrated ? planRepair(orders) : planRenumber(orders);
   const assignedAt = new Date().toISOString();
   for (const c of plan.changes) {
-    await store.update(c.order, { queue_no: c.to, queue_assigned_at: assignedAt });
+    const stamp = c.to ? assignedAt : null;
+    await store.update(c.order, { queue_no: c.to, queue_assigned_at: stamp });
     c.order.queue_no = c.to;
-    c.order.queue_assigned_at = assignedAt;
+    c.order.queue_assigned_at = stamp;
   }
   if (!migrated) {
     // Unchanged orders now hold server-confirmed numbers too.

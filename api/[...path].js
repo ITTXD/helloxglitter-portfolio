@@ -2069,7 +2069,7 @@ module.exports = async (req, res) => {
       const changes = plan.changes.map(c => ({ id: c.order.id, from: c.from, to: c.to }));
       if (!body.dry_run) {
         const assignedAt = new Date().toISOString();
-        for (const c of plan.changes) await updateDoc(doc(db, c.order._collection, c.order._docId), { queue_no: c.to, queue_assigned_at: assignedAt });
+        for (const c of plan.changes) await updateDoc(doc(db, c.order._collection, c.order._docId), { queue_no: c.to, queue_assigned_at: c.to ? assignedAt : null });
         // The next paid order continues straight after the renumbered ones.
         await setDoc(doc(db, 'settings', 'queue_counter'), { last: plan.last, updated_at: new Date().toISOString() });
       }
