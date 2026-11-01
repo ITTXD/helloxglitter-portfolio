@@ -98,6 +98,60 @@ function planRenumber(orders) {
 }
 
 /**
+ * Keeps existing numbers and only fixes paid orders whose number is missing
+ * or already taken by an older order; those get the next free numbers.
+ * @returns {{ changes: {order, from, to}[], last: number }}
+ */
+function planRepair(orders) {
+  // Numbers the server issued (queue_assigned_at) keep priority over stale
+  // client-made ones, so a number a customer was already given never moves.
+  const issued = o => (o.queue_assigned_at ? 0 : 1);
+  const paid = (orders || []).filter(isPaid).sort((a, b) =>
+    (issued(a) - issued(b)) || (orderTime(a) - orderTime(b)) || String(a.id || '').localeCompare(String(b.id || '')));
+  let last = maxQueueNumber(paid);
+  const taken = new Set();
+  const changes = [];
+  paid.forEach(order => {
+    const n = queueNumber(order.queue_no);
+    if (n && !taken.has(n)) { taken.add(n); return; }
+    const to = formatQueueNo(++last);
+    taken.add(last);
+    changes.push({ order, from: order.queue_no || '', to });
+  });
+  return { changes, last };
+}
+
+/**
+ * Server-owned queue numbers. The first run renumbers every paid order by
+ * order date (orders saved before the server took over all said HLG-001);
+ * later runs only repair missing or duplicate numbers.
+ * @param store { isMigrated(), markMigrated(total), setCounter(last), update(order, queueNo) }
+ */
+async function syncQueueNumbers(orders, store) {
+  const migrated = await store.isMigrated();
+  const plan = migrated ? planRepair(orders) : planRenumber(orders);
+  const assignedAt = new Date().toISOString();
+  for (const c of plan.changes) {
+    await store.update(c.order, { queue_no: c.to, queue_assigned_at: assignedAt });
+    c.order.queue_no = c.to;
+    c.order.queue_assigned_at = assignedAt;
+  }
+  if (!migrated) {
+    // Unchanged orders now hold server-confirmed numbers too.
+    for (const o of orders.filter(isPaid)) {
+      if (o.queue_assigned_at) continue;
+      await store.update(o, { queue_assigned_at: assignedAt });
+      o.queue_assigned_at = assignedAt;
+    }
+  }
+  if (!migrated) {
+    await store.setCounter(plan.last);
+    await store.markMigrated(plan.last);
+  }
+  return { renumbered: !migrated, changed: plan.changes.length, last: plan.last };
+}
+
+/**
  * Remove expired unpaid bills.
  * @param {object[]} orders  every order record (must carry _docId)
  * @param {object} store     { remove(order), tombstone(order) }
@@ -133,5 +187,7 @@ module.exports = {
   nextQueueNumber,
   formatQueueNo,
   planRenumber,
+  planRepair,
+  syncQueueNumbers,
   purgeExpired,
 };

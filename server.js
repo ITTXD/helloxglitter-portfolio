@@ -407,9 +407,41 @@ const expiredOrderStore = {
   }),
 };
 
+// The server owns queue numbers: renumbers once, then repairs gaps/duplicates.
+// Checked at most every few minutes per process once the first renumber is done.
+let queueMigrated = false, queueCheckedAt = 0;
+async function ensureQueueNumbers(rows) {
+  if (queueMigrated && Date.now() - queueCheckedAt < 5 * 60 * 1000) return;
+  queueCheckedAt = Date.now();
+  const collectionOf = new Map(rows.map(o => [o, 'orders']));
+  const all = rows.slice();
+  try {
+    (await fsGetDocs('sticker_orders')).forEach(s => {
+      if (!all.some(o => o.id === s.id)) { all.push(s); collectionOf.set(s, 'sticker_orders'); }
+    });
+  } catch (e) {}
+  try {
+    const result = await lifecycle.syncQueueNumbers(all, {
+      isMigrated: async () => queueMigrated || !!(await fsGetDoc('settings', 'queue_migration')),
+      markMigrated: total => fsSetDoc('settings', 'queue_migration', { renumbered_at: new Date().toISOString(), total }),
+      setCounter: async last => {
+        if (db) await fsSetDoc('settings', 'queue_counter', { last, updated_at: new Date().toISOString() });
+        else memQueueCounter = last;
+      },
+      update: (o, fields) => fsUpdateDoc(collectionOf.get(o), o._docId || o.id, fields),
+    });
+    queueMigrated = true;
+    if (result.changed) console.log('[queue]', result.renumbered ? 'renumbered' : 'repaired', result.changed, 'orders; last', result.last);
+  } catch (err) {
+    console.warn('[queue] numbering check failed:', err.message);
+  }
+}
+
 // All orders, with unpaid bills past their 1-hour deadline removed.
 async function loadLiveOrders(orderField) {
-  return lifecycle.purgeExpired(await fsGetDocs('orders', orderField), expiredOrderStore);
+  const rows = await lifecycle.purgeExpired(await fsGetDocs('orders', orderField), expiredOrderStore);
+  await ensureQueueNumbers(rows);
+  return rows;
 }
 
 async function isExpiredOrderId(id) {
@@ -1320,6 +1352,7 @@ async function handleApi(req, res) {
     const order = {
       id: orderId,
       queue_no,
+      queue_assigned_at: new Date().toISOString(),
       channel: 'shopee',
       shopee_order_sn,
       customer_name,
@@ -1996,6 +2029,7 @@ async function handleApi(req, res) {
       status: 1, // 1 = ยืนยันคิวแล้ว
       type: lifecycle.deriveOrderType(orderData.items, orderData.type || (existing && existing.type)),
       payment_state: lifecycle.PAID,
+      queue_assigned_at: (existing && existing.queue_assigned_at && existing.queue_no === queue_no) ? existing.queue_assigned_at : new Date().toISOString(),
       payment_deadline: null,
       paid_at: new Date().toISOString(),
       note: orderData.note || '',
@@ -2079,7 +2113,8 @@ async function handleApi(req, res) {
     const plan = lifecycle.planRenumber(rows);
     const changes = plan.changes.map(c => ({ id: c.order.id, from: c.from, to: c.to }));
     if (!body.dry_run) {
-      for (const c of plan.changes) await fsUpdateDoc(c.order._collection, c.order._docId || c.order.id, { queue_no: c.to });
+      const assignedAt = new Date().toISOString();
+      for (const c of plan.changes) await fsUpdateDoc(c.order._collection, c.order._docId || c.order.id, { queue_no: c.to, queue_assigned_at: assignedAt });
       // The next paid order continues straight after the renumbered ones.
       if (db) await fsSetDoc('settings', 'queue_counter', { last: plan.last, updated_at: new Date().toISOString() });
       else memQueueCounter = plan.last;

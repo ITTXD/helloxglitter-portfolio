@@ -97,6 +97,44 @@ async function test(name, fn) {
     assert.strictEqual(plan.last, 2);
   });
 
+  await test('repair keeps existing numbers and moves later duplicates/missing ones to the end', () => {
+    const plan = L.planRepair([
+      { id: 'A', queue_no: 'HLG-001', status: 1, created_at: '2026-10-01T00:00:00Z' },
+      { id: 'B', queue_no: 'HLG-002', status: 1, created_at: '2026-10-02T00:00:00Z' },
+      { id: 'C', queue_no: 'HLG-002', status: 1, created_at: '2026-10-03T00:00:00Z' },
+      { id: 'D', queue_no: '', payment_state: L.PAID, created_at: '2026-10-04T00:00:00Z' },
+      { id: 'U', queue_no: '', payment_state: L.AWAITING, created_at: '2026-10-05T00:00:00Z' },
+    ]);
+    assert.deepStrictEqual(plan.changes.map(c => [c.order.id, c.to]), [['C', 'HLG-003'], ['D', 'HLG-004']]);
+    assert.strictEqual(plan.last, 4);
+  });
+
+  await test('sync renumbers everything once, then only repairs', async () => {
+    let migrated = false, counter = 99;
+    const writes = [];
+    const store = {
+      isMigrated: async () => migrated,
+      markMigrated: async () => { migrated = true; },
+      setCounter: async last => { counter = last; },
+      update: async (o, f) => { if (f.queue_no) writes.push(o.id + '=' + f.queue_no); },
+    };
+    const orders = [
+      { id: 'B', queue_no: 'HLG-001', status: 1, created_at: '2026-10-02T00:00:00Z' },
+      { id: 'A', queue_no: 'HLG-001', status: 1, created_at: '2026-10-01T00:00:00Z' },
+    ];
+    const first = await L.syncQueueNumbers(orders, store);
+    assert.deepStrictEqual(first, { renumbered: true, changed: 1, last: 2 });
+    assert.deepStrictEqual(writes, ['B=HLG-002']);
+    assert.strictEqual(counter, 2, 'counter restarts after the renumber');
+    assert.strictEqual(orders[0].queue_no, 'HLG-002', 'returned rows show the new number');
+
+    orders.push({ id: 'C', queue_no: 'HLG-001', status: 1, created_at: '2026-09-01T00:00:00Z' });
+    const second = await L.syncQueueNumbers(orders, store);
+    assert.deepStrictEqual(second, { renumbered: false, changed: 1, last: 3 });
+    assert.strictEqual(orders[2].queue_no, 'HLG-003', 'after migration an older late-comer is appended, not reshuffled');
+    assert.strictEqual(orders[1].queue_no, 'HLG-001', 'a number the server already issued never moves');
+  });
+
   console.log(`\n  RESULT: ${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);
 })();
