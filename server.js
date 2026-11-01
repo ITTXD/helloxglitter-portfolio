@@ -2114,7 +2114,7 @@ async function handleApi(req, res) {
     const changes = plan.changes.map(c => ({ id: c.order.id, from: c.from, to: c.to }));
     if (!body.dry_run) {
       const assignedAt = new Date().toISOString();
-      for (const c of plan.changes) await fsUpdateDoc(c.order._collection, c.order._docId || c.order.id, { queue_no: c.to, queue_assigned_at: assignedAt });
+      for (const c of plan.changes) await fsUpdateDoc(c.order._collection, c.order._docId || c.order.id, { queue_no: c.to, queue_assigned_at: c.to ? assignedAt : null });
       // The next paid order continues straight after the renumbered ones.
       if (db) await fsSetDoc('settings', 'queue_counter', { last: plan.last, updated_at: new Date().toISOString() });
       else memQueueCounter = plan.last;
