@@ -19271,11 +19271,38 @@ function expire(id){
  if(o&&o.payment_state!=='expired'&&!o.payment_customer_confirmed_at){o.payment_state='expired';try{if(typeof saveOrders==='function')saveOrders(a)}catch(e){}}
  const root=document.getElementById('v8CartContent');
  if(root&&root.querySelector('.hrx-done'))mount(root,o||{payment_state:'expired'});
- showExpiredPopup()
+ showExpiredPopup();
+ setTimeout(purgeLocal,1500)
 }
+// Same rules as the server (order-lifecycle.js): a bill nobody paid within an hour is deleted,
+// here from this browser's order list so it also disappears from the queue and tracking.
+function stale(o){
+ if(!o||o.payment_customer_confirmed_at||o.slip_verified)return false;
+ if(o.payment_state==='expired')return true;
+ if(o.payment_state==='awaiting_payment'){const d=deadline(o);return Number.isFinite(d)&&d<=Date.now()}
+ if(!o.payment_state&&Number(o.status)===0&&!o.payment_slip&&!o.slip_data&&o.channel!=='shopee'&&!o.shopee_order_sn&&!o.tracking_number){
+  const c=Date.parse(o.created_at||'');return Number.isFinite(c)&&c+WINDOW_MS<=Date.now()
+ }
+ return false
+}
+let purging=false;
+async function purgeLocal(){
+ if(purging||typeof getOrders!=='function'||typeof saveOrders!=='function')return;
+ purging=true;
+ try{
+  if(window.hlgOrderStore?.active){try{await window.hlgOrderStore.readyPromise}catch(e){return}}
+  const all=getOrders(),keep=all.filter(o=>!stale(o));
+  if(keep.length===all.length)return;
+  await saveOrders(keep);
+  try{if(document.getElementById('page-admin')?.classList.contains('active'))window.renderAdminOrders?.()}catch(e){}
+ }finally{purging=false}
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(purgeLocal,600),{once:true});else setTimeout(purgeLocal,600);
+window.addEventListener('pageshow',()=>setTimeout(purgeLocal,300));
+setInterval(purgeLocal,30000);
 window.hlgPaymentWindow={
  notice:()=>'<div class="hpw-notice"><b>⏰ ชำระเงินภายใน 1 ชั่วโมง</b>หลังกดตกลง กรุณาโอนเงินและแนบสลิปภายใน 1 ชั่วโมง หากเลยเวลา ระบบจะยกเลิกออเดอร์นี้ให้อัตโนมัติค่ะ</div>',
- mount,expire,isExpired
+ mount,expire,isExpired,purgeLocal
 };
 })();
 </script>

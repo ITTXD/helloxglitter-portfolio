@@ -25,10 +25,24 @@ function isAwaitingPayment(order) {
   return !!order && order.payment_state === AWAITING && !order.slip_verified;
 }
 
+// An order saved before bills had a payment deadline: still unpaid (status 0),
+// no slip of any kind, not from Shopee and never shipped. Paid orders always
+// carry a slip, so this only matches bills nobody ever paid.
+function isLegacyUnpaid(order) {
+  return !!order && !order.payment_state && Number(order.status) === 0
+    && !order.slip_verified && !order.slip_data && !order.payment_slip
+    && order.channel !== 'shopee' && !order.shopee_order_sn && !order.tracking_number;
+}
+
 function isExpired(order, now) {
+  const t = now == null ? Date.now() : now;
+  if (isLegacyUnpaid(order)) {
+    const created = Date.parse(order.created_at || '');
+    return Number.isFinite(created) && created + PAYMENT_WINDOW_MS <= t;
+  }
   if (!isAwaitingPayment(order)) return false;
   const deadline = Date.parse(order.payment_deadline || '');
-  return Number.isFinite(deadline) && deadline <= (now == null ? Date.now() : now);
+  return Number.isFinite(deadline) && deadline <= t;
 }
 
 // Paid orders are the only ones that count as real orders (stats, labels, sales).
@@ -159,6 +173,17 @@ async function syncQueueNumbers(orders, store) {
   return { renumbered: !migrated, changed: plan.changes.length, last: plan.last };
 }
 
+// What is kept of a purged bill so it can be restored by hand: the order
+ // without its (possibly large) images or Firestore bookkeeping.
+function archiveCopy(order) {
+  const copy = {};
+  Object.keys(order || {}).forEach(k => {
+    if (k === '_docId' || k === 'slip_data' || k === 'payment_slip') return;
+    copy[k] = order[k];
+  });
+  return copy;
+}
+
 /**
  * Remove expired unpaid bills.
  * @param {object[]} orders  every order record (must carry _docId)
@@ -177,6 +202,8 @@ async function purgeExpired(orders, store, now) {
       live.push(order);
     }
   }
+  const removed = (orders || []).length - live.length;
+  if (removed > 0) console.log('[orders] purged', removed, 'unpaid bills');
   return live;
 }
 
@@ -187,6 +214,7 @@ module.exports = {
   EXPIRED_COLLECTION,
   paymentDeadline,
   isAwaitingPayment,
+  isLegacyUnpaid,
   isExpired,
   isPaid,
   deriveOrderType,
@@ -197,5 +225,6 @@ module.exports = {
   planRenumber,
   planRepair,
   syncQueueNumbers,
+  archiveCopy,
   purgeExpired,
 };

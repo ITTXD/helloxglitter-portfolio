@@ -404,6 +404,8 @@ const expiredOrderStore = {
     id: o.id,
     expired_at: new Date().toISOString(),
     payment_deadline: o.payment_deadline || null,
+    legacy: lifecycle.isLegacyUnpaid(o),
+    order: lifecycle.archiveCopy(o),
   }),
 };
 
