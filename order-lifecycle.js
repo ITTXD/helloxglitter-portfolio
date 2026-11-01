@@ -73,6 +73,30 @@ function formatQueueNo(n) {
   return 'HLG-' + String(n).padStart(3, '0');
 }
 
+function orderTime(o) {
+  const raw = o && o.created_at;
+  if (raw && typeof raw === 'object' && raw.seconds) return raw.seconds * 1000;
+  const t = Date.parse(raw || '');
+  return Number.isFinite(t) ? t : 0;
+}
+
+/**
+ * Queue numbers for every paid order, oldest first: HLG-001, HLG-002, …
+ * Used once to repair orders that were all saved as HLG-001 before the
+ * server took over numbering. Unpaid bills never get a number.
+ * @returns {{ changes: {order, from, to}[], last: number }}
+ */
+function planRenumber(orders) {
+  const paid = (orders || []).filter(isPaid).sort((a, b) =>
+    (orderTime(a) - orderTime(b)) || String(a.id || '').localeCompare(String(b.id || '')));
+  const changes = [];
+  paid.forEach((order, i) => {
+    const to = formatQueueNo(i + 1);
+    if (order.queue_no !== to) changes.push({ order, from: order.queue_no || '', to });
+  });
+  return { changes, last: paid.length };
+}
+
 /**
  * Remove expired unpaid bills.
  * @param {object[]} orders  every order record (must carry _docId)
@@ -108,5 +132,6 @@ module.exports = {
   maxQueueNumber,
   nextQueueNumber,
   formatQueueNo,
+  planRenumber,
   purgeExpired,
 };

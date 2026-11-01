@@ -72,6 +72,31 @@ async function test(name, fn) {
     assert.strictEqual(live.length, 1);
   });
 
+  await test('renumbering gives paid orders HLG-001… by order date and skips unpaid bills', () => {
+    const plan = L.planRenumber([
+      { id: 'C', queue_no: 'HLG-001', status: 1, created_at: '2026-10-03T00:00:00Z' },
+      { id: 'A', queue_no: 'HLG-001', status: 1, created_at: '2026-10-01T00:00:00Z' },
+      { id: 'U', queue_no: 'HLG-001', status: 0, created_at: '2026-10-02T00:00:00Z' },
+      { id: 'B', queue_no: '', payment_state: L.PAID, created_at: '2026-10-02T00:00:00Z' },
+      { id: 'S', queue_no: 'HLG-003', channel: 'shopee', status: 1, created_at: '2026-10-04T00:00:00Z' },
+    ]);
+    assert.strictEqual(plan.last, 4);
+    assert.deepStrictEqual(plan.changes.map(c => [c.order.id, c.from, c.to]), [
+      ['B', '', 'HLG-002'],
+      ['C', 'HLG-001', 'HLG-003'],
+      ['S', 'HLG-003', 'HLG-004'],
+    ]);
+  });
+
+  await test('renumbering an already ordered list changes nothing', () => {
+    const plan = L.planRenumber([
+      { id: 'A', queue_no: 'HLG-001', status: 1, created_at: '2026-10-01T00:00:00Z' },
+      { id: 'B', queue_no: 'HLG-002', status: 2, created_at: '2026-10-02T00:00:00Z' },
+    ]);
+    assert.deepStrictEqual(plan.changes, []);
+    assert.strictEqual(plan.last, 2);
+  });
+
   console.log(`\n  RESULT: ${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);
 })();

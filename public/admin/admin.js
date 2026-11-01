@@ -1374,6 +1374,37 @@ function bulkDeleteAllShown() {
   confirmBulkDelete(filteredOrders.slice(), 'ลบออเดอร์ทั้งหมดที่แสดงอยู่ ' + filteredOrders.length + ' รายการ (ตามแท็บ ช่วงวันที่ และคำค้นหาปัจจุบัน)? ลบแล้วกู้คืนไม่ได้');
 }
 
+// ==================== QUEUE RENUMBER ====================
+// Repairs orders that were all saved as HLG-001: every paid order gets
+// HLG-001, HLG-002, … by order date. Shows what will change before saving.
+function renumberQueues() {
+  var btn = document.getElementById('renumberQueueBtn');
+  function call(dryRun) {
+    return fetch('/api/orders/renumber-queue', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ dry_run: dryRun }),
+    }).then(function(r) {
+      return r.json().then(function(d) { if (!r.ok || d.error) throw new Error(d.error || r.status); return d; });
+    });
+  }
+  btn.disabled = true;
+  call(true)
+    .then(function(plan) {
+      if (!plan.changes.length) { showToast('success', 'เลขคิวเรียงถูกต้องอยู่แล้ว (' + plan.total + ' ออเดอร์)'); return; }
+      var sample = plan.changes.slice(0, 8).map(function(c) { return c.id + ': ' + (c.from || '—') + ' → ' + c.to; }).join('\n');
+      var more = plan.changes.length > 8 ? '\n… และอีก ' + (plan.changes.length - 8) + ' ออเดอร์' : '';
+      if (!confirm('จัดเลขคิวใหม่ให้ออเดอร์ที่ชำระแล้ว ' + plan.total + ' ออเดอร์ เรียงตามวันที่สั่ง (HLG-001 ถึง ' + 'HLG-' + String(plan.total).padStart(3, '0') + ')\n\nจะเปลี่ยน ' + plan.changes.length + ' ออเดอร์:\n' + sample + more)) return;
+      return call(false).then(function(res) {
+        showToast('success', 'จัดเลขคิวใหม่แล้ว ' + res.changes.length + ' ออเดอร์');
+        loadOrders();
+      });
+    })
+    .catch(function(err) { showToast('error', 'จัดเลขคิวไม่สำเร็จ: ' + err.message); })
+    .finally(function() { btn.disabled = false; });
+}
+
 // ==================== EXPORT ADDRESSES (EXCEL) ====================
 var XLSX_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 var xlsxLoading = null;
