@@ -412,3 +412,11 @@ body { font-family: 'Nunito', sans-serif; background: #f8f9fc; color: #333; min-
   .bulk-bar { padding: 10px 12px; }
   .bulk-actions { width: 100%; }
 }
+
+/* ==================== PRODUCT TYPE TABS ==================== */
+.filter-type-tabs { flex-wrap: wrap; }
+.tytab { display: inline-flex; align-items: center; gap: 5px; }
+.tytab.active { background: #d45a8a; border-color: #d45a8a; color: #fff; box-shadow: 0 2px 8px rgba(212, 90, 138, .25); }
+.tytab[data-type="wallpaper"].active { background: #7c3aed; border-color: #7c3aed; box-shadow: 0 2px 8px rgba(124, 58, 237, .25); }
+.tytab[data-type="sticker"].active { background: #d97706; border-color: #d97706; box-shadow: 0 2px 8px rgba(217, 119, 6, .25); }
+.tytab.active .ftab-count { background: rgba(255,255,255,0.3); color: #fff; }

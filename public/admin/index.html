@@ -219,6 +219,12 @@
       <button class="chtab" data-channel="web" onclick="switchChannelFilter('web')">🌐 เว็บไซต์</button>
       <button class="chtab" data-channel="shopee" onclick="switchChannelFilter('shopee')">🧡 Shopee</button>
     </div>
+    <div class="filter-channel-tabs filter-type-tabs" id="filterTypeTabs" style="display:inline-flex;gap:4px">
+      <button class="chtab tytab active" data-type="all" onclick="switchTypeFilter('all')">ทุกสินค้า <span class="ftab-count">0</span></button>
+      <button class="chtab tytab" data-type="bag" onclick="switchTypeFilter('bag')">👜 กระเป๋า <span class="ftab-count">0</span></button>
+      <button class="chtab tytab" data-type="wallpaper" onclick="switchTypeFilter('wallpaper')">🎨 Wallpaper <span class="ftab-count">0</span></button>
+      <button class="chtab tytab" data-type="sticker" onclick="switchTypeFilter('sticker')">✨ Sticker <span class="ftab-count">0</span></button>
+    </div>
     <div class="date-range" id="ordersDateRange" data-range="orders"></div>
     <div class="refresh-bar">
       <button class="refresh-btn" id="refreshBtn" onclick="refreshData()"><i class="ti ti-refresh"></i> รีเฟรช</button>
