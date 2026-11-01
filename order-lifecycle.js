@@ -67,6 +67,13 @@ function deriveOrderType(items, fallback) {
   return fallback || 'bag';
 }
 
+// Number of bags in an order, from item quantities (wallpaper and stickers are not bags).
+// Returns null when the order has no item list (older orders keep their stored total_bags).
+function bagCount(items) {
+  if (!Array.isArray(items) || !items.length) return null;
+  return items.reduce((n, x) => n + (x && (x.type === 'bag' || !x.type) ? Math.max(1, Number(x.qty) || 1) : 0), 0);
+}
+
 function hasWallpaper(order) {
   if (!order) return false;
   if (order.type === 'wallpaper') return true;
@@ -224,6 +231,7 @@ module.exports = {
   isExpired,
   isPaid,
   deriveOrderType,
+  bagCount,
   hasWallpaper,
   maxQueueNumber,
   nextQueueNumber,

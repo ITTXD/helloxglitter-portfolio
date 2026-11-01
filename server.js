@@ -1265,7 +1265,7 @@ async function handleApi(req, res) {
       patterns: patterns,
       pattern_qtys: body.pattern_qtys || null,
       qty: body.qty || 1,
-      total_bags: body.total_bags || (patterns.length * (body.qty || 1)),
+      total_bags: lifecycle.bagCount(body.items) != null ? lifecycle.bagCount(body.items) : (body.total_bags || (patterns.length * (body.qty || 1))),
       original_price: originalPrice,
       total_price: finalTotalPrice,
       savings: (body.savings || 0) + couponDiscount,
@@ -1976,10 +1976,8 @@ async function handleApi(req, res) {
       });
     }
 
-    const totalBags = orderData.total_bags
-      || (orderData.items ? orderData.items.filter(x => x.type === 'bag').reduce((n, x) => n + (Number(x.qty) || 1), 0) : 0)
-      || patterns.length
-      || 1;
+    const itemBags = lifecycle.bagCount(orderData.items);
+    const totalBags = itemBags != null ? itemBags : (orderData.total_bags || patterns.length || 1);
 
     let customProducts = [];
     try {
@@ -2252,7 +2250,7 @@ async function handleApi(req, res) {
     const orders = (await loadLiveOrders()).filter(lifecycle.isPaid);
     const stats = {
       total_orders: orders.length,
-      total_bags: orders.reduce((s, o) => s + (o.total_bags || 0), 0),
+      total_bags: orders.reduce((s, o) => s + (lifecycle.bagCount(o.items) != null ? lifecycle.bagCount(o.items) : (o.total_bags || 0)), 0),
       total_revenue: orders.reduce((s, o) => s + (o.total_price || 0) + (o.shipping_cost != null ? o.shipping_cost : 50), 0),
       total_product_price: orders.reduce((s, o) => s + (o.total_price || 0), 0),
       total_shipping: orders.reduce((s, o) => s + (o.shipping_cost != null ? o.shipping_cost : 50), 0),
