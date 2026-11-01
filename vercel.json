@@ -1,4 +1,12 @@
 {
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "helloxglitter-preorder.vercel.app" }],
+      "destination": "https://helloxglitterstore.vercel.app/$1",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     { "source": "/designer", "destination": "/From_Designer/designer.html" },
     { "source": "/admin", "destination": "/api/admin-logout" },
