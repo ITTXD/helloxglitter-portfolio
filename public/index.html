@@ -9861,7 +9861,7 @@ function dt(v){
  const d=new Date(v);if(isNaN(d))return String(v||'-');
  return d.toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})
 }
-function escQ(v){return String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function escQ(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function thumb(o){
  const it=(o.items||[]).find(x=>x.image);
  return it?.image||o.payment_slip||''
@@ -10028,15 +10028,33 @@ window.v8QEdit=function(id){
 }
 window.v8QCopyAddress=async function(id){
  const o=rows().find(x=>String(x.id)===String(id));if(!o)return;
- const parts=[o.customer_name||'',o.customer_phone||'',o.customer_address||''].map(v=>String(v).trim()).filter(Boolean);
- if(!o.customer_address){toastQ('ออเดอร์นี้ยังไม่มีที่อยู่ กรุณาตรวจสอบก่อนส่ง','err');return}
- const value=parts.join('\n');
+ const infoLines=String(o.customer_info||o.recipient_info||'').split(/\r?\n/).map(v=>v.trim()).filter(Boolean);
+ const rawPhone=String(o.customer_phone||o.phone||o.tel||o.mobile||'').trim();
+ let phone=rawPhone==='-'?'':rawPhone;
+ if(!phone){
+  const phLine=infoLines.find((l,idx)=>idx>0&&/^0\d[\d\s\-]{7,12}$/.test(l));
+  const phMatch=String(o.customer_info||o.recipient_info||o.customer_address||'').match(/(?:^|\D)(0[689]\d[\s\-]?\d{3}[\s\-]?\d{4}|0[2-9]\d[\s\-]?\d{3}[\s\-]?\d{3,4})(?!\d)/);
+  phone=phLine||(phMatch?phMatch[1].trim():'');
+ }
+ const name=String(o.customer_name||infoLines[0]||'').trim();
+ const shipAddr=typeof o.shipping_address==='string'?o.shipping_address:(o.shipping_address?.address1||'');
+ const rawAddr=String(o.customer_address||o.address||shipAddr||infoLines.slice(1).join('\n')||'').trim();
+ if(!rawAddr&&!phone){toastQ('ออเดอร์นี้ยังไม่มีที่อยู่ กรุณาตรวจสอบก่อนส่ง','err');return}
+ let addrLines=rawAddr?rawAddr.split(/\r?\n/).map(v=>v.trim()).filter(Boolean):[];
+ if(name&&addrLines.length>0&&addrLines[0]===name)addrLines=addrLines.slice(1);
+ const pDigits=phone.replace(/\D/g,'');
+ if(pDigits)addrLines=addrLines.filter(l=>!(l.replace(/\D/g,'')===pDigits&&/^[\d\s\-+()โทร.:tel]+$/i.test(l)));
+ const value=[name,phone,addrLines.join('\n').trim()].filter(Boolean).join('\n');
+ const fallbackCopy=txt=>{
+  const field=document.createElement('textarea');field.value=txt;field.setAttribute('readonly','');field.style.cssText='position:fixed;left:-9999px;top:0;opacity:0;pointer-events:none';document.body.appendChild(field);field.focus();field.select();
+  try{field.setSelectionRange(0,field.value.length)}catch(e){}
+  let copied=false;try{copied=document.execCommand('copy')}catch(e){copied=false}
+  field.remove();return copied
+ };
  try{
-  if(navigator.clipboard&&window.isSecureContext)await navigator.clipboard.writeText(value);
-  else{
-   const field=document.createElement('textarea');field.value=value;field.style.cssText='position:fixed;left:-9999px;top:0';document.body.appendChild(field);field.select();
-   const copied=document.execCommand('copy');field.remove();if(!copied)throw new Error('copy unavailable')
-  }
+  if(navigator.clipboard&&typeof navigator.clipboard.writeText==='function'&&window.isSecureContext){
+   try{await navigator.clipboard.writeText(value)}catch(err){if(!fallbackCopy(value))throw err}
+  }else if(!fallbackCopy(value))throw new Error('copy unavailable');
   toastQ('คัดลอกชื่อ เบอร์โทร และที่อยู่แล้ว ✓')
  }catch(e){toastQ('คัดลอกไม่สำเร็จ กรุณาลองอีกครั้ง','err')}
 }
@@ -10096,7 +10114,7 @@ window.renderAdminOrders=function(){
       const ws=workStatus(o),items=Array.isArray(o.items)?o.items:[];
       return `<article class="v8q-pack-card">
        <div class="v8q-pack-main">
-        <div class="v8q-pack-cell v8q-pack-customer"><span class="v8q-pack-label">ลูกค้า · ที่อยู่จัดส่ง</span><b>${escQ(o.customer_name||'ไม่ระบุชื่อ')}</b>${o.customer_email?`<span class="v8q-handle">${escQ(o.customer_email)}</span>`:''}<div class="v8q-contact">📞 ${escQ(o.customer_phone||'-')}</div><div class="v8q-pack-address">📍 ${escQ(o.customer_address||'ยังไม่มีที่อยู่จัดส่ง')}</div><button type="button" class="v8q-pack-copy" onclick="v8QCopyAddress('${escQ(o.id)}')">คัดลอกชื่อ + เบอร์ + ที่อยู่</button></div>
+        <div class="v8q-pack-cell v8q-pack-customer"><span class="v8q-pack-label">ลูกค้า · ที่อยู่จัดส่ง</span><b>${escQ(o.customer_name||'ไม่ระบุชื่อ')}</b>${o.customer_email?`<span class="v8q-handle">${escQ(o.customer_email)}</span>`:''}<div class="v8q-contact">📞 ${escQ(o.customer_phone||'-')}</div><div class="v8q-pack-address">📍 ${escQ(o.customer_address||'ยังไม่มีที่อยู่จัดส่ง')}</div><button type="button" class="v8q-pack-copy" data-order-id="${escQ(o.id)}" onclick="v8QCopyAddress(this.dataset.orderId)">คัดลอกชื่อ + เบอร์ + ที่อยู่</button></div>
         <div class="v8q-pack-cell v8q-pack-products"><span class="v8q-pack-label">รายการที่สั่ง</span>${items.length?items.map((x,i)=>`<div class="v8q-pack-product"><span class="v8q-pack-number">${i+1}.</span><span>${escQ(x.name||'สินค้า')} × ${Number(x.qty||1)}${x.variant?`<small>${escQ(x.variant)}</small>`:''}</span></div>`).join(''):'<div class="v8q-pack-more">ออเดอร์เก่าไม่มีข้อมูลรายการสินค้า</div>'}<button type="button" class="v8q-pack-open" onclick="v8QShowItems('${escQ(o.id)}')">ดูรูปและรายละเอียด ›</button></div>
         <div class="v8q-pack-cell v8q-pack-track"><span class="v8q-pack-label">เลขคิว · เลขแทร็ค</span><span class="v8q-queue">${escQ(o.queue_no||'รอเลขคิว')}</span><span class="v8q-carrier-prompt">ขนส่งที่ใช้</span><div class="v8q-carrier-choices">${[['FLASH','Flash','flash'],['SPX','SPX','spx'],['JT','J&T','jt']].map(([code,label,cls])=>`<button type="button" class="v8q-carrier-choice ${cls} ${carrierCode(o)===code?'selected':''}" aria-pressed="${carrierCode(o)===code}" onclick="v8QChooseCarrier('${escQ(o.id)}','${code}')">${label}</button>`).join('')}</div>${done(o)?`${editingTrackId===String(o.id)?`<div class="v8q-track-edit"><input id="v8qt-${escQ(o.id)}" value="${escQ(o.tracking_number||'')}" aria-label="แก้ไขเลขแทร็คของ ${escQ(o.customer_name||'ลูกค้า')}"><button type="button" onclick="v8QSaveTrackingEdit('${escQ(o.id)}')">บันทึกเลขใหม่</button></div>`:`<div class="v8q-pack-tracking-done">${escQ(o.tracking_number||'ส่งแล้ว')}</div>`}${!carrierCode(o)?'<div class="v8q-carrier-missing">ยังไม่ได้ระบุขนส่ง เลือกได้ด้านบน</div>':''}<div class="v8q-track-actions"><button type="button" onclick="v8QEditTracking('${escQ(o.id)}')">${editingTrackId===String(o.id)?'ยกเลิกแก้ไข':'✎ แก้ไขเลขแทร็ค'}</button>${o.tracking_number?`<button type="button" class="remove" onclick="v8QRemoveTracking('${escQ(o.id)}')">ลบเลขแทร็ค</button>`:''}</div>`:`<div class="v8q-track"><input id="v8qt-${escQ(o.id)}" value="${escQ(o.tracking_number||'')}" placeholder="กรอกเลขแทร็ค" aria-label="เลขแทร็คของ ${escQ(o.customer_name||'ลูกค้า')}"><button onclick="v8QConfirmTracking('${escQ(o.id)}')">✓ ยืนยันส่ง</button></div>`}</div>
        </div>
@@ -10114,6 +10132,7 @@ window.renderAdminOrders=function(){
  }
 };
 
+window.v8RenderQueue=function(){return window.renderAdminOrders()};
 document.addEventListener('DOMContentLoaded',()=>{migrateOldOrders()});
 if(document.readyState!=='loading')migrateOldOrders();
 })();
@@ -14937,6 +14956,16 @@ function banner(page){const pg=document.getElementById('page-'+page);if(!pg)retu
  if(!promos.length){el?.remove();return}if(!el){el=document.createElement('div');el.className='hlg-sale-banner';const dest=page==='preorder'?document.getElementById('hlgPreorderBlocks'):pg.querySelector('.hero');if(page==='preorder'&&dest)dest.prepend(el);else dest?.insertAdjacentElement('afterend',el)}
  el.textContent='✨ '+[...new Set(promos.map(p=>p.label||'กำลังลดราคา ♡'))].join(' · ')
 }
+function fillPrice(label,item,pr){
+ label.querySelector('.gprice,.gprice-row')?.remove();label.querySelector('.hlg-promo-tag')?.remove();label.querySelector('.hlg-tier-hint')?.remove();
+ // Quantity promo (buy 1/2/3): its 1-piece price and best per-piece price also count as a visible discount.
+ let now=pr.price,best=null;const info=window.hlgTierProductInfo?.({...item,price:pr.price});
+ if(info){const [one,,three]=info.prices.map(v=>v===null||v===undefined||!Number.isFinite(Number(v))?null:Number(v));if(one!==null&&one<now)now=one;const lo=Math.min(...info.prices.filter(v=>v!==null&&v!==undefined&&Number.isFinite(Number(v))).map(Number),now);if(lo<now)best=lo}
+ const d=document.createElement('div');d.className='gprice-row';
+ d.innerHTML=now<pr.base?`<span class="hlg-price-old">${pr.base.toLocaleString()} ฿</span><span class="hlg-price-new">${now.toLocaleString()} ฿</span><span class="hlg-price-save">ลด ${(pr.base-now).toLocaleString()} ฿</span>`:`<span class="gprice">${pr.price.toLocaleString()} ฿</span>`;
+ label.append(d);
+ if(best!==null){const h=document.createElement('div');h.className='hlg-tier-hint';h.textContent='ซื้อหลายใบ เหลือใบละ '+best.toLocaleString()+' ฿';label.append(h)}
+}
 function decorateGallery(){
  if(typeof getList==='function'){
    const ps=getList(),cards=document.querySelectorAll('#gallery .gcard');cards.forEach((card,i)=>{const p=ps[i];if(!p)return;const pr=resolve({type:'bag',name:p.name,variant:p.size}),label=card.querySelector('.glabel');if(!label)return;fillPrice(label,{type:'bag',name:p.name,variant:p.size},pr);if(pr.promo){const t=document.createElement('span');t.className='hlg-promo-tag';t.textContent=pr.promo.label;label.append(t)}card.querySelector('.flash-corner-tag')?.remove()})
@@ -14956,16 +14985,6 @@ const oldPromo=window.renderPromoWrap;if(typeof oldPromo==='function')window.ren
 const oldShow=window.showPage;window.showPage=function(){const r=oldShow?.apply(this,arguments);setTimeout(()=>{refresh()},30);return r};
 window.addEventListener('storage',e=>{if(e.key===KEY)refresh()});
 function boot(){refresh()}
-function fillPrice(label,item,pr){
- label.querySelector('.gprice,.gprice-row')?.remove();label.querySelector('.hlg-promo-tag')?.remove();label.querySelector('.hlg-tier-hint')?.remove();
- // Quantity promo (buy 1/2/3): its 1-piece price and best per-piece price also count as a visible discount.
- let now=pr.price,best=null;const info=window.hlgTierProductInfo?.({...item,price:pr.price});
- if(info){const [one,,three]=info.prices.map(v=>v===null||v===undefined||!Number.isFinite(Number(v))?null:Number(v));if(one!==null&&one<now)now=one;const lo=Math.min(...info.prices.filter(v=>v!==null&&v!==undefined&&Number.isFinite(Number(v))).map(Number),now);if(lo<now)best=lo}
- const d=document.createElement('div');d.className='gprice-row';
- d.innerHTML=now<pr.base?`<span class="hlg-price-old">${pr.base.toLocaleString()} ฿</span><span class="hlg-price-new">${now.toLocaleString()} ฿</span><span class="hlg-price-save">ลด ${(pr.base-now).toLocaleString()} ฿</span>`:`<span class="gprice">${pr.price.toLocaleString()} ฿</span>`;
- label.append(d);
- if(best!==null){const h=document.createElement('div');h.className='hlg-tier-hint';h.textContent='ซื้อหลายใบ เหลือใบละ '+best.toLocaleString()+' ฿';label.append(h)}
-}
 document.addEventListener('DOMContentLoaded',boot);if(document.readyState!=='loading')boot();
 })();
 </script>
@@ -18075,8 +18094,7 @@ window.renderPromoWrap=function(){
   }
   section.append(grid);panel.append(section)
  }
- let detail=$('#hlgTierProducts');if(!detail){detail=document.createElement('div');detail.id='hlgTierProducts';panel.after(detail)}
- const chosen=catalog().filter(x=>selected(v,x));detail.replaceChildren();if(chosen.length){const title=document.createElement('p');title.textContent='สินค้าในโปร '+chosen.length+' รายการ · จำนวนสินค้าที่ร่วมโปรในตะกร้าคละลายกันได้';detail.append(title);for(const x of chosen.slice(0,30)){const row=document.createElement('div');row.className='hlg-tier-product-row';row.textContent=x.name+(x.variant?' · '+x.variant:'')+' — '+[1,2,3].map(n=>{const base=window.hlgPriceFor?.(x).price??x.price,price=levelPrice(v,{...x,price:base},n);return n+(n===3?'+':'')+' ชิ้น '+(price===null?'ราคาปกติ':Math.min(base,price).toLocaleString()+' ฿/ชิ้น')}).join(' · ');detail.append(row)}if(chosen.length>30){const more=document.createElement('p');more.textContent='และอีก '+(chosen.length-30)+' รายการ ดูราคาที่หน้าสินค้า';detail.append(more)}}
+ $('#hlgTierProducts')?.remove();
  return result
 };
 
@@ -18141,14 +18159,13 @@ function boot(){ensureTab();categories=read();renderPages();hydrate().then(()=>{
 })();
 </script>
 <style id="hlg-tier-badges-style">
-.hlg-tier-prices{margin:7px 0 0;padding:7px 9px;background:#fff0f6;color:#a63d6e;border:1px solid #f3c9da;border-radius:10px;font-size:11px;line-height:1.55;font-weight:500}.hlg-tier-prices b{font-weight:600}.hlg-tier-home{margin:12px auto;padding:15px;max-width:1100px;background:#fff2f8;border:1px solid #edbfd2;border-radius:15px;color:#9d3f6d}.hlg-tier-home h3{margin:0 0 8px;font-size:16px}.hlg-tier-home button{margin:4px;padding:7px 10px;border:1px solid #d98eb0;border-radius:9px;background:white;color:#9e3b6a;font:inherit;font-size:12px;cursor:pointer}.hlg-tier-home p{font-size:12px;margin:7px 0 0}
+.hlg-tier-home{margin:12px auto;padding:15px;max-width:1100px;background:#fff2f8;border:1px solid #edbfd2;border-radius:15px;color:#9d3f6d}.hlg-tier-home h3{margin:0 0 8px;font-size:16px}.hlg-tier-home button{margin:4px;padding:7px 10px;border:1px solid #d98eb0;border-radius:9px;background:white;color:#9e3b6a;font:inherit;font-size:12px;cursor:pointer}.hlg-tier-home p{font-size:12px;margin:7px 0 0}
 </style>
 <script id="hlg-tier-badges-js">
 (function(){
 'use strict';
 const $=s=>document.querySelector(s);
-function label(x,settings){if(!x)return null;const info=window.hlgTierProductInfo?.(x,settings);if(!info)return null;const box=document.createElement('div');box.className='hlg-tier-prices';const title=document.createElement('b');title.textContent=info.name+' ♡';box.append(title,document.createElement('br'));info.prices.forEach((price,i)=>{if(price===null||!Number.isFinite(price))return;const line=document.createElement('span');line.textContent='ซื้อครบ '+(i+1)+(i===2?' ชิ้นขึ้นไป':' ชิ้น')+' → '+price.toLocaleString()+' ฿/ชิ้น';box.append(line,document.createElement('br'))});if(info.prices.every(price=>price===null)){const line=document.createElement('span');line.textContent='ร่วมโปรของแถม / ส่งฟรีตามจำนวน';box.append(line)}return box}
-function decorate(){const settings=window.hlgTierSettings?.(),bag=typeof getList==='function'?getList():[],stickers=typeof STICKER_PATTERNS!=='undefined'?STICKER_PATTERNS:[];for(const [selector,products,type] of [['#gallery .gcard',bag,'bag'],['#stickerGallery .gcard',stickers,'sticker']])document.querySelectorAll(selector).forEach((card,i)=>{card.querySelector('.hlg-tier-prices')?.remove();const x=products[i];if(!x)return;const box=label({type,name:x.name,variant:type==='bag'?x.size||'':'',price:type==='bag'?Number(x.priceOrig):Number(x.price)},settings);if(box)card.querySelector('.glabel')?.append(box)});document.querySelectorAll('.page[data-hlg-collection]').forEach(page=>{const products=window.hlgCollectionProducts?.().filter(x=>x.categoryId===page.dataset.hlgCollection)||[];page.querySelectorAll('.hlgc-gallery .gcard').forEach((card,i)=>{card.querySelector('.hlg-tier-prices')?.remove();const box=label(products[i],settings);if(box)card.querySelector('.glabel')?.append(box)})});const wp=document.querySelector('#wpCard');if(wp){wp.querySelector('.hlg-tier-prices')?.remove();const box=label({type:'wallpaper',name:'Wallpaper Special Set',variant:'Digital Download',price:99},settings);if(box)wp.querySelector('.wp-card-info')?.append(box)}home(settings)}
+function decorate(){document.querySelectorAll('.hlg-tier-prices').forEach(el=>el.remove());home(window.hlgTierSettings?.())}
 function home(settings){let el=$('#hlgTierHome');const products=[...(typeof ALL_PATTERNS!=='undefined'?ALL_PATTERNS.map(x=>({type:'bag',name:x.name,variant:x.size||'',price:Number(x.priceOrig)})):[]),...(typeof STICKER_PATTERNS!=='undefined'?STICKER_PATTERNS.map(x=>({type:'sticker',name:x.name,variant:'',price:Number(x.price)})):[]),{type:'wallpaper',name:'Wallpaper Special Set',variant:'Digital Download',price:99},...(window.hlgCollectionProducts?.()||[])];const pages=new Map();for(const x of products){if(!window.hlgTierProductInfo?.(x,settings))continue;const page=x.type==='bag'?'preorder':x.type==='sticker'?'sticker':x.type==='wallpaper'?'wallpaper':x.categoryId;pages.set(page,x.type==='bag'?'กระเป๋า':x.type==='sticker'?'Sticker':x.type==='wallpaper'?'Wallpaper':x.variant||'สินค้าใหม่')}const anchor=$('.v5-products');if(!anchor)return;if(!pages.size){el?.remove();return}if(!el){el=document.createElement('div');el.id='hlgTierHome';el.className='hlg-tier-home';anchor.before(el)}el.replaceChildren();const title=document.createElement('h3');title.textContent='🎀 สินค้าที่กำลังมีโปร';el.append(title);for(const [page,name] of pages){const b=document.createElement('button');b.type='button';b.textContent=name+' →';b.onclick=()=>showPage(page);el.append(b)}const desc=document.createElement('p');desc.textContent='ดูราคาโปรของแต่ละชิ้นในหน้าสินค้า และตรวจยอดสุดท้ายในตะกร้าก่อนโอนค่ะ';el.append(desc)}
 window.hlgDecorateTierGalleries=decorate;
 const oldBag=window.buildGallery;if(typeof oldBag==='function')window.buildGallery=function(){const r=oldBag.apply(this,arguments);decorate();return r};
@@ -18208,8 +18225,6 @@ window.hrxDownload=async function(id){const button=document.getElementById('hrxD
 })();
 </script>
 <style id="hlg-promo-fix-style">
-#hlgTierProducts{margin:12px 0;padding:13px 16px;border:1px solid #efd2df;border-radius:15px;background:#fff8fb;color:#905472;font-size:12px;line-height:1.55}
-#hlgTierProducts p{margin:0 0 8px;font-weight:500}.hlg-tier-product-row{padding:6px 0;border-top:1px solid #f4deea;overflow-wrap:anywhere}
 .promo-panel .hlg-tier-detail{font-size:12px;color:#a5748c;padding:5px 0}.promo-panel .pbadge{max-width:100%;overflow-wrap:anywhere}
 @media(max-width:650px){.ptabs{overflow-x:auto;-webkit-overflow-scrolling:touch}.ptab{min-width:120px;flex:none}.promo-panel .pgrid{display:grid;grid-template-columns:1fr;gap:10px}.promo-panel .pitem{min-width:0}}
 </style>
