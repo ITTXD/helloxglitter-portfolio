@@ -10625,6 +10625,7 @@ window.v8CFconfirm=function(){
    type:buy.every(x=>x.type==='wallpaper')?'wallpaper':(buy.some(x=>x.type==='bag')?'bag':(buy[0]?.type||'bag')),
    payment_state:'awaiting_payment',
    payment_deadline:new Date(Date.now()+60*60*1000).toISOString(),
+   line_user_id:(()=>{try{return JSON.parse(localStorage.getItem('hlg_line_user_v1')||'null')?.line_user_id||''}catch(e){return ''}})(),
    customer_name:firstLine,
    customer_phone:phone || '-',
    customer_email:email,
@@ -10666,6 +10667,7 @@ window.v8CFconfirm=function(){
        items:order.items,
        total_price:order.total_price,
        shipping_cost:order.shipping_cost,
+       line_user_id:order.line_user_id||undefined,
        type:order.type
      })
    }).then(r=>r.json()).then(data=>{
@@ -18286,22 +18288,15 @@ function getLineUser(){
     const u=JSON.parse(localStorage.getItem(LINE_USER_KEY)||'null');
     if(u&&u.line_user_id)return u;
   }catch(e){}
-  if(localStorage.getItem('hlg_line_demo_v3')==='1'||localStorage.getItem('HLG_LINE_KEY')==='1'){
-    return {line_user_id:'U_DEMO_CUSTOMER',line_display_name:'ลูกค้า LINE (Demo)',picture_url:''};
-  }
   return null;
 }
 
 function setLineUser(u){
-  if(u&&u.line_user_id){
-    localStorage.setItem(LINE_USER_KEY,JSON.stringify(u));
-    localStorage.setItem('hlg_line_demo_v3','1');
-    localStorage.setItem('HLG_LINE_KEY','1');
-  }else{
-    localStorage.removeItem(LINE_USER_KEY);
-    localStorage.removeItem('hlg_line_demo_v3');
-    localStorage.removeItem('HLG_LINE_KEY');
-  }
+  // Flags from the old demo login made customers look connected without a real LINE account.
+  localStorage.removeItem('hlg_line_demo_v3');
+  localStorage.removeItem('HLG_LINE_KEY');
+  if(u&&u.line_user_id)localStorage.setItem(LINE_USER_KEY,JSON.stringify(u));
+  else localStorage.removeItem(LINE_USER_KEY);
   try{if(typeof renderDrawerMenu==='function')renderDrawerMenu()}catch(e){}
 }
 
@@ -18439,7 +18434,7 @@ window.openLineAccount=function(){
         if(window.liff){
           try{
             if(!window.liff.isLoggedIn()){
-              window.liff.login({ redirectUri: window.location.href });
+              window.hlgLineLogin();
             }else{
               const profile=await window.liff.getProfile();
               const res=await fetch('/api/auth/line/verify',{
@@ -18461,7 +18456,7 @@ window.openLineAccount=function(){
             }
           }catch(err){
             console.error('LIFF login redirect:', err);
-            window.liff.login({ redirectUri: window.location.href });
+            window.hlgLineLogin();
           }
         }else{
           window.location.href='https://liff.line.me/2011786627-NobuH2ua';
@@ -18719,37 +18714,80 @@ if(typeof originalRenderUnifiedCart==='function'){
 }
 
 
-async function initLineLiff(){
-  try{
-    const res=await fetch('/api/auth/line/me');
-    const data=await res.json();
-    const liffId=data.liff_id || '2011786627-NobuH2ua';
-    window._hxgLiffId=liffId;
-    if(window.liff){
-      await window.liff.init({liffId:liffId});
-      if(window.liff.isLoggedIn()){
-        const profile=await window.liff.getProfile();
-        const authRes=await fetch('/api/auth/line/verify',{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({
-            line_user_id:profile.userId,
-            line_display_name:profile.displayName,
-            line_picture_url:profile.pictureUrl
-          })
-        });
-        const authData=await authRes.json();
-        if(authData.success){
-          setLineUser(authData.user);
-          if(typeof renderDrawerMenu==='function')renderDrawerMenu();
-        }
-      }
-    }
-    if(data.authenticated&&data.user){
-      setLineUser(data.user);
-    }
-  }catch(err){console.warn('[LINE LIFF] Init status:',err.message)}
+// Links the customer's LINE account without them having to press "LOGIN":
+// - opened inside LINE (LIFF / LINE's in-app browser): signs in automatically once per visit
+// - returning from the LINE login page: finishes the link and tidies the URL
+// - a LINE cookie from an earlier visit: restores the link silently
+const LINE_AUTO_TRIED='hlg_line_auto_login_tried_v1';
+const LINE_LOGIN_PARAMS=['code','state','liffClientId','liffRedirectUri','error','error_description'];
+function lineLoginRedirectUri(){
+  const u=new URL(window.location.href);LINE_LOGIN_PARAMS.forEach(k=>u.searchParams.delete(k));return u.toString()
 }
+function cleanLineLoginUrl(){
+  try{const clean=lineLoginRedirectUri();if(clean!==window.location.href)history.replaceState(history.state,'',clean)}catch(e){}
+}
+function inLineApp(){
+  try{if(window.liff?.isInClient?.())return true}catch(e){}
+  return /\bLine\//i.test(navigator.userAgent||'')
+}
+function refreshLineUi(){
+  try{if(typeof renderDrawerMenu==='function')renderDrawerMenu()}catch(e){}
+  try{if(typeof hlgRenderAccountCard==='function')hlgRenderAccountCard()}catch(e){}
+  try{if(document.getElementById('page-cart')?.classList.contains('active')&&typeof renderUnifiedCart==='function')renderUnifiedCart()}catch(e){}
+}
+async function linkLineProfile(){
+  const profile=await window.liff.getProfile();
+  const authRes=await fetch('/api/auth/line/verify',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    credentials:'include',
+    body:JSON.stringify({
+      line_user_id:profile.userId,
+      line_display_name:profile.displayName,
+      line_picture_url:profile.pictureUrl
+    })
+  });
+  const authData=await authRes.json();
+  if(!authData.success)throw Error(authData.error||'LINE verify failed');
+  const isNew=getLineUser()?.line_user_id!==authData.user.line_user_id;
+  setLineUser(authData.user);refreshLineUi();
+  if(isNew)window.showToast?.('เชื่อมบัญชี LINE แล้ว สวัสดีคุณ '+(profile.displayName||'')+' ♡');
+  return authData.user
+}
+async function initLineLiff(){
+  const returning=new URLSearchParams(window.location.search).has('liffClientId')||new URLSearchParams(window.location.search).has('code');
+  let data={};
+  try{data=await fetch('/api/auth/line/me',{credentials:'include'}).then(r=>r.json())}catch(e){}
+  if(data.authenticated&&data.user&&!getLineUser()){setLineUser(data.user);refreshLineUi()}
+  const liffId=data.liff_id||'2011786627-NobuH2ua';
+  window._hxgLiffId=liffId;
+  if(!window.liff)return;
+  try{
+    await window.liff.init({liffId:liffId});
+    if(window.liff.isLoggedIn()){
+      await linkLineProfile();
+    }else if(inLineApp()&&!getLineUser()&&sessionStorage.getItem(LINE_AUTO_TRIED)!=='1'){
+      // Inside LINE the login is a silent hop through the app, so do it for the customer.
+      sessionStorage.setItem(LINE_AUTO_TRIED,'1');
+      window.liff.login({redirectUri:lineLoginRedirectUri()});
+      return
+    }
+  }catch(err){
+    console.warn('[LINE LIFF] Init status:',err.message);
+    if(returning)window.showToast?.('เชื่อมบัญชี LINE ไม่สำเร็จ กรุณากด LOGIN อีกครั้งค่ะ');
+  }finally{
+    if(returning)cleanLineLoginUrl()
+  }
+}
+window.hlgLineLogin=function(){
+  if(window.liff){
+    try{
+      if(window.liff.isLoggedIn())return linkLineProfile().then(()=>{document.getElementById('lineAccountModal')?.remove()});
+      window.liff.login({redirectUri:lineLoginRedirectUri()});return
+    }catch(e){console.warn('[LINE LIFF] login',e)}
+  }
+  window.location.href='https://liff.line.me/'+(window._hxgLiffId||'2011786627-NobuH2ua')
+};
 
 function boot(){
   initLineLiff();
@@ -18965,10 +19003,8 @@ function hlgRenderAccountCard(){
 /* ---------- Login / Logout actions ---------- */
 function hlgLoginFromMenu(){
   try{if(typeof closeMenu==='function')closeMenu()}catch(e){}
+  if(typeof window.hlgLineLogin==='function'){window.hlgLineLogin();return}
   if(typeof window.openLineAccount==='function'){window.openLineAccount();return}
-  if(window.liff){
-    try{window.liff.login({redirectUri:window.location.href});return}catch(e){}
-  }
   window.location.href='https://liff.line.me/'+(window._hxgLiffId||'2011786627-NobuH2ua');
 }
 window.hlgLoginFromMenu=hlgLoginFromMenu;
