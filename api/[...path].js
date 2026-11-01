@@ -1880,7 +1880,8 @@ module.exports = async (req, res) => {
         sendJson(res, 410, { error: 'บิลนี้หมดเวลาชำระแล้ว (เกิน 1 ชั่วโมง) ออเดอร์ถูกยกเลิกอัตโนมัติ หากโอนเงินแล้ว กรุณาติดต่อร้านพร้อมสลิปค่ะ', expired: true });
         return;
       }
-      let queue_no = (existing && existing.queue_no) ? existing.queue_no : await getNextQueueNo();
+      // An unpaid bill never owns a real queue number (old ones carried a client-made HLG-001).
+      let queue_no = (existing && existing.queue_no && lifecycle.isPaid(existing)) ? existing.queue_no : await getNextQueueNo();
 
       // Pattern qtys
       let patternQtys = orderData.pattern_qtys || null;
@@ -2015,6 +2016,28 @@ module.exports = async (req, res) => {
         });
       } catch (e) {}
       sendJson(res, 200, results);
+      return;
+    }
+
+    // POST /api/orders/renumber-queue — admin: number every paid order HLG-001… by order date
+    if (pathname === '/api/orders/renumber-queue' && method === 'POST') {
+      if (!isAdmin(req)) { send401(res); return; }
+      const body = await readBody(req);
+      const rows = (await loadLiveOrders()).map(o => ({ ...o, _collection: 'orders' }));
+      try {
+        const snapStickers = await getDocs(collection(db, 'sticker_orders'));
+        snapStickers.forEach(d => {
+          if (!rows.some(o => o.id === d.data().id)) rows.push({ _docId: d.id, ...d.data(), _collection: 'sticker_orders' });
+        });
+      } catch (e) {}
+      const plan = lifecycle.planRenumber(rows);
+      const changes = plan.changes.map(c => ({ id: c.order.id, from: c.from, to: c.to }));
+      if (!body.dry_run) {
+        for (const c of plan.changes) await updateDoc(doc(db, c.order._collection, c.order._docId), { queue_no: c.to });
+        // The next paid order continues straight after the renumbered ones.
+        await setDoc(doc(db, 'settings', 'queue_counter'), { last: plan.last, updated_at: new Date().toISOString() });
+      }
+      sendJson(res, 200, { success: true, dry_run: !!body.dry_run, total: plan.last, changes });
       return;
     }
 

@@ -1928,7 +1928,8 @@ async function handleApi(req, res) {
       sendJson(res, 410, { error: 'บิลนี้หมดเวลาชำระแล้ว (เกิน 1 ชั่วโมง) ออเดอร์ถูกยกเลิกอัตโนมัติ หากโอนเงินแล้ว กรุณาติดต่อร้านพร้อมสลิปค่ะ', expired: true });
       return true;
     }
-    let queue_no = (existing && existing.queue_no) ? existing.queue_no : await getNextQueueNo();
+    // An unpaid bill never owns a real queue number (old ones carried a client-made HLG-001).
+    let queue_no = (existing && existing.queue_no && lifecycle.isPaid(existing)) ? existing.queue_no : await getNextQueueNo();
 
     // Pattern qtys
     let patternQtys = orderData.pattern_qtys || null;
@@ -2062,6 +2063,28 @@ async function handleApi(req, res) {
       });
     } catch (e) {}
     sendJson(res, 200, orders);
+    return true;
+  }
+
+  // POST /api/orders/renumber-queue — admin: number every paid order HLG-001… by order date
+  if (pathname === '/api/orders/renumber-queue' && method === 'POST') {
+    if (!isAdmin(req)) { send401(res); return true; }
+    const body = await readBody(req);
+    const rows = (await loadLiveOrders()).map(o => ({ ...o, _collection: 'orders' }));
+    try {
+      (await fsGetDocs('sticker_orders')).forEach(s => {
+        if (!rows.some(o => o.id === s.id)) rows.push({ ...s, _collection: 'sticker_orders' });
+      });
+    } catch (e) {}
+    const plan = lifecycle.planRenumber(rows);
+    const changes = plan.changes.map(c => ({ id: c.order.id, from: c.from, to: c.to }));
+    if (!body.dry_run) {
+      for (const c of plan.changes) await fsUpdateDoc(c.order._collection, c.order._docId || c.order.id, { queue_no: c.to });
+      // The next paid order continues straight after the renumbered ones.
+      if (db) await fsSetDoc('settings', 'queue_counter', { last: plan.last, updated_at: new Date().toISOString() });
+      else memQueueCounter = plan.last;
+    }
+    sendJson(res, 200, { success: true, dry_run: !!body.dry_run, total: plan.last, changes });
     return true;
   }
 
