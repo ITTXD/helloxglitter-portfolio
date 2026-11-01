@@ -399,9 +399,17 @@ function renderTable() {
       }
     }
 
-    var custName = o.customer_name || (o.customer_info || '').split('\n')[0] || '-';
-    var custPhone = o.customer_phone || (o.customer_info || '').split('\n')[1] || '';
-    var custDisplay = escapeHtml(custName) + (custPhone ? '<div style="font-size:11px;color:#807078">📞 ' + escapeHtml(custPhone) + '</div>' : '');
+    var cust = extractOrderCustomer(o);
+    var custName = cust.name || '-';
+    var custPhone = cust.phone;
+    var canCopyAddr = !isWp && !!(cust.address || custPhone || cust.name);
+    var copyBtnHtml = canCopyAddr
+      ? '<button type="button" onclick="event.stopPropagation(); copyOrderAddress(this)" data-doc-id="' + escapeHtmlAttr(o._docId || '') + '" data-order-id="' + escapeHtmlAttr(o.id || '') + '" title="คัดลอกชื่อ + เบอร์โทร + ที่อยู่" style="border:1px solid #ecc9d6;background:#fff5f9;color:#c04878;border-radius:5px;padding:1px 6px;font-size:10px;cursor:pointer;font-weight:700;line-height:1.4;flex-shrink:0"><i class="ti ti-copy"></i> คัดลอก</button>'
+      : '';
+    var custSubRow = (custPhone || copyBtnHtml)
+      ? '<div style="font-size:11px;color:#807078;display:flex;align-items:center;gap:5px;margin-top:2px">' + (custPhone ? '<span>📞 ' + escapeHtml(custPhone) + '</span>' : '') + copyBtnHtml + '</div>'
+      : '';
+    var custDisplay = '<div style="overflow:hidden;text-overflow:ellipsis">' + escapeHtml(custName) + '</div>' + custSubRow;
 
     var isShopee = o.channel === 'shopee' || !!o.shopee_order_sn;
     var shopeeBadge = isShopee ? ('<br><span style="display:inline-flex;align-items:center;gap:3px;color:#e04422;font-size:10px;font-weight:800;background:#ffebe5;padding:2px 6px;border-radius:4px;border:1px solid #ffd0c4;margin-top:2px"><i class="ti ti-brand-shopee"></i> Shopee: ' + escapeHtml(o.shopee_order_sn || '') + '</span>') : '';
@@ -498,9 +506,10 @@ function openOrder(id) {
   html += '</div></div>';
 
   // Customer Info (editable separated fields)
-  var cName = order.customer_name || (order.customer_info || '').split('\n')[0] || '';
-  var cPhone = order.customer_phone || (order.customer_info || '').split('\n')[1] || '';
-  var cAddress = order.customer_address || ((order.customer_info || '').split('\n').slice(2).join('\n')) || '';
+  var cust = extractOrderCustomer(order);
+  var cName = cust.name;
+  var cPhone = cust.phone;
+  var cAddress = cust.address;
 
   if (order.channel === 'shopee' || order.shopee_order_sn) {
     html += '<div class="m-section" style="background:#fff7f4;border:1px solid #ffd0c4;border-radius:12px;padding:12px 14px;margin-bottom:14px">';
@@ -520,7 +529,7 @@ function openOrder(id) {
   }
 
   html += '<div class="m-section">';
-  html += '<div class="m-section-title" style="display:flex;justify-content:space-between;align-items:center;">ข้อมูลลูกค้า <button type="button" style="border:1px solid #ecc9d6;background:#fff5f9;color:#c04878;border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;font-weight:700" onclick="copyCustomerInfo(\'' + escapeHtmlAttr(cName) + '\', \'' + escapeHtmlAttr(cPhone) + '\', \'' + escapeHtmlAttr(cAddress) + '\')"><i class="ti ti-copy"></i> คัดลอก</button></div>';
+  html += '<div class="m-section-title" style="display:flex;justify-content:space-between;align-items:center;">ข้อมูลลูกค้า <button type="button" id="modalCopyCustomerBtn" style="border:1px solid #ecc9d6;background:#fff5f9;color:#c04878;border-radius:6px;padding:4px 9px;font-size:11px;cursor:pointer;font-weight:700;display:inline-flex;align-items:center;gap:4px" onclick="copyCustomerInfo(this)"><i class="ti ti-copy"></i> คัดลอกที่อยู่ + เบอร์</button></div>';
   html += '<div style="margin-bottom:8px"><label style="font-size:11px;font-weight:700;color:#c04878;display:block;margin-bottom:3px">ชื่อ-นามสกุล</label><input type="text" class="m-note-input" id="modalCustName" value="' + escapeHtmlAttr(cName) + '" placeholder="ชื่อ-นามสกุล" style="padding:7px 10px;"/></div>';
   html += '<div style="margin-bottom:8px"><label style="font-size:11px;font-weight:700;color:#c04878;display:block;margin-bottom:3px">เบอร์โทรศัพท์</label><input type="tel" class="m-note-input" id="modalCustPhone" value="' + escapeHtmlAttr(cPhone) + '" placeholder="เบอร์โทรศัพท์" style="padding:7px 10px;"/></div>';
   html += '<div style="margin-bottom:8px"><label style="font-size:11px;font-weight:700;color:#c04878;display:block;margin-bottom:3px">ที่อยู่จัดส่ง</label><textarea class="m-note-input" id="modalCustAddress" rows="3" placeholder="ที่อยู่จัดส่ง">' + escapeHtml(cAddress) + '</textarea></div>';
@@ -801,7 +810,7 @@ function renderTrackingView() {
   if (search) {
     orders = orders.filter(function(o) {
       var id = (o.id || '').toLowerCase();
-      var name = (o.customer_info || '').toLowerCase();
+      var name = [o.customer_name, o.customer_phone, o.customer_address, o.customer_info].filter(Boolean).join(' ').toLowerCase();
       return id.includes(search) || name.includes(search);
     });
   }
@@ -810,18 +819,22 @@ function renderTrackingView() {
     return;
   }
   list.innerHTML = orders.map(function(o) {
-    var custFirst = (o.customer_info || '').split('\n')[0] || '-';
+    var cust = extractOrderCustomer(o);
+    var custFirst = cust.name || '-';
     var patterns = (o.patterns || []).join(', ');
     if (patterns.length > 30) patterns = patterns.substring(0, 30) + '...';
     var statusLabel = STATUS_LABELS[o.status] || 'ไม่ทราบ';
     var d = new Date(o.created_at);
     var dateStr = d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
     var saved = o.tracking_number ? ' saved' : '';
+    var copyBtn = (!isWallpaperOrder(o) && (cust.address || cust.phone))
+      ? ' <button type="button" onclick="copyOrderAddress(this)" data-doc-id="' + escapeHtmlAttr(o._docId || '') + '" data-order-id="' + escapeHtmlAttr(o.id || '') + '" style="border:1px solid #ecc9d6;background:#fff5f9;color:#c04878;border-radius:5px;padding:2px 7px;font-size:10px;cursor:pointer;font-weight:700;margin-left:6px"><i class="ti ti-copy"></i> คัดลอกที่อยู่ + เบอร์</button>'
+      : '';
     return '<div class="track-row' + saved + '">'
       + '<div class="track-row-top">'
       + '<div class="track-info">'
-      + '<div class="track-id">' + escapeHtml(o.id) + '</div>'
-      + '<div class="track-cust">' + escapeHtml(custFirst) + '</div>'
+      + '<div class="track-id">' + escapeHtml(o.id) + copyBtn + '</div>'
+      + '<div class="track-cust">' + escapeHtml(custFirst) + (cust.phone ? ' · 📞 ' + escapeHtml(cust.phone) : '') + '</div>'
       + '<div class="track-date">' + dateStr + '</div>'
       + '<div class="track-patterns">' + escapeHtml(patterns) + '</div>'
       + '</div>'
@@ -1011,10 +1024,10 @@ function printUpdateCount() {
 }
 
 function buildLabelHTML(order) {
-  var lines = (order.customer_info || '').split('\n');
-  var customerName = order.customer_name || lines[0] || '';
-  var phone = order.customer_phone || (lines.length > 1 ? lines[1] : '');
-  var address = order.customer_address || (lines.length > 2 ? lines.slice(2).join('\n') : '');
+  var cust = extractOrderCustomer(order);
+  var customerName = cust.name;
+  var phone = cust.phone;
+  var address = cust.address;
 
   var pq = order.pattern_qtys || {};
   var digital = digitalPatterns(order);
@@ -1503,10 +1516,10 @@ function exportAddressesExcel() {
   var orders = (picked.length ? picked : filteredOrders).slice();
   if (!orders.length) { showToast('warn', 'ไม่มีออเดอร์สำหรับ Export'); return; }
   var rows = orders.map(function(o, i) {
-    var lines = (o.customer_info || '').split('\n');
-    var name = o.customer_name || lines[0] || '';
-    var phone = o.customer_phone || lines[1] || '';
-    var address = o.customer_address || lines.slice(2).join('\n') || '';
+    var cust = extractOrderCustomer(o);
+    var name = cust.name;
+    var phone = cust.phone;
+    var address = cust.address;
     var items = Array.isArray(o.items) && o.items.length
       ? o.items.map(function(x) { return (x.name || 'สินค้า') + (x.variant ? ' (' + x.variant + ')' : '') + ' x' + (Number(x.qty) || 1) + (x.sponge ? ' +ฟองน้ำ' : ''); })
       : (o.patterns || []).map(function(n) { return n + ' x' + ((o.pattern_qtys || {})[n] || o.qty || 1); });
@@ -1521,7 +1534,7 @@ function exportAddressesExcel() {
       'ชื่อผู้รับ': name,
       'เบอร์โทร': String(phone || ''),
       'ที่อยู่': address,
-      'ชื่อ + เบอร์ + ที่อยู่ (สำหรับคัดลอก)': [name, phone, address].filter(Boolean).join('\n'),
+      'ชื่อ + เบอร์ + ที่อยู่ (สำหรับคัดลอก)': formatCustomerCopyText(name, phone, address),
       'สินค้า': items.join('\n'),
       'จำนวนชิ้น': qty,
       'ยอดรวม (บาท)': (Number(o.total_price) || 0) + (Number(o.shipping_cost) || 0),
@@ -1585,10 +1598,185 @@ document.addEventListener('DOMContentLoaded', function() {
   initBulkBar();
   startOrderAutoRefresh();
 });
-function copyCustomerInfo(name, phone, address) {
-  var text = [name, phone, address].filter(Boolean).join("\n");
-  navigator.clipboard.writeText(text).then(function() {
-    showToast("คัดลอกข้อมูลลูกค้าแล้ว");
+function cleanPhoneValue(v) {
+  var s = String(v == null ? '' : v).trim();
+  return s === '-' ? '' : s;
+}
+
+function findThaiPhone(text) {
+  if (!text) return '';
+  var m = String(text).match(/(?:^|\D)(0[689]\d[\s\-]?\d{3}[\s\-]?\d{4}|0[2-9]\d[\s\-]?\d{3}[\s\-]?\d{3,4})(?!\d)/);
+  return m ? m[1].trim() : '';
+}
+
+function extractOrderCustomer(order) {
+  if (!order) return { name: '', phone: '', address: '' };
+  var info = String(order.customer_info || order.recipient_info || '').trim();
+  var lines = info ? info.split(/\r?\n/).map(function(l) { return l.trim(); }).filter(Boolean) : [];
+
+  var name = String(order.customer_name || order.name || '').trim();
+  var phone = cleanPhoneValue(order.customer_phone || order.phone || order.tel || order.mobile);
+  var rawShipping = order.shipping_address;
+  var shippingStr = typeof rawShipping === 'string' ? rawShipping : (rawShipping && rawShipping.address1 ? rawShipping.address1 : '');
+  var address = String(order.customer_address || order.address || shippingStr || '').trim();
+
+  if (!name && lines.length > 0) name = lines[0];
+
+  if (!phone) {
+    if (lines.length > 1 && /^0\d[\d\s\-]{7,12}$/.test(lines[1])) {
+      phone = lines[1];
+    } else if (lines.length > 1 && /^0\d[\d\s\-]{7,12}$/.test(lines[lines.length - 1])) {
+      phone = lines[lines.length - 1];
+    } else {
+      phone = findThaiPhone(info) || findThaiPhone(address);
+    }
+  }
+
+  if (!address && lines.length > 1) {
+    var phoneDigits = phone.replace(/\D/g, '');
+    var emailLower = String(order.customer_email || order.email || '').trim().toLowerCase();
+    var addrLines = lines.slice(1).filter(function(l) {
+      if (phoneDigits && l.replace(/\D/g, '') === phoneDigits && /^[\d\s\-+()โทร.:tel]+$/i.test(l)) return false;
+      if (emailLower && l.toLowerCase() === emailLower) return false;
+      return true;
+    });
+    address = addrLines.join('\n').trim();
+  }
+
+  return { name: name, phone: phone, address: address };
+}
+
+function formatCustomerCopyText(name, phone, address) {
+  var n = String(name == null ? '' : name).trim();
+  var p = cleanPhoneValue(phone);
+  var a = String(address == null ? '' : address).trim();
+
+  if (!p) {
+    p = findThaiPhone(a) || findThaiPhone(n);
+  }
+
+  var addrLines = a ? a.split(/\r?\n/).map(function(l) { return l.trim(); }).filter(Boolean) : [];
+  if (n && addrLines.length > 0 && addrLines[0] === n) {
+    addrLines = addrLines.slice(1);
+  }
+  var pDigits = p.replace(/\D/g, '');
+  if (pDigits && addrLines.length > 0) {
+    addrLines = addrLines.filter(function(l) {
+      return !(l.replace(/\D/g, '') === pDigits && /^[\d\s\-+()โทร.:tel]+$/i.test(l));
+    });
+  }
+  var cleanAddr = addrLines.join('\n').trim();
+
+  var parts = [];
+  if (n) parts.push(n);
+  if (p) parts.push(p);
+  if (cleanAddr) parts.push(cleanAddr);
+  return parts.join('\n');
+}
+
+function fallbackCopyText(text) {
+  if (typeof document === 'undefined' || !document.body) return false;
+  var ta = document.createElement('textarea');
+  ta.value = text;
+  ta.setAttribute('readonly', '');
+  ta.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0;pointer-events:none;';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try { ta.setSelectionRange(0, ta.value.length); } catch (e) {}
+  var ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  ta.remove();
+  return ok;
+}
+
+function copyTextToClipboard(text) {
+  if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function' && (typeof window === 'undefined' || window.isSecureContext !== false)) {
+    return navigator.clipboard.writeText(text).catch(function(err) {
+      if (fallbackCopyText(text)) return;
+      throw err;
+    });
+  }
+  return new Promise(function(resolve, reject) {
+    if (fallbackCopyText(text)) resolve();
+    else reject(new Error('Clipboard unavailable'));
+  });
+}
+
+function flashCopyButton(btn) {
+  if (!btn || !btn.dataset) return;
+  if (!btn.dataset.origHtml) btn.dataset.origHtml = btn.innerHTML;
+  btn.innerHTML = '<i class="ti ti-check"></i> คัดลอกแล้ว';
+  btn.style.borderColor = '#86efac';
+  btn.style.background = '#f0fdf4';
+  btn.style.color = '#15803d';
+  clearTimeout(btn._copyResetTimer);
+  btn._copyResetTimer = setTimeout(function() {
+    btn.innerHTML = btn.dataset.origHtml;
+    btn.style.borderColor = '#ecc9d6';
+    btn.style.background = '#fff5f9';
+    btn.style.color = '#c04878';
+  }, 1800);
+}
+
+function copyCustomerInfo(nameOrBtn, phone, address) {
+  var btn = (nameOrBtn && typeof nameOrBtn === 'object' && nameOrBtn.nodeType === 1)
+    ? nameOrBtn
+    : (typeof document !== 'undefined' ? document.getElementById('modalCopyCustomerBtn') : null);
+  var cName, cPhone, cAddress;
+  if (typeof nameOrBtn === 'string') {
+    cName = nameOrBtn;
+    cPhone = phone || '';
+    cAddress = address || '';
+  } else {
+    var fallback = extractOrderCustomer(currentModalOrder);
+    var nameEl = typeof document !== 'undefined' ? document.getElementById('modalCustName') : null;
+    var phoneEl = typeof document !== 'undefined' ? document.getElementById('modalCustPhone') : null;
+    var addrEl = typeof document !== 'undefined' ? document.getElementById('modalCustAddress') : null;
+    cName = nameEl ? nameEl.value : fallback.name;
+    cPhone = phoneEl ? phoneEl.value : fallback.phone;
+    cAddress = addrEl ? addrEl.value : fallback.address;
+    if (!cleanPhoneValue(cPhone) && fallback.phone) cPhone = fallback.phone;
+  }
+  var text = formatCustomerCopyText(cName, cPhone, cAddress);
+  if (!text) {
+    showToast('warn', 'ยังไม่มีข้อมูลที่อยู่สำหรับคัดลอก');
+    return Promise.resolve(false);
+  }
+  return copyTextToClipboard(text).then(function() {
+    flashCopyButton(btn);
+    showToast('success', 'คัดลอกชื่อ เบอร์โทร และที่อยู่แล้ว');
+    return true;
+  }).catch(function() {
+    showToast('error', 'คัดลอกไม่สำเร็จ กรุณาลองอีกครั้ง');
+    return false;
+  });
+}
+
+function copyOrderAddress(btnOrId) {
+  var btn = (btnOrId && typeof btnOrId === 'object' && btnOrId.nodeType === 1) ? btnOrId : null;
+  var docId = btn ? (btn.getAttribute('data-doc-id') || '') : '';
+  var orderId = btn ? (btn.getAttribute('data-order-id') || '') : String(btnOrId || '');
+  var order = allOrders.find(function(o) {
+    return (docId && o._docId === docId) || (orderId && (o.id === orderId || o._docId === orderId));
+  });
+  if (!order) {
+    showToast('warn', 'ไม่พบข้อมูลออเดอร์');
+    return Promise.resolve(false);
+  }
+  var cust = extractOrderCustomer(order);
+  var text = formatCustomerCopyText(cust.name, cust.phone, cust.address);
+  if (!text) {
+    showToast('warn', 'ออเดอร์นี้ยังไม่มีข้อมูลที่อยู่สำหรับคัดลอก');
+    return Promise.resolve(false);
+  }
+  return copyTextToClipboard(text).then(function() {
+    flashCopyButton(btn);
+    showToast('success', 'คัดลอกชื่อ เบอร์โทร และที่อยู่แล้ว');
+    return true;
+  }).catch(function() {
+    showToast('error', 'คัดลอกไม่สำเร็จ กรุณาลองอีกครั้ง');
+    return false;
   });
 }
 
