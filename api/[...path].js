@@ -19,6 +19,7 @@ const pricingConfig = require('../pricing-config');
 const quoteService = require('../quote-service');
 const lifecycle = require('../order-lifecycle');
 const storyService = require('../story-service');
+const siteSettings = require('../site-settings');
 const {
   getSlipLockKey,
   acquireSlipLock,
@@ -404,6 +405,17 @@ module.exports = async (req, res) => {
       del: (c, id) => deleteDoc(doc(db, c, id)),
     };
     if (await storyService.handleStoryApi(req, res, pathname, method, { isAdmin, readBody, sendJson, store: storyStore })) return;
+    if (await siteSettings.handleSiteSettingsApi(req, res, pathname, method, { isAdmin, readBody, sendJson, store: storyStore })) return;
+
+    // GET /api/stock-used — units each managed stock line has sold or reserved (public)
+    if (pathname === '/api/stock-used' && method === 'GET') {
+      const kv = (await storyStore.get('settings', siteSettings.DOC_ID)) || {};
+      const inventory = kv.values && kv.values.hlg_inventory_v1;
+      const used = inventory ? siteSettings.stockUsed(inventory, await loadLiveOrders()) : {};
+      res.setHeader('Cache-Control', 'no-store');
+      sendJson(res, 200, { used });
+      return;
+    }
 
     // POST /api/login
     if (pathname === '/api/login' && method === 'POST') {

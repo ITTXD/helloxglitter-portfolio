@@ -3105,9 +3105,9 @@ async function deletePreviewCard(idx) {
     if (fontUrl) { URL.revokeObjectURL(fontUrl); fontUrl = ''; }
     if (v.family === 'custom') {
       try {
-        var blob = await fontBlob();
-        if (blob) {
-          fontUrl = URL.createObjectURL(blob);
+        var blob = v.url ? null : await fontBlob();
+        if (v.url || blob) {
+          fontUrl = v.url || URL.createObjectURL(blob);
           var style = $('#hlgCustomFontFace');
           if (!style) { style = document.createElement('style'); style.id = 'hlgCustomFontFace'; document.head.append(style); }
           style.textContent = "@font-face{font-family:'HLG Custom';src:url('" + fontUrl + "')}";
@@ -3141,8 +3141,12 @@ async function deletePreviewCard(idx) {
       if (file && (!/\.(ttf|otf|woff2?)$/i.test(file.name) || file.size > 5 * 1024 * 1024)) { alert('ใช้ไฟล์ฟอนต์ .ttf, .otf, .woff หรือ .woff2 ไม่เกิน 5 MB'); return; }
       var setting = { family: $('#hlfFamily').value, body: Number($('#hlfBody').value), head: Number($('#hlfHead').value) };
       try {
-        if (file) { await fontBlob(file); setting.family = 'custom'; }
-        else if (setting.family === 'custom' && !(await fontBlob())) { alert('กรุณาอัปโหลดไฟล์ฟอนต์ก่อนค่ะ'); return; }
+        // Upload the font so customers load it too; keep a local copy for this browser.
+        if (file) { setting.url = await window.hlgUploadMedia(file); await fontBlob(file); setting.family = 'custom'; }
+        else if (setting.family === 'custom') {
+          setting.url = fontSettings().url || '';
+          if (!setting.url && !(await fontBlob())) { alert('กรุณาอัปโหลดไฟล์ฟอนต์ก่อนค่ะ'); return; }
+        }
         localStorage.setItem(FONT_KEY, JSON.stringify(setting));
         await applyFont();
         adminToast('บันทึกฟอนต์แล้ว ✓');
@@ -3313,7 +3317,16 @@ async function deletePreviewCard(idx) {
   // The storefront keeps orders in IndexedDB (HLG_ORDERS_DB_V1 / state / 'orders').
   // Never create that database here: opening a missing DB with a version would make
   // the storefront's own open() skip its upgrade step and break its store.
+  // Stock is used by the shop's real orders on the server, not this browser's copy.
   function stockReadOrders(force) {
+    if (force) stockOrderCache = null;
+    if (stockOrderCache) return Promise.resolve(stockOrderCache);
+    return fetch('/api/orders', { credentials: 'include' })
+      .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error(r.status)); })
+      .then(function(list) { stockOrderCache = Array.isArray(list) ? list : []; return stockOrderCache; })
+      .catch(function() { return stockReadLocalOrders(force); });
+  }
+  function stockReadLocalOrders(force) {
     return new Promise(function(resolve) {
       if (force) stockOrderCache = null;
       var fallback = function() { resolve(stockLocalOrders()); };
@@ -3423,7 +3436,7 @@ async function deletePreviewCard(idx) {
   }
   async function receiptGifSource() {
     var value = receiptSettings().gif;
-    if (value !== 'db:thankyou') return /^(data:image\/gif;base64,|https:\/\/)/i.test(value) ? value : '';
+    if (value !== 'db:thankyou') return /^(data:image\/gif;base64,|https?:\/\/)/i.test(value) ? value : '';
     try {
       var db = await receiptDb();
       var blob = await new Promise(function(resolve, reject) {
@@ -3445,7 +3458,7 @@ async function deletePreviewCard(idx) {
     var p = $('#receiptManagerContainer');
     if (!p) return;
     var v = receiptSettings();
-    p.innerHTML = `<div class="hrx-admin"><h3>ตกแต่งหน้าหลังสั่งซื้อ</h3><label>หัวข้อ<input id="hrxTitle" maxlength="80" value="${esc(v.title || '')}"></label><label>คำขอบคุณ<textarea id="hrxThanks" maxlength="350">${esc(v.thanks || '')}</textarea></label><label>ลิงก์ GIF (https://)<input id="hrxGifUrl" type="url" placeholder="https://example.com/thank-you.gif" value="${esc(/^https:\/\//.test(v.gif || '') ? v.gif : '')}"></label><label>หรืออัปโหลด GIF ไม่เกิน 8 MB<input id="hrxGifFile" type="file" accept="image/gif"></label><img id="hrxGifPreview" class="hrx-gif-preview" alt="ตัวอย่าง GIF" hidden><div id="hrxGifStatus" class="hrx-mini">${v.gif ? 'กำลังโหลดตัวอย่าง GIF…' : 'ยังไม่ได้ใส่ GIF'}</div><button class="primary" id="hrxSaveDesign" type="button">บันทึกหน้าขอบคุณ</button><button id="hrxRemoveGif" type="button">ลบ GIF</button><p class="hrx-mini">GIF จะแสดงบนหน้าขอบคุณและในใบสรุปคำสั่งซื้อที่ดาวน์โหลดจากเบราว์เซอร์นี้</p></div>`;
+    p.innerHTML = `<div class="hrx-admin"><h3>ตกแต่งหน้าหลังสั่งซื้อ</h3><label>หัวข้อ<input id="hrxTitle" maxlength="80" value="${esc(v.title || '')}"></label><label>คำขอบคุณ<textarea id="hrxThanks" maxlength="350">${esc(v.thanks || '')}</textarea></label><label>ลิงก์ GIF (https://)<input id="hrxGifUrl" type="url" placeholder="https://example.com/thank-you.gif" value="${esc(/^https:\/\//.test(v.gif || '') ? v.gif : '')}"></label><label>หรืออัปโหลด GIF ไม่เกิน 8 MB<input id="hrxGifFile" type="file" accept="image/gif"></label><img id="hrxGifPreview" class="hrx-gif-preview" alt="ตัวอย่าง GIF" hidden><div id="hrxGifStatus" class="hrx-mini">${v.gif ? 'กำลังโหลดตัวอย่าง GIF…' : 'ยังไม่ได้ใส่ GIF'}</div><button class="primary" id="hrxSaveDesign" type="button">บันทึกหน้าขอบคุณ</button><button id="hrxRemoveGif" type="button">ลบ GIF</button><p class="hrx-mini">GIF และข้อความจะแสดงบนหน้าขอบคุณและในใบสรุปคำสั่งซื้อของลูกค้าทุกคน</p></div>`;
     if (v.gif) receiptGifSource().then(function(src) {
       if (!p.isConnected) return;
       var im = p.querySelector('#hrxGifPreview'), status = p.querySelector('#hrxGifStatus');
@@ -3470,10 +3483,13 @@ async function deletePreviewCard(idx) {
       var status = p.querySelector('#hrxGifStatus');
       status.textContent = 'กำลังบันทึก GIF…';
       try {
+        // Upload so every customer sees it; the browser copy is only a fast local preview.
+        status.textContent = 'กำลังอัปโหลด GIF ขึ้นระบบ…';
+        var uploaded = await window.hlgUploadMedia(f);
         await receiptStoreGif(f);
-        localStorage.setItem(RECEIPT_KEY, JSON.stringify(Object.assign({}, value(), { gif: 'db:thankyou' })));
+        localStorage.setItem(RECEIPT_KEY, JSON.stringify(Object.assign({}, value(), { gif: uploaded })));
         var preview = await receiptGifSource();
-        if (!preview.startsWith('data:image/gif;base64,')) throw Error('GIF readback failed');
+        if (!preview) throw Error('GIF readback failed');
         renderReceipt();
         adminToast('อัปโหลด GIF และตรวจตัวอย่างแล้ว ♡');
       } catch (error) {
@@ -3531,9 +3547,25 @@ async function deletePreviewCard(idx) {
     try { return localStorage.getItem(key); } catch (e) { return null; }
   }
 
+  var writingFromCloud = false;
   function storageSet(key, value) {
-    localStorage.setItem(key, value);
+    writingFromCloud = true;
+    try { localStorage.setItem(key, value); } finally { writingFromCloud = false; }
   }
+
+  // Saving a price, promo or shipping editor publishes it straight away, so the
+  // change reaches customers without a separate "เผยแพร่ขึ้น Cloud" click.
+  var AUTO_PUBLISH_KEYS = {};
+  AUTO_PUBLISH_KEYS[PRICING_KEY] = AUTO_PUBLISH_KEYS[TIER_KEY] = AUTO_PUBLISH_KEYS[SHIPPING_KEY] = true;
+  var autoPublishTimer = null;
+  var setBeforeAutoPublish = Storage.prototype.setItem;
+  Storage.prototype.setItem = function (key, value) {
+    setBeforeAutoPublish.call(this, key, value);
+    if (this === localStorage && AUTO_PUBLISH_KEYS[key] && !writingFromCloud) {
+      clearTimeout(autoPublishTimer);
+      autoPublishTimer = setTimeout(function () { publish({ auto: true }); }, 1200);
+    }
+  };
 
   function readJSON(key, fallback) {
     try {
@@ -3772,10 +3804,15 @@ async function deletePreviewCard(idx) {
     });
   }
 
-  function publish() {
-    if (!state.config) { refresh(); return; }
+  function publish(opts) {
+    var auto = !!(opts && opts.auto);
+    if (!state.config) {
+      // Load the current Cloud version first; an automatic publish then continues.
+      if (auto) { request('/api/pricing/config').then(function (cfg) { state.config = cfg; publish(opts); }).catch(function () { refresh(); }); return; }
+      refresh(); return;
+    }
     var version = Number(state.config.version) || 0;
-    if (!confirm('เผยแพร่ราคา/โปร/ค่าส่งจากเครื่องนี้ขึ้น Cloud เป็นเวอร์ชัน ' + (version + 1) + ' ใช่ไหมคะ?\nลูกค้าทุกเครื่องจะใช้เวอร์ชันนี้')) return;
+    if (!auto && !confirm('เผยแพร่ราคา/โปร/ค่าส่งจากเครื่องนี้ขึ้น Cloud เป็นเวอร์ชัน ' + (version + 1) + ' ใช่ไหมคะ?\nลูกค้าทุกเครื่องจะใช้เวอร์ชันนี้')) return;
 
     var local = localSnapshot();
     var featureDraft = readFeatureInputs() || featureFromConfig(state.config);
