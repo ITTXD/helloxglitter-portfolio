@@ -8,6 +8,7 @@ var editingTrackingId = null;
 // Inclusive YYYY-MM-DD ranges picked from the calendar, per view. Empty = no limit.
 var dateRanges = { orders: { from: '', to: '' }, tracking: { from: '', to: '' }, summary: { from: '', to: '' } };
 var currentChannelFilter = 'all';
+var currentTypeFilter = 'all';
 var deleteTargetId = null;
 
 function switchChannelFilter(channel) {
@@ -15,6 +16,27 @@ function switchChannelFilter(channel) {
   document.querySelectorAll('.chtab').forEach(function(tab) {
     tab.classList.toggle('active', tab.dataset.channel === channel);
   });
+  filterOrders();
+}
+
+// Bag / wallpaper / sticker kept apart so each is packed or sent on its own.
+// An order from the unified cart can hold several kinds and then shows under each.
+function orderKinds(o) {
+  var kinds = {};
+  if (Array.isArray(o.items) && o.items.length) {
+    o.items.forEach(function(x) { if (x) kinds[x.type === 'wallpaper' || x.type === 'sticker' ? x.type : 'bag'] = true; });
+  } else {
+    kinds[o.type === 'wallpaper' || o.type === 'sticker' ? o.type : 'bag'] = true;
+  }
+  return kinds;
+}
+
+function switchTypeFilter(type) {
+  currentTypeFilter = type;
+  document.querySelectorAll('.tytab').forEach(function(tab) {
+    tab.classList.toggle('active', tab.dataset.type === type);
+  });
+  updateFilterBadges();
   filterOrders();
 }
 
@@ -170,7 +192,19 @@ function refreshData() {
 
 // ==================== FILTER ====================
 function updateFilterBadges() {
-  var dateFiltered = allOrders.filter(function(o) { return inDateRange(o, 'orders'); });
+  var inRange = allOrders.filter(function(o) { return inDateRange(o, 'orders'); });
+  var typeCounts = { all: 0, bag: 0, wallpaper: 0, sticker: 0 };
+  inRange.forEach(function(o) {
+    if (isAwaitingPayment(o)) return;
+    typeCounts.all++;
+    var k = orderKinds(o);
+    Object.keys(k).forEach(function(t) { typeCounts[t]++; });
+  });
+  document.querySelectorAll('.tytab').forEach(function(tab) {
+    var badge = tab.querySelector('.ftab-count');
+    if (badge) badge.textContent = typeCounts[tab.dataset.type] || 0;
+  });
+  var dateFiltered = inRange.filter(function(o) { return currentTypeFilter === 'all' || orderKinds(o)[currentTypeFilter]; });
   var paid = dateFiltered.filter(function(o) { return !isAwaitingPayment(o); });
   var counts = { all: paid.length, 0: 0, 1: 0, 2: 0, 3: 0, unpaid: dateFiltered.length - paid.length };
   paid.forEach(function(o) {
@@ -192,6 +226,8 @@ function filterOrders() {
     else if (isAwaitingPayment(o)) return false;
     else if (currentFilter !== 'all' && String(o.status) !== currentFilter) return false;
     if (!inDateRange(o, 'orders')) return false;
+
+    if (currentTypeFilter !== 'all' && !orderKinds(o)[currentTypeFilter]) return false;
 
     // Channel filter
     if (currentChannelFilter === 'shopee') {
