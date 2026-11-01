@@ -286,7 +286,22 @@ function renderProductSummary() {
   orders.forEach(function(o) {
     var qtys = o.pattern_qtys || {};
     var names = o.patterns || [];
-    var customer = (o.customer_info || '').split('\n')[0] || '-';
+    var customer = o.customer_name || (o.customer_info || '').split('\n')[0] || '-';
+    // Orders from the cart carry items with their own price, quantity and type.
+    if (Array.isArray(o.items) && o.items.length) {
+      o.items.forEach(function(x) {
+        if (!x || !x.name) return;
+        var label = x.name + (x.variant ? ' (' + x.variant + ')' : '');
+        var qty = Math.max(1, Number(x.qty) || 1);
+        var price = Number(x.price) || priceMap[x.name] || 0;
+        var bucket = x.type === 'wallpaper' ? wallpapers : (x.type === 'sticker' ? stickers : bags);
+        if (!bucket[label]) bucket[label] = { total: 0, totalPrice: 0, buyers: [] };
+        bucket[label].total += qty;
+        bucket[label].totalPrice += qty * price;
+        bucket[label].buyers.push({ qty: qty, price: price, customer: customer, orderId: o.id, email: o.email || '' });
+      });
+      return;
+    }
     names.forEach(function(name) {
       var qty = qtys[name] || o.qty || 1;
       var price = priceMap[name] || (o.type === 'sticker' ? (typeof STICKER_PRICE !== 'undefined' ? STICKER_PRICE : 69) : 0);
@@ -407,7 +422,7 @@ function renderTable() {
       + '<td class="order-id">' + escapeHtml(o.id) + queueTxt + slipBadge + (o.fast_track ? '<br><span style="color:#8c30d8;font-size:10px;font-weight:800;background:#f3e8fc;padding:2px 4px;border-radius:4px">⚡ FAST TRACK</span>' : '') + shopeeBadge + '</td>'
       + '<td class="order-customer">' + custDisplay + '</td>'
       + '<td class="order-patterns">' + escapeHtml(patterns) + '</td>'
-      + '<td class="order-qty">' + (o.total_bags || 0) + '</td>'
+      + '<td class="order-qty">' + bagsOf(o) + '</td>'
       + '<td class="order-price">' + grandTotal.toLocaleString() + ' ฿</td>'
       + '<td class="order-tracking" onclick="event.stopPropagation()">' + trackingCellHTML(o) + '</td>'
       + '<td onclick="event.stopPropagation()">' + statusCell + '</td>'
@@ -568,7 +583,7 @@ function openOrder(id) {
   // Summary
   html += '<div class="m-section">';
   html += '<div class="m-section-title">สรุป</div>';
-  html += '<div class="m-row"><span class="m-row-label">จำนวนทั้งหมด</span><span class="m-row-val">' + (order.total_bags || 0) + ' ชิ้น</span></div>';
+  html += '<div class="m-row"><span class="m-row-label">จำนวนกระเป๋า</span><span class="m-row-val">' + bagsOf(order) + ' ใบ</span></div>';
   html += '<div class="m-row"><span class="m-row-label">ยอดสินค้า</span><span class="m-row-val">' + (order.total_price || 0).toLocaleString() + ' ฿</span></div>';
   var shippingCost = order.shipping_cost != null ? order.shipping_cost : 0;
   var shippingLabel = shippingCost === 0 ? 'ค่าจัดส่ง (ฟรี)' : (order.is_remote ? 'ค่าจัดส่ง (พื้นที่ห่างไกล)' : 'ค่าจัดส่ง');
@@ -877,7 +892,9 @@ function renderPrintTable() {
   var groups = {};
   confirmedOrders.forEach(function(o) {
     var pq = o.pattern_qtys || {};
+    var digital = digitalPatterns(o);
     (o.patterns || []).forEach(function(name) {
+      if (digital[name]) return;
       if (!groups[name]) groups[name] = { total: 0, orders: [] };
       var qty = pq[name] || o.qty || 1;
       groups[name].total += qty;
@@ -998,7 +1015,8 @@ function buildLabelHTML(order) {
   var address = order.customer_address || (lines.length > 2 ? lines.slice(2).join('\n') : '');
 
   var pq = order.pattern_qtys || {};
-  var patternList = (order.patterns || []).map(function(name) {
+  var digital = digitalPatterns(order);
+  var patternList = (order.patterns || []).filter(function(name) { return !digital[name]; }).map(function(name) {
     var qty = pq[name] || order.qty || 1;
     return escapeHtml(name) + ' × ' + qty + (hasSponge(order, name) ? ' 🧽+ฟองน้ำ' : '');
   }).join('  ·  ');
@@ -1138,6 +1156,23 @@ function isPaidOrder(o) {
   if (o.payment_state === 'paid' || o.slip_verified) return true;
   if (o.payment_state === 'awaiting_payment') return false;
   return o.channel === 'shopee' || !!o.shopee_order_sn || Number(o.status) >= 1;
+}
+
+// Bags in an order from item quantities; older orders without items keep total_bags.
+function bagsOf(o) {
+  var items = o && Array.isArray(o.items) ? o.items : [];
+  if (!items.length) return Number(o && o.total_bags) || 0;
+  return items.reduce(function(n, x) { return n + (x && (x.type === 'bag' || !x.type) ? Math.max(1, Number(x.qty) || 1) : 0); }, 0);
+}
+
+// Pattern labels of the digital items in an order (nothing to pack or label).
+function digitalPatterns(o) {
+  var set = {};
+  (o && Array.isArray(o.items) ? o.items : []).forEach(function(x) {
+    if (x && x.type === 'wallpaper') set[x.name + (x.variant ? ' (' + x.variant + ')' : '')] = true;
+  });
+  (o && o.patterns || []).forEach(function(n) { if (/wallpaper/i.test(n)) set[n] = true; });
+  return set;
 }
 
 function isWallpaperOrder(o) {
