@@ -7089,7 +7089,7 @@ async function fetchLiveOrders(){
         var existing = getOrders();
         var merged = list.map(function(item, idx) {
           var ex = existing.find(function(x){ return x.id === item.id; });
-          var qNo = item.queue_no || (ex ? ex.queue_no : '') || ('HLG-' + String(list.length - idx).padStart(3, '0'));
+          var qNo = item.queue_no || (ex ? ex.queue_no : '') || '';
           var totalBags = item.total_bags || (item.patterns ? item.patterns.length : 1);
           var custPhone = item.customer_phone || (item.customer_info ? (item.customer_info.match(/0[689]\d(?:[\ \-\.]?\d){7}/) || [''])[0] : '');
           var custName = item.customer_name || (item.customer_info ? item.customer_info.split('\n')[0] : '');
@@ -7101,6 +7101,7 @@ async function fetchLiveOrders(){
             customer_phone: custPhone,
             customer_address: custAddr,
             slip_data: item.slip_data || (ex ? ex.slip_data : null),
+            payment_slip: item.payment_slip || item.slip_data || (ex ? ex.payment_slip : '') || '',
             slip_verified: !!item.slip_verified
           });
         });
@@ -10620,7 +10621,10 @@ window.v8CFconfirm=function(){
 
  const order={
    id:window.hlgMakeOrderId(),
-   queue_no:typeof makeQueueNo==='function'?makeQueueNo():'',
+   queue_no:'',
+   type:buy.every(x=>x.type==='wallpaper')?'wallpaper':(buy.some(x=>x.type==='bag')?'bag':(buy[0]?.type||'bag')),
+   payment_state:'awaiting_payment',
+   payment_deadline:new Date(Date.now()+60*60*1000).toISOString(),
    customer_name:firstLine,
    customer_phone:phone || '-',
    customer_email:email,
@@ -10628,7 +10632,7 @@ window.v8CFconfirm=function(){
    recipient_info:onlyWp ? ('Digital Download (Wallpaper)\n' + email) : (fullAddress+'\n'+phone),
    shipping_address:{address1:onlyWp ? 'Digital Download (Wallpaper)' : addr1},
    customer_note:note,
-   items:buy.map(x=>({name:x.name,variant:x.variant||'',qty:Number(x.qty||1),price:Number(x.price||0),image:x.image||'',type:x.type||''})),
+   items:buy.map(x=>({name:x.name,variant:x.variant||'',qty:Number(x.qty||1),price:Number(x.price||0),image:x.image||'',type:x.type||'',sponge:!!(x.sponge&&window.hlgSponge?.eligible(x))})),
    shipping_cost:onlyWp ? 0 : shipping().total,
    total_price:onlyWp ? subtotal() : total(),
    tier_promo:onlyWp ? null : (window.hlgTierQuote?.(buy,addr1).snapshot||null),
@@ -10661,8 +10665,14 @@ window.v8CFconfirm=function(){
        patterns:order.items.map(x=>x.name+(x.variant?' ('+x.variant+')':'')),
        items:order.items,
        total_price:order.total_price,
+       shipping_cost:order.shipping_cost,
        type:order.type
      })
+   }).then(r=>r.json()).then(data=>{
+     // The server's deadline is the one that counts; keep the local bill in step with it.
+     const deadline=data?.order?.payment_deadline;if(!deadline)return;
+     const rows=typeof getOrders==='function'?getOrders():[],local=rows.find(x=>x.id===order.id);
+     if(local&&local.payment_deadline!==deadline){local.payment_deadline=deadline;if(typeof saveOrders==='function')saveOrders(rows)}
    }).catch(()=>{});
  }catch(e){}
  const root=document.getElementById('v8CartContent');
@@ -10820,6 +10830,74 @@ async function refUrl(ref,bucket=tempUrls){
 function tempUrl(blob,bucket=tempUrls){const u=URL.createObjectURL(blob);bucket.push(u);return u}
 function clearTemp(){tempUrls.forEach(u=>{try{URL.revokeObjectURL(u)}catch(e){}});tempUrls=[]}
 
+/* ---------- cloud storage (/api/stories, /api/story-media — see /story-service.js) ----------
+   Highlights used to live only in the admin's browser, so customers never saw them.
+   Media is uploaded in chunks; the story list is shared through the server. */
+const CLOUD_CHUNK=600*1024,CLOUD_SYNCED='hlg_story_cloud_synced_v1';
+const MEDIA_MIME=/^(image\/(jpeg|png|webp|gif)|video\/(mp4|webm|quicktime))$/;
+function newMediaId(){return 'm'+Date.now().toString(36)+Math.random().toString(36).slice(2,10)}
+function cloudRef(r){return r&&r.media_id?{media_id:r.media_id,url:'/api/story-media/'+r.media_id,type:r.type||'image',duration:r.duration||0}:(r&&r.url?{url:r.url,type:r.type||'image'}:null)}
+function fromCloud(list){return (list||[]).map(st=>({name:cleanName(st.name),cover:cloudRef(st.cover),media:(st.media||[]).map(cloudRef).filter(Boolean)}))}
+function toCloud(list){const out=r=>r&&(r.media_id?{media_id:r.media_id,type:r.type||'image',duration:r.duration||0}:(r.url&&!/^(blob|data):/.test(r.url)?{url:r.url,type:r.type||'image'}:null));return (list||[]).map(st=>({name:cleanName(st.name),cover:out(st.cover),media:(st.media||[]).map(out).filter(Boolean)}))}
+// Photos are re-encoded to JPEG so every phone can show them (iPhone HEIC does not open on Android/Chrome).
+async function normalizeImage(blob){
+  if(blob.type==='image/gif'&&blob.size<=8*1024*1024)return blob;
+  let bmp;try{bmp=await createImageBitmap(blob)}catch(e){
+    bmp=await new Promise((res,rej)=>{const u=URL.createObjectURL(blob),im=new Image();im.onload=()=>{URL.revokeObjectURL(u);res(im)};im.onerror=()=>{URL.revokeObjectURL(u);rej(Error('เปิดรูปนี้ไม่ได้ กรุณาใช้ไฟล์ JPG หรือ PNG ค่ะ'))};im.src=u})
+  }
+  const w=bmp.width||bmp.naturalWidth,h=bmp.height||bmp.naturalHeight,scale=Math.min(1,1600/Math.max(w,h)),c=document.createElement('canvas');
+  c.width=Math.max(1,Math.round(w*scale));c.height=Math.max(1,Math.round(h*scale));
+  const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(bmp,0,0,c.width,c.height);
+  return await new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(Error('แปลงรูปไม่สำเร็จค่ะ')),'image/jpeg',.85))
+}
+function b64(bytes){let s='';for(let i=0;i<bytes.length;i+=0x8000)s+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));return btoa(s)}
+async function uploadMedia(blob,type,onProgress){
+  if(type!=='video')blob=await normalizeImage(blob);
+  const mime=blob.type||(type==='video'?'video/mp4':'image/jpeg');
+  if(!MEDIA_MIME.test(mime))throw Error('ไฟล์ชนิดนี้ใช้ไม่ได้ กรุณาใช้รูป JPG/PNG หรือวิดีโอ MP4 ค่ะ');
+  const bytes=new Uint8Array(await blob.arrayBuffer()),count=Math.max(1,Math.ceil(bytes.length/CLOUD_CHUNK));
+  if(count>60)throw Error('ไฟล์ใหญ่เกินไป (ไม่เกิน 35 MB ต่อไฟล์) กรุณาย่อวิดีโอก่อนค่ะ');
+  const id=newMediaId();
+  for(let i=0;i<count;i++){
+    const body=JSON.stringify({media_id:id,index:i,count,mime,data:b64(bytes.subarray(i*CLOUD_CHUNK,(i+1)*CLOUD_CHUNK))});
+    let ok=false,last='';
+    for(let attempt=0;attempt<3&&!ok;attempt++){
+      try{const r=await fetch('/api/story-media',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body});ok=r.ok;if(!ok)last=(await r.json().catch(()=>({}))).error||('HTTP '+r.status)}catch(e){last=e.message}
+    }
+    if(!ok)throw Error('อัปโหลดไฟล์ไม่สำเร็จ ('+last+')');
+    onProgress?.((i+1)/count)
+  }
+  return {media_id:id,url:'/api/story-media/'+id,type:type==='video'?'video':'image'}
+}
+async function pushCloud(list){
+  const r=await fetch('/api/stories',{method:'PUT',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({stories:toCloud(list)})});
+  if(!r.ok)throw Error((await r.json().catch(()=>({}))).error||'บันทึก Highlight ขึ้น Cloud ไม่สำเร็จ');
+  try{localStorage.setItem(CLOUD_SYNCED,'1')}catch(e){}
+}
+async function pullCloud(){
+  try{
+    const r=await fetch('/api/stories',{cache:'no-store'});if(!r.ok)return false;
+    const d=await r.json();
+    if(!d.updated_at){
+      // Nothing published yet: the admin's existing (browser-only) highlights go up once.
+      if(admin()&&load().length&&localStorage.getItem(CLOUD_SYNCED)!=='1')await uploadLocalStories();
+      return false
+    }
+    save(fromCloud(d.stories));return true
+  }catch(e){console.warn('Highlight cloud sync failed',e);return false}
+}
+async function uploadLocalStories(){
+  toast('กำลังอัปโหลด Highlight เดิมขึ้น Cloud ให้ลูกค้าเห็น…');
+  const out=[];
+  for(const st of load()){
+    const x={name:st.name,cover:null,media:[]};
+    try{x.cover=await persist(st.cover)}catch(e){console.warn(e)}
+    for(const m of st.media||[]){try{const p=await persist(m);if(p)x.media.push(p)}catch(e){console.warn(e)}}
+    out.push(x)
+  }
+  save(out);await pushCloud(out);toast('อัปโหลด Highlight ขึ้น Cloud แล้ว ✓')
+}
+
 function cleanName(n){return String(n||'Story').trim()||'Story'}
 function mediaSig(m){return [m.type||'',m.key||'',m.url||'',String(m.data||'').slice(0,80)].join('|')}
 function dedupeStories(a){
@@ -10973,33 +11051,38 @@ async function openEditor(i){
 }
 function closeEditor(){clearTemp();document.getElementById('v8StoryCleanModal')?.classList.remove('show')}
 function move(i,d){const j=i+d;if(j<0||j>=draft.media.length)return;[draft.media[i],draft.media[j]]=[draft.media[j],draft.media[i]];drawDraft()}
-function removeMedia(i){const x=draft.media[i];if(x?.key)draft.deleteRefs.push({...x});draft.media.splice(i,1);drawDraft()}
-async function persist(ref,prefix){
+function removeMedia(i){const x=draft.media[i];if(x?.key||x?.media_id)draft.deleteRefs.push({...x});draft.media.splice(i,1);drawDraft()}
+async function persist(ref,onProgress){
   if(!ref)return null;
-  if(ref._blob){const key=prefix+'_'+Date.now()+'_'+Math.random().toString(36).slice(2);await dbPut(key,ref._blob);return {key,db:DB,type:ref.type||'image',duration:ref.duration||0}}
-  if(ref.key)return {key:ref.key,db:ref.db||null,type:ref.type||'image',duration:ref.duration||0};
-  if(ref.url)return {url:ref.url,type:ref.type||'image'};
-  if(ref.data)return {data:ref.data,type:ref.type||'image'};
+  if(ref.media_id)return cloudRef(ref);
+  const blob=ref._blob||(ref.key?await dbGet(ref):null)||(ref.data&&/^data:/.test(ref.data)?dataUrlBlob(ref.data):null);
+  if(blob){const up=await uploadMedia(blob,ref.type||'image',onProgress);return {...up,duration:ref.duration||0}}
+  if(ref.url&&!/^(blob|data):/.test(ref.url))return {url:ref.url,type:ref.type||'image'};
   return null
 }
 async function saveEditor(){
   const m=ensureModal(),btn=m.querySelector('#v8scSave'),err=m.querySelector('#v8scError');
   if(btn.disabled||uploading)return;btn.disabled=true;btn.textContent='กำลังบันทึก…';err.classList.remove('show');
   try{
-    const saved={name:cleanName(m.querySelector('#v8scName').value),cover:await persist(draft.cover,'cover'),media:[]};
-    for(const x of draft.media){const p=await persist(x,'media');if(p)saved.media.push(p)}
-    const a=load();a[editing]=saved;save(a);
-    for(const r of draft.deleteRefs)await dbDel(r);
+    const files=[draft.cover,...draft.media].filter(x=>x&&!x.media_id).length;let done=0;
+    const step=f=>{btn.textContent='กำลังอัปโหลด '+Math.min(files,done+1)+'/'+files+' ('+Math.round(f*100)+'%)…'};
+    const up=async x=>{const p=await persist(x,step);if(x&&!x.media_id)done++;return p};
+    const saved={name:cleanName(m.querySelector('#v8scName').value),cover:await up(draft.cover),media:[]};
+    for(const x of draft.media){const p=await up(x);if(p)saved.media.push(p)}
+    btn.textContent='กำลังบันทึก…';
+    const a=load();a[editing]=saved;await pushCloud(a);save(a);
+    for(const r of draft.deleteRefs){if(r.media_id)fetch('/api/story-media/'+r.media_id,{method:'DELETE',credentials:'include'}).catch(()=>{});else await dbDel(r)}
     closeEditor();await render();toast('บันทึก Highlight แล้ว ✓')
-  }catch(e){console.error(e);err.textContent='บันทึกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง';err.classList.add('show');toast('บันทึกไม่สำเร็จ','err')}
+  }catch(e){console.error(e);err.textContent=e.message&&/[ก-๙]/.test(e.message)?e.message:'บันทึกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง';err.classList.add('show');toast('บันทึกไม่สำเร็จ','err')}
   finally{btn.disabled=false;btn.textContent='บันทึก ✓'}
 }
 async function deleteStory(){
   if(!confirm('ลบ Highlight นี้ทั้งหมดใช่ไหมคะ?'))return;
   try{
     const a=load(),old=a[editing];
-    for(const r of [old?.cover,...(old?.media||[])])await dbDel(r);
-    a.splice(editing,1);save(a);closeEditor();await render();toast('ลบ Highlight แล้ว ✓')
+    a.splice(editing,1);await pushCloud(a);save(a);
+    for(const r of [old?.cover,...(old?.media||[])]){if(r?.media_id)fetch('/api/story-media/'+r.media_id,{method:'DELETE',credentials:'include'}).catch(()=>{});else await dbDel(r)}
+    closeEditor();await render();toast('ลบ Highlight แล้ว ✓')
   }catch(e){console.error(e);toast('ลบไม่สำเร็จ','err')}
 }
 async function addStory(){
@@ -11033,7 +11116,7 @@ async function drawView(){
   if(!u){box.innerHTML='<div class="v8sc-empty">เปิดไฟล์นี้ไม่ได้ กรุณาอัปโหลดใหม่ค่ะ</div>';return}
   const fill=v.querySelectorAll('#v8scProgress i')[viewItem];prefetchNext(st,viewItem);
   if(x.type==='video'){
-    loading.hidden=false;const vd=document.createElement('video');vd.src=u;vd.muted=true;vd.playsInline=true;vd.autoplay=true;vd.preload='auto';vd.setAttribute('playsinline','');box.appendChild(vd);
+    loading.hidden=false;const vd=document.createElement('video');vd.muted=true;vd.defaultMuted=true;vd.playsInline=true;vd.autoplay=true;vd.preload='auto';['muted','autoplay','playsinline','webkit-playsinline'].forEach(a=>vd.setAttribute(a,''));vd.src=u;box.appendChild(vd);
     let started=false;const start=()=>{if(started||token!==viewToken)return;started=true;loading.hidden=true;sound.hidden=false};
     vd.onplaying=start;vd.oncanplay=()=>{if(token!==viewToken)return;vd.play().catch(()=>{loading.textContent='แตะวิดีโอเพื่อเล่น';loading.hidden=false;vd.controls=true})};
     vd.onclick=()=>{if(vd.paused)vd.play().catch(()=>{})};vd.onended=()=>{if(token===viewToken)next()};vd.onerror=()=>{loading.textContent='วิดีโอนี้เล่นไม่ได้ ลองแตะลูกศรถัดไป';loading.hidden=false};
@@ -11082,9 +11165,9 @@ window.showPage=function(){const r=oldShow&&oldShow.apply(this,arguments);setTim
 
 document.addEventListener('DOMContentLoaded',async()=>{
   document.querySelectorAll('#v8StoryAdmin,#v8StableStoryModal,#v8StoryFinalModal').forEach(x=>x.remove());
-  await migrate();bindRoot();await render()
+  await migrate();bindRoot();await render();if(await pullCloud())await render()
 });
-if(document.readyState!=='loading')setTimeout(async()=>{document.querySelectorAll('#v8StoryAdmin,#v8StableStoryModal,#v8StoryFinalModal').forEach(x=>x.remove());await migrate();bindRoot();await render()},0)
+if(document.readyState!=='loading')setTimeout(async()=>{document.querySelectorAll('#v8StoryAdmin,#v8StableStoryModal,#v8StoryFinalModal').forEach(x=>x.remove());await migrate();bindRoot();await render();if(await pullCloud())await render()},0)
 })();
 </script>
 
@@ -15110,7 +15193,7 @@ window.v8CFconfirm=function(){
  const addrBlock=onlyWp
   ?`<div class="hrx-address"><b>ข้อมูลจัดส่ง (Digital Download)</b><br>Email: ${esc(email)}</div>`
   :`<div class="hrx-address"><b>ข้อมูลจัดส่ง</b><br>${esc(address)}<br>โทร. ${esc(phone)}${email?'<br>Email: '+esc(email):''}</div>`;
- modal.innerHTML=`<div class="hrx-dialog"><h2>ตรวจสอบคำสั่งซื้อ ♡</h2>${line('รายการที่เลือก',items.length+' รายการ')}${items.map(x=>line((x.name||'สินค้า')+(x.variant?' ('+x.variant+')':'')+' × '+(Number(x.qty)||1),money((Number(x.price)||0)*(Number(x.qty)||1)))).join('')}${line('จำนวนทั้งหมด',qty(items)+' ชิ้น')}${line('ราคาสินค้า',money(sub))}${tier?.discount?line('ส่วนลด '+tier.name,'−'+money(tier.discount)):''}${cpnDiscount?line('ส่วนลดคูปอง '+appliedCpn.code,'−'+money(cpnDiscount)):''}${tier?.gifts?line('ของแถม',tier.gifts):''}${tier?.freeShipping?line('โปรส่งฟรี',shipping.remote&&shipping.total?'ฟรีค่าส่งปกติ · พื้นที่ห่างไกล +'+money(shipping.total):'ฟรี'):''}${line('ค่าจัดส่ง',money(shipping.total))}${line('ยอดรวม',money(grandTotal),true)}${addrBlock}<div class="hrx-actions"><button type="button" id="hrxCancel">กลับไปแก้ไข</button><button type="button" class="primary" id="hrxSubmit">ตกลง ✓</button></div></div>`;
+ modal.innerHTML=`<div class="hrx-dialog"><h2>ตรวจสอบคำสั่งซื้อ ♡</h2>${line('รายการที่เลือก',items.length+' รายการ')}${items.map(x=>line((x.name||'สินค้า')+(x.variant?' ('+x.variant+')':'')+' × '+(Number(x.qty)||1)+(x.sponge&&window.hlgSponge?.eligible(x)?' + ฟองน้ำ':''),money((Number(x.price)||0)*(Number(x.qty)||1)))).join('')}${line('จำนวนทั้งหมด',qty(items)+' ชิ้น')}${line('ราคาสินค้า',money(sub))}${tier?.sponge?line('🧽 ฟองน้ำให้กระเป๋าตั้งได้ ('+(tier.sponge/(window.hlgSponge?.price||40))+' ใบ)','+'+money(tier.sponge)):''}${tier?.discount?line('ส่วนลด '+tier.name,'−'+money(tier.discount)):''}${cpnDiscount?line('ส่วนลดคูปอง '+appliedCpn.code,'−'+money(cpnDiscount)):''}${tier?.gifts?line('ของแถม',tier.gifts):''}${tier?.freeShipping?line('โปรส่งฟรี',shipping.remote&&shipping.total?'ฟรีค่าส่งปกติ · พื้นที่ห่างไกล +'+money(shipping.total):'ฟรี'):''}${line('ค่าจัดส่ง',money(shipping.total))}${line('ยอดรวม',money(grandTotal),true)}${addrBlock}${window.hlgPaymentWindow?.notice()||''}<div class="hrx-actions"><button type="button" id="hrxCancel">กลับไปแก้ไข</button><button type="button" class="primary" id="hrxSubmit">ตกลง ✓</button></div></div>`;
  document.body.appendChild(modal);document.body.style.overflow='hidden';
  const close=()=>{modal.remove();document.body.style.overflow=''};
  modal.onclick=e=>{if(e.target===modal)close()};modal.querySelector('#hrxCancel').onclick=close;
@@ -15147,8 +15230,8 @@ window.v8CFconfirm=function(){
 function orderDate(o){try{return new Date(o.created_at).toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Bangkok'})}catch(e){return ''}}
 function receiptMarkup(o,forDownload,gif){
  const items=o.items||[],sub=items.reduce((n,x)=>n+(Number(x.price)||0)*(Number(x.qty)||1),0),ship=Number(o.shipping_cost)||0;
- const rows=items.map(x=>`<tr><td>${esc(x.name||'สินค้า')}${x.variant?' · '+esc(x.variant):''}</td><td>${Number(x.qty)||1}</td><td>${money(x.price)}</td><td>${money((Number(x.price)||0)*(Number(x.qty)||1))}</td></tr>`).join('');
- return `<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>สรุปคำสั่งซื้อ ${esc(o.id)}</title><style>${document.getElementById('hlg-opun-embedded')?.textContent||''}body{font-family:${window.hlgReceiptFontFamily?.()||"'Opun',Tahoma,Arial,sans-serif"};background:#fff8fb;color:#614657;padding:20px}main{max-width:760px;margin:auto;background:white;border:1px solid #f1cbdb;border-radius:18px;padding:28px}h1{color:#c54b7f}.gift{display:block;max-width:420px;width:100%;max-height:240px;object-fit:contain;margin:0 auto 22px;border-radius:16px}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #efdce4;padding:11px;text-align:left}td:nth-child(n+2),th:nth-child(n+2){text-align:right}p{line-height:1.8;white-space:pre-wrap}.total{font-size:20px;color:#c54b7f;font-weight:bold}.note{background:#fff3f8;border-radius:12px;padding:14px;font-size:13px}button{background:#cf5588;color:white;border:0;border-radius:9px;padding:10px 16px}@media print{body{background:white}main{border:0;padding:0}button{display:none}}</style></head><body><main>${gif?`<img class="gift" src="${esc(gif)}" alt="ภาพขอบคุณจากร้าน">`:``}<h1>Hello x Glitter ♡</h1><h2>ใบสรุปคำสั่งซื้อ</h2><p>เลขออเดอร์: <b>${esc(o.id)}</b><br>วันที่สั่งซื้อ: ${esc(orderDate(o))}<br>สถานะ: ${esc(o.payment_status||'รอตรวจสอบสลิป')}</p><p><b>ผู้รับและที่อยู่จัดส่ง</b><br>${esc(o.customer_address||'')}<br>โทร. ${esc(o.customer_phone||'')}${o.customer_email?'<br>Email: '+esc(o.customer_email):''}</p><table><thead><tr><th>สินค้า</th><th>จำนวน</th><th>ราคาต่อชิ้น</th><th>รวม</th></tr></thead><tbody>${rows}</tbody></table><p>สินค้า: ${money(sub)}${o.tier_promo?.discount?'<br>ส่วนลด '+esc(o.tier_promo.name)+': −'+money(o.tier_promo.discount):''}${o.tier_promo?.gifts?'<br>ของแถม: '+esc(o.tier_promo.gifts):''}${o.tier_promo?.freeShipping?'<br>โปรส่งฟรี: '+(o.tier_promo.remoteSurcharge?'ฟรีค่าส่งปกติ · พื้นที่ห่างไกล +'+money(o.tier_promo.remoteSurcharge):'ฟรี'):''}<br>ค่าจัดส่ง: ${money(ship)}</p><p class="total">ยอดรวม ${money(o.total_price)}</p><p class="note">เอกสารนี้เป็นใบสรุปคำสั่งซื้อ ยังไม่ใช่ใบเสร็จรับเงินหรือใบกำกับภาษี การชำระเงินจะสมบูรณ์เมื่อร้านตรวจสอบสลิปและยืนยันยอดแล้วค่ะ</p>${forDownload?'<button onclick="window.print()">พิมพ์ / บันทึกเป็น PDF</button>':''}</main></body></html>`
+ const rows=items.map(x=>`<tr><td>${esc(x.name||'สินค้า')}${x.variant?' · '+esc(x.variant):''}${x.sponge?' + ฟองน้ำ':''}</td><td>${Number(x.qty)||1}</td><td>${money(x.price)}</td><td>${money((Number(x.price)||0)*(Number(x.qty)||1))}</td></tr>`).join('');
+ return `<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>สรุปคำสั่งซื้อ ${esc(o.id)}</title><style>${document.getElementById('hlg-opun-embedded')?.textContent||''}body{font-family:${window.hlgReceiptFontFamily?.()||"'Opun',Tahoma,Arial,sans-serif"};background:#fff8fb;color:#614657;padding:20px}main{max-width:760px;margin:auto;background:white;border:1px solid #f1cbdb;border-radius:18px;padding:28px}h1{color:#c54b7f}.gift{display:block;max-width:420px;width:100%;max-height:240px;object-fit:contain;margin:0 auto 22px;border-radius:16px}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #efdce4;padding:11px;text-align:left}td:nth-child(n+2),th:nth-child(n+2){text-align:right}p{line-height:1.8;white-space:pre-wrap}.total{font-size:20px;color:#c54b7f;font-weight:bold}.note{background:#fff3f8;border-radius:12px;padding:14px;font-size:13px}button{background:#cf5588;color:white;border:0;border-radius:9px;padding:10px 16px}@media print{body{background:white}main{border:0;padding:0}button{display:none}}</style></head><body><main>${gif?`<img class="gift" src="${esc(gif)}" alt="ภาพขอบคุณจากร้าน">`:``}<h1>Hello x Glitter ♡</h1><h2>ใบสรุปคำสั่งซื้อ</h2><p>เลขออเดอร์: <b>${esc(o.id)}</b><br>วันที่สั่งซื้อ: ${esc(orderDate(o))}<br>สถานะ: ${esc(o.payment_status||'รอตรวจสอบสลิป')}</p><p><b>ผู้รับและที่อยู่จัดส่ง</b><br>${esc(o.customer_address||'')}<br>โทร. ${esc(o.customer_phone||'')}${o.customer_email?'<br>Email: '+esc(o.customer_email):''}</p><table><thead><tr><th>สินค้า</th><th>จำนวน</th><th>ราคาต่อชิ้น</th><th>รวม</th></tr></thead><tbody>${rows}</tbody></table><p>สินค้า: ${money(sub)}${o.tier_promo?.discount?'<br>ส่วนลด '+esc(o.tier_promo.name)+': −'+money(o.tier_promo.discount):''}${o.tier_promo?.gifts?'<br>ของแถม: '+esc(o.tier_promo.gifts):''}${o.tier_promo?.freeShipping?'<br>โปรส่งฟรี: '+(o.tier_promo.remoteSurcharge?'ฟรีค่าส่งปกติ · พื้นที่ห่างไกล +'+money(o.tier_promo.remoteSurcharge):'ฟรี'):''}${window.hlgSponge?.feeOf(items)?'<br>ฟองน้ำให้กระเป๋าตั้งได้: +'+money(window.hlgSponge.feeOf(items)):''}<br>ค่าจัดส่ง: ${money(ship)}</p><p class="total">ยอดรวม ${money(o.total_price)}</p><p class="note">เอกสารนี้เป็นใบสรุปคำสั่งซื้อ ยังไม่ใช่ใบเสร็จรับเงินหรือใบกำกับภาษี การชำระเงินจะสมบูรณ์เมื่อร้านตรวจสอบสลิปและยืนยันยอดแล้วค่ะ</p>${forDownload?'<button onclick="window.print()">พิมพ์ / บันทึกเป็น PDF</button>':''}</main></body></html>`
 }
 window.hrxDownload=async function(id){const o=orders().find(x=>x.id===id);if(!o)return;const gif=await gifSource();const blob=new Blob([receiptMarkup(o,true,gif)],{type:'text/html;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='HLG_order_'+String(o.id).replace(/[^a-zA-Z0-9_-]/g,'')+'.html';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000)};
 window.hrxCopyBank=async function(account){const value=String(account||window.hlgPromptSettings?.().account||'749-2439-414');try{await navigator.clipboard.writeText(value.replace(/\D/g,''));showToast?.('คัดลอกเลขบัญชีแล้ว ♡')}catch(e){showToast?.('เลขบัญชี '+value)}};
@@ -15194,6 +15277,7 @@ window.hrxPostSlip=function(id,file){
 window.hrxVerifySlip=async function(id){
  const rows=orders(),index=rows.findIndex(x=>x.id===id),error=document.getElementById('hrxSlipError'),btn=document.getElementById('hrxVerifySlipBtn');
  if(index<0)return;
+ if(window.hlgPaymentWindow?.isExpired(rows[index])){window.hlgPaymentWindow.expire(id);return}
  const o=rows[index];
  if(!o.payment_slip){
    if(error){error.textContent='กรุณาแนบรูปสลิปก่อนกดตรวจสอบค่ะ';error.style.display='block';}
@@ -15252,6 +15336,7 @@ window.hrxVerifySlip=async function(id){
 window.hrxConfirmPayment=async function(id){
  const rows=orders(),index=rows.findIndex(x=>x.id===id),error=document.getElementById('hrxSlipError'),button=document.getElementById('hrxConfirmPayment');
  if(index<0)return;
+ if(window.hlgPaymentWindow?.isExpired(rows[index])){window.hlgPaymentWindow.expire(id);return}
  const o=rows[index];
  if(!o.payment_slip){
    if(error){error.textContent='กรุณาแนบสลิปก่อนยืนยันการชำระค่ะ';error.style.display='block';}
@@ -15296,8 +15381,10 @@ window.hrxConfirmPayment=async function(id){
          pattern_qtys:patternQtys,
          items:o.items||[],
          total_bags:o.total_bags||patterns.length||1,
-         original_price:o.original_price||o.total_price,
-         total_price:o.total_price,
+         type:o.type||'',
+         // total_price on the bill already includes shipping; the server adds shipping_cost itself.
+         original_price:Math.max(0,Number(o.total_price||0)-Number(o.shipping_cost||0)+Number(o.coupon_discount||0)),
+         total_price:Math.max(0,Number(o.total_price||0)-Number(o.shipping_cost||0)),
          shipping_cost:o.shipping_cost||0,
          is_remote:o.is_remote||false,
          coupon_code:o.coupon_code||'',
@@ -15311,6 +15398,7 @@ window.hrxConfirmPayment=async function(id){
      })
    });
    const data=await res.json().catch(()=>({}));
+   if(res.status===410||data.expired){window.hlgPaymentWindow?.expire(o.id);return}
    if(!res.ok||!data.success){
      const errMsg=data.error||'บันทึกออเดอร์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง';
      if(error){error.textContent=errMsg;error.style.display='block';}
@@ -15322,6 +15410,7 @@ window.hrxConfirmPayment=async function(id){
    if(data.order){
      Object.assign(o,data.order);
    }
+   o.payment_state='paid';
    o.payment_customer_confirmed_at=new Date().toISOString();
    o.payment_status='ยืนยันคิวแล้ว (ชำระเงินเรียบร้อย)';
    o.status=1;
@@ -15341,8 +15430,8 @@ window.hrxConfirmPayment=async function(id){
 };
 
 function renderDone(o){const root=document.getElementById('v8CartContent');if(!root)return;const design=settings(),payment=window.hlgPromptSettings?.()||{},items=o.items||[],sub=items.reduce((n,x)=>n+(Number(x.price)||0)*(Number(x.qty)||1),0),gif=/^(data:image\/gif;base64,|https?:\/\/)/i.test(design.gif)?design.gif:'';
- root.innerHTML=`<div class="hrx-done">${gif?`<img class="hrx-gif" src="${esc(gif)}" alt="ภาพขอบคุณจากร้าน">`:design.gif==='db:thankyou'?'<img class="hrx-gif" id="hrxGifMedia" alt="ภาพขอบคุณจากร้าน" hidden>':''}<div class="hrx-check">✓</div><h2>${esc(design.title)}</h2><p>${esc(design.thanks)}</p><div class="hrx-code">รหัสออเดอร์ของคุณ<b>${esc(o.id)}</b>${o.queue_no?`<span class="hrx-q-badge" style="background:#eafaf1;color:#15803d;border:1px solid #86efac;padding:3px 10px;border-radius:8px;font-size:13px;font-weight:900;margin-left:8px;display:inline-block">คิว ${esc(o.queue_no)}</span>`:''}<small>${esc(orderDate(o))}</small></div><div class="hrx-box"><h3>สรุปที่สั่ง</h3>${items.map(x=>`<div class="hrx-product">${x.image?`<img src="${esc(x.image)}" alt="">`:'<span style="flex:0">🛍️</span>'}<span>${esc(x.name||'สินค้า')}${x.variant?'<br><small>'+esc(x.variant)+'</small>':''} × ${Number(x.qty)||1}</span><strong>${money((Number(x.price)||0)*(Number(x.qty)||1))}</strong></div>`).join('')}${line('ราคาสินค้า',money(sub))}${o.tier_promo?.discount?line('ส่วนลด '+o.tier_promo.name,'−'+money(o.tier_promo.discount)):''}${o.tier_promo?.gifts?line('ของแถม',o.tier_promo.gifts):''}${o.tier_promo?.freeShipping?line('โปรส่งฟรี',o.tier_promo.remoteSurcharge?'ฟรีค่าส่งปกติ · พื้นที่ห่างไกล +'+money(o.tier_promo.remoteSurcharge):'ฟรี'):''}${line('ค่าจัดส่ง',money(o.shipping_cost))}${line('ยอดรวม',money(o.total_price),true)}${line('จำนวน',qty(items)+' ชิ้น')}<p class="hrx-mini"><b>จัดส่งไปที่</b><br>${esc(o.customer_address||'').replace(/\n/g,'<br>')}${o.customer_email?`<br>Email: ${esc(o.customer_email)}`:''}${o.customer_phone&&o.customer_phone!=='-'?`<br>โทร. ${esc(o.customer_phone)}`:''}</p></div><div class="hrx-box hrx-payment"><h3>${esc(o.payment_heading||payment.heading||'ชำระเงิน')} · ยอด ${money(o.total_price)}</h3><p class="hrx-mini">${esc(o.payment_note||payment.note||'สแกน QR พร้อมเพย์ตามยอดออเดอร์ หรือโอนเข้าบัญชีด้านล่าง')}</p><div class="hrx-qr-frame"><div class="hrx-qr-head">THAI QR PAYMENT · PromptPay</div><img id="hlgReceiptQr" class="hlg-dynamic-qr" alt="QR สำหรับชำระเงิน" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'><rect width='220' height='220' fill='%23fff'/><text x='110' y='115' text-anchor='middle' font-size='12' fill='%23c25484' font-family='sans-serif'>กำลังสร้าง QR Code...</text></svg>"><div id="hlgQrMessage" class="ht-qr-note"></div><button type="button" class="hrx-qr-save-btn" id="hrxSaveQrBtn" onclick="window.hlgSaveOrderQr?.()" style="margin:10px auto 4px;border:1.5px solid #dba4bd;background:#fff5f9;color:#b24171;border-radius:999px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px">📥 บันทึก QR Code ลงเครื่อง</button></div><div class="hrx-bank"><b>${esc(o.payment_bank_name||payment.bank||'กสิกรไทย')} ${esc(o.payment_bank_account||payment.account||'749-2439-414')}</b><span>ชื่อบัญชี ${esc(o.payment_bank_holder||payment.holder||'Nichakarn E.')}</span><button class="hrx-button" type="button" id="hrxCopy">คัดลอกเลขบัญชี</button></div><div class="hrx-slip-box"><h3>แนบสลิปการโอนเงิน</h3><p class="hrx-mini">${o.slip_verified?'สลิปผ่านการตรวจสอบแล้ว ✓':(o.payment_slip?'แนบสลิปแล้ว · กรุณากดตรวจสอบสลิปค่ะ':'โอนเงินแล้วแนบสลิปเพื่อให้ระบบตรวจสอบค่ะ')}</p><label class="hrx-slip-drop" for="hrxSlipInput">▤<strong>${o.payment_slip?'แตะเพื่อเปลี่ยนสลิป':'แตะเพื่อเลือกรูปสลิป'}</strong><small>JPG, PNG หรือ WEBP ไม่เกิน 5 MB</small><input id="hrxSlipInput" type="file" accept="image/png,image/jpeg,image/webp" hidden></label>${o.payment_slip?`<img class="hrx-slip-preview" src="${esc(o.payment_slip)}" alt="สลิปที่แนบแล้ว">`:''}${o.payment_slip?(o.slip_verified?`<div class="hrx-slip-success" style="background:#eafaf1;border:1.5px solid #22c55e;color:#15803d;padding:12px 14px;border-radius:12px;margin-top:12px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px"><span style="font-size:18px">✓</span><div><div>สลิปผ่านการตรวจสอบแล้ว ยอด ${money(o.slip_amount||o.total_price)}</div>${o.slip_sender_name?`<small style="font-size:11px;font-weight:500;color:#166534">ผู้โอน: ${esc(o.slip_sender_name)}${o.slip_bank?' ('+esc(o.slip_bank)+')':''}</small>`:''}</div></div><button type="button" class="hrx-verify-btn" id="hrxVerifySlipBtn" style="background:#16a34a;color:#fff;border:none;border-radius:12px;padding:11px 16px;font-size:13px;font-weight:800;cursor:pointer;width:100%;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:6px">✓ สลิปถูกต้องแล้ว (แตะเพื่อตรวจใหม่)</button>`:`<button type="button" class="hrx-verify-btn" id="hrxVerifySlipBtn" style="background:#16a34a;color:#fff;border:none;border-radius:12px;padding:12px 18px;font-size:14px;font-weight:800;cursor:pointer;width:100%;margin-top:12px;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 14px rgba(22,163,74,0.35);transition:all 0.2s">🔍 ตรวจสอบสลิปโอนเงิน</button><div style="font-size:11px;color:#6b7280;margin-top:6px;text-align:center">กดปุ่มสีเขียวเพื่อเช็กสลิป เมื่อผ่านแล้วจึงจะกดยืนยันการชำระได้ค่ะ</div>`):`<button type="button" class="hrx-verify-btn" id="hrxVerifySlipBtn" disabled style="background:#86efac;color:#fff;border:none;border-radius:12px;padding:12px 18px;font-size:14px;font-weight:800;cursor:not-allowed;width:100%;margin-top:12px;display:flex;align-items:center;justify-content:center;gap:8px;opacity:0.6">🔍 ตรวจสอบสลิปโอนเงิน</button><div style="font-size:11px;color:#9ca3af;margin-top:6px;text-align:center">กรุณาแนบรูปสลิปก่อนจึงจะกดตรวจสอบสลิปได้ค่ะ</div>`}<div id="hrxSlipError" class="hrx-error" style="color:#dc2626;background:#fef2f2;border:1px solid #fecaca;padding:10px 12px;border-radius:10px;margin-top:10px;font-size:12px;font-weight:700;display:none"></div></div></div><div class="hrx-actions"><button class="primary" type="button" id="hrxDownload">↓ ${o.payment_verification==='verified'&&o.payment_verified_by==='admin'&&o.payment_verified_at?'ดาวน์โหลดใบรับชำระเงิน PNG':'ดาวน์โหลดใบสรุป PNG'}</button>${o.items?.every(x=>x.type==='wallpaper')?`<button type="button" id="hrxWpBtn" style="background:#7c3aed;color:#fff;border-color:#7c3aed" onclick="showPage('wpcheck')">📥 ไปหน้าดาวน์โหลด Wallpaper →</button>`:''}<button type="button" id="hrxTracking">เช็กสถานะการชำระเงิน →</button></div><button class="hrx-button primary" id="hrxConfirmPayment" type="button" ${(!o.slip_verified||o.payment_customer_confirmed_at)?'disabled':''} style="${(!o.slip_verified&&!o.payment_customer_confirmed_at)?'opacity:0.55;cursor:not-allowed;':''}">${o.payment_customer_confirmed_at?`✓ บันทึกยืนยันคิวแล้ว (${o.queue_no||o.id})`:(o.slip_verified?'✓ ยืนยันการชำระ':'✓ ยืนยันการชำระ (กรุณากดตรวจสลิปก่อน)')}</button></div>`;
- if(design.gif==='db:thankyou')gifSource().then(src=>{const img=root.querySelector('#hrxGifMedia');if(img&&src){img.src=src;img.hidden=false}}).catch(e=>console.error('GIF display failed',e));window.hlgRenderOrderQr?.(o);root.querySelector('#hrxDownload').onclick=()=>window.hrxDownload(o.id);root.querySelector('#hrxCopy').onclick=()=>window.hrxCopyBank(o.payment_bank_account||payment.account);root.querySelector('#hrxSlipInput').onchange=e=>window.hrxPostSlip(o.id,e.target.files[0]);const verifySlipBtn=root.querySelector('#hrxVerifySlipBtn');if(verifySlipBtn&&!verifySlipBtn.disabled){verifySlipBtn.onclick=()=>window.hrxVerifySlip(o.id);}root.querySelector('#hrxTracking').onclick=()=>showPage('tracking');root.querySelector('#hrxConfirmPayment').onclick=()=>window.hrxConfirmPayment(o.id);root.scrollIntoView({block:'start',behavior:'smooth'});
+ root.innerHTML=`<div class="hrx-done">${gif?`<img class="hrx-gif" src="${esc(gif)}" alt="ภาพขอบคุณจากร้าน">`:design.gif==='db:thankyou'?'<img class="hrx-gif" id="hrxGifMedia" alt="ภาพขอบคุณจากร้าน" hidden>':''}<div class="hrx-check">✓</div><h2>${esc(design.title)}</h2><p>${esc(design.thanks)}</p><div class="hrx-code">รหัสออเดอร์ของคุณ<b>${esc(o.id)}</b>${o.queue_no?`<span class="hrx-q-badge" style="background:#eafaf1;color:#15803d;border:1px solid #86efac;padding:3px 10px;border-radius:8px;font-size:13px;font-weight:900;margin-left:8px;display:inline-block">คิว ${esc(o.queue_no)}</span>`:''}<small>${esc(orderDate(o))}</small></div><div class="hrx-box"><h3>สรุปที่สั่ง</h3>${items.map(x=>`<div class="hrx-product">${x.image?`<img src="${esc(x.image)}" alt="">`:'<span style="flex:0">🛍️</span>'}<span>${esc(x.name||'สินค้า')}${x.variant?'<br><small>'+esc(x.variant)+'</small>':''} × ${Number(x.qty)||1}${x.sponge?'<br><small>🧽 + ฟองน้ำ</small>':''}</span><strong>${money((Number(x.price)||0)*(Number(x.qty)||1))}</strong></div>`).join('')}${line('ราคาสินค้า',money(sub))}${window.hlgSponge?.feeOf(items)?line('🧽 ฟองน้ำให้กระเป๋าตั้งได้','+'+money(window.hlgSponge.feeOf(items))):''}${o.tier_promo?.discount?line('ส่วนลด '+o.tier_promo.name,'−'+money(o.tier_promo.discount)):''}${o.tier_promo?.gifts?line('ของแถม',o.tier_promo.gifts):''}${o.tier_promo?.freeShipping?line('โปรส่งฟรี',o.tier_promo.remoteSurcharge?'ฟรีค่าส่งปกติ · พื้นที่ห่างไกล +'+money(o.tier_promo.remoteSurcharge):'ฟรี'):''}${line('ค่าจัดส่ง',money(o.shipping_cost))}${line('ยอดรวม',money(o.total_price),true)}${line('จำนวน',qty(items)+' ชิ้น')}<p class="hrx-mini"><b>จัดส่งไปที่</b><br>${esc(o.customer_address||'').replace(/\n/g,'<br>')}${o.customer_email?`<br>Email: ${esc(o.customer_email)}`:''}${o.customer_phone&&o.customer_phone!=='-'?`<br>โทร. ${esc(o.customer_phone)}`:''}</p></div><div class="hrx-box hrx-payment"><h3>${esc(o.payment_heading||payment.heading||'ชำระเงิน')} · ยอด ${money(o.total_price)}</h3><p class="hrx-mini">${esc(o.payment_note||payment.note||'สแกน QR พร้อมเพย์ตามยอดออเดอร์ หรือโอนเข้าบัญชีด้านล่าง')}</p><div class="hrx-qr-frame"><div class="hrx-qr-head">THAI QR PAYMENT · PromptPay</div><img id="hlgReceiptQr" class="hlg-dynamic-qr" alt="QR สำหรับชำระเงิน" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'><rect width='220' height='220' fill='%23fff'/><text x='110' y='115' text-anchor='middle' font-size='12' fill='%23c25484' font-family='sans-serif'>กำลังสร้าง QR Code...</text></svg>"><div id="hlgQrMessage" class="ht-qr-note"></div><button type="button" class="hrx-qr-save-btn" id="hrxSaveQrBtn" onclick="window.hlgSaveOrderQr?.()" style="margin:10px auto 4px;border:1.5px solid #dba4bd;background:#fff5f9;color:#b24171;border-radius:999px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px">📥 บันทึก QR Code ลงเครื่อง</button></div><div class="hrx-bank"><b>${esc(o.payment_bank_name||payment.bank||'กสิกรไทย')} ${esc(o.payment_bank_account||payment.account||'749-2439-414')}</b><span>ชื่อบัญชี ${esc(o.payment_bank_holder||payment.holder||'Nichakarn E.')}</span><button class="hrx-button" type="button" id="hrxCopy">คัดลอกเลขบัญชี</button></div><div class="hrx-slip-box"><h3>แนบสลิปการโอนเงิน</h3><p class="hrx-mini">${o.slip_verified?'สลิปผ่านการตรวจสอบแล้ว ✓':(o.payment_slip?'แนบสลิปแล้ว · กรุณากดตรวจสอบสลิปค่ะ':'โอนเงินแล้วแนบสลิปเพื่อให้ระบบตรวจสอบค่ะ')}</p><label class="hrx-slip-drop" for="hrxSlipInput">▤<strong>${o.payment_slip?'แตะเพื่อเปลี่ยนสลิป':'แตะเพื่อเลือกรูปสลิป'}</strong><small>JPG, PNG หรือ WEBP ไม่เกิน 5 MB</small><input id="hrxSlipInput" type="file" accept="image/png,image/jpeg,image/webp" hidden></label>${o.payment_slip?`<img class="hrx-slip-preview" src="${esc(o.payment_slip)}" alt="สลิปที่แนบแล้ว">`:''}${o.payment_slip?(o.slip_verified?`<div class="hrx-slip-success" style="background:#eafaf1;border:1.5px solid #22c55e;color:#15803d;padding:12px 14px;border-radius:12px;margin-top:12px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px"><span style="font-size:18px">✓</span><div><div>สลิปผ่านการตรวจสอบแล้ว ยอด ${money(o.slip_amount||o.total_price)}</div>${o.slip_sender_name?`<small style="font-size:11px;font-weight:500;color:#166534">ผู้โอน: ${esc(o.slip_sender_name)}${o.slip_bank?' ('+esc(o.slip_bank)+')':''}</small>`:''}</div></div><button type="button" class="hrx-verify-btn" id="hrxVerifySlipBtn" style="background:#16a34a;color:#fff;border:none;border-radius:12px;padding:11px 16px;font-size:13px;font-weight:800;cursor:pointer;width:100%;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:6px">✓ สลิปถูกต้องแล้ว (แตะเพื่อตรวจใหม่)</button>`:`<button type="button" class="hrx-verify-btn" id="hrxVerifySlipBtn" style="background:#16a34a;color:#fff;border:none;border-radius:12px;padding:12px 18px;font-size:14px;font-weight:800;cursor:pointer;width:100%;margin-top:12px;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 14px rgba(22,163,74,0.35);transition:all 0.2s">🔍 ตรวจสอบสลิปโอนเงิน</button><div style="font-size:11px;color:#6b7280;margin-top:6px;text-align:center">กดปุ่มสีเขียวเพื่อเช็กสลิป เมื่อผ่านแล้วจึงจะกดยืนยันการชำระได้ค่ะ</div>`):`<button type="button" class="hrx-verify-btn" id="hrxVerifySlipBtn" disabled style="background:#86efac;color:#fff;border:none;border-radius:12px;padding:12px 18px;font-size:14px;font-weight:800;cursor:not-allowed;width:100%;margin-top:12px;display:flex;align-items:center;justify-content:center;gap:8px;opacity:0.6">🔍 ตรวจสอบสลิปโอนเงิน</button><div style="font-size:11px;color:#9ca3af;margin-top:6px;text-align:center">กรุณาแนบรูปสลิปก่อนจึงจะกดตรวจสอบสลิปได้ค่ะ</div>`}<div id="hrxSlipError" class="hrx-error" style="color:#dc2626;background:#fef2f2;border:1px solid #fecaca;padding:10px 12px;border-radius:10px;margin-top:10px;font-size:12px;font-weight:700;display:none"></div></div></div><div class="hrx-actions"><button class="primary" type="button" id="hrxDownload">↓ ${o.payment_verification==='verified'&&o.payment_verified_by==='admin'&&o.payment_verified_at?'ดาวน์โหลดใบรับชำระเงิน PNG':'ดาวน์โหลดใบสรุป PNG'}</button>${o.items?.every(x=>x.type==='wallpaper')?`<button type="button" id="hrxWpBtn" style="background:#7c3aed;color:#fff;border-color:#7c3aed" onclick="showPage('wpcheck')">📥 ไปหน้าดาวน์โหลด Wallpaper →</button>`:''}<button type="button" id="hrxTracking">เช็กสถานะการชำระเงิน →</button></div><button class="hrx-button primary" id="hrxConfirmPayment" type="button" ${(!o.slip_verified||o.payment_customer_confirmed_at)?'disabled':''} style="${(!o.slip_verified&&!o.payment_customer_confirmed_at)?'opacity:0.55;cursor:not-allowed;':''}">${o.payment_customer_confirmed_at?`✓ บันทึกยืนยันคิวแล้ว (${o.queue_no||o.id})`:(o.slip_verified?'✓ ยืนยันการชำระ':'✓ ยืนยันการชำระ (กรุณากดตรวจสลิปก่อน)')}</button></div>`;
+ if(design.gif==='db:thankyou')gifSource().then(src=>{const img=root.querySelector('#hrxGifMedia');if(img&&src){img.src=src;img.hidden=false}}).catch(e=>console.error('GIF display failed',e));window.hlgRenderOrderQr?.(o);window.hlgPaymentWindow?.mount(root,o);root.querySelector('#hrxDownload').onclick=()=>window.hrxDownload(o.id);root.querySelector('#hrxCopy').onclick=()=>window.hrxCopyBank(o.payment_bank_account||payment.account);root.querySelector('#hrxSlipInput').onchange=e=>window.hrxPostSlip(o.id,e.target.files[0]);const verifySlipBtn=root.querySelector('#hrxVerifySlipBtn');if(verifySlipBtn&&!verifySlipBtn.disabled){verifySlipBtn.onclick=()=>window.hrxVerifySlip(o.id);}root.querySelector('#hrxTracking').onclick=()=>showPage('tracking');root.querySelector('#hrxConfirmPayment').onclick=()=>window.hrxConfirmPayment(o.id);root.scrollIntoView({block:'start',behavior:'smooth'});
 }
 // NOTE: the receipt/thank-you design editor moved to /admin/ (window.hlgRenderReceipt).
 // The customer-facing settings(), gifSource(), receiptMarkup(), renderDone() and the
@@ -18083,6 +18172,7 @@ async function repairQueues(){
  let changed=false;
  for(const row of rows.slice().sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')))){
   if(String(row.queue_no||'').trim())continue;
+  if(row.payment_state==='awaiting_payment'||row.payment_state==='expired')continue;
   row.queue_no='HLG-'+String(++max).padStart(3,'0');changed=true
  }
  if(changed){try{await saveOrders(rows);window.renderAdminOrders?.()}catch(e){console.error('Queue repair failed',e)}}
@@ -19065,6 +19155,176 @@ if(document.readyState==='loading'){
   setTimeout(nukeAdminAndForceHome, 600);
 
   window.addEventListener('pageshow', nukeAdminAndForceHome);
+})();
+</script>
+<style id="hlg-payment-window-style">
+.hpw-notice{margin:12px 0 4px;padding:11px 13px;border-radius:12px;background:#fff7e8;border:1px solid #f4cf8b;color:#7a4b0e;font-size:12px;line-height:1.55}
+.hpw-notice b{display:block;font-size:13px;margin-bottom:2px;color:#9a5a00}
+.hpw-banner{margin:12px 0;padding:12px 14px;border-radius:14px;background:#fff7e8;border:1.5px solid #f4cf8b;color:#7a4b0e;font-size:13px;line-height:1.6;text-align:center}
+.hpw-banner .hpw-left{display:block;font-size:26px;font-weight:800;color:#c2410c;letter-spacing:.04em;font-variant-numeric:tabular-nums}
+.hpw-banner small{display:block;font-size:11px;color:#9a6b2f}
+.hpw-banner.hpw-expired{background:#fef2f2;border-color:#fca5a5;color:#991b1b}
+.hpw-banner.hpw-expired button{margin-top:9px;border:0;border-radius:999px;background:#d45a8a;color:#fff;padding:9px 16px;font:inherit;font-weight:700;cursor:pointer}
+.hrx-payment.hpw-locked{opacity:.45;pointer-events:none;filter:grayscale(.6)}
+.hpw-pop ul{margin:10px 0 4px;padding-left:18px;font-size:12.5px;line-height:1.65;color:#6d4a5b;text-align:left}
+.hpw-pop p{font-size:13px;line-height:1.65;color:#6d4a5b;text-align:left;margin:6px 0}
+.hpw-pop .hpw-time{color:#c2410c;font-weight:800}
+</style>
+<script id="hlg-payment-window-js">
+(function(){
+'use strict';
+// Storefront bills must be paid within 1 hour, otherwise the order is cancelled.
+// The server enforces the deadline; this keeps the customer informed and stops
+// them paying for a bill that is already gone. Mirrors /order-lifecycle.js.
+const WINDOW_MS=60*60*1000,SEEN='hlg_payment_window_seen_v1';
+let timer=null;
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function awaiting(o){return !!o&&o.payment_state==='awaiting_payment'&&!o.slip_verified&&!o.payment_customer_confirmed_at}
+function deadline(o){const t=Date.parse(o?.payment_deadline||'');if(Number.isFinite(t))return t;const c=Date.parse(o?.created_at||'');return Number.isFinite(c)?c+WINDOW_MS:NaN}
+function isExpired(o){if(!o)return false;if(o.payment_state==='expired')return true;const d=deadline(o);return awaiting(o)&&Number.isFinite(d)&&d<=Date.now()}
+function clock(t){return new Date(t).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})+' น.'}
+function left(ms){ms=Math.max(0,ms);const m=Math.floor(ms/60000),s=Math.floor(ms%60000/1000);return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')}
+function rows(){return typeof getOrders==='function'?getOrders():[]}
+function seen(id){try{return (JSON.parse(localStorage.getItem(SEEN)||'[]')||[]).includes(id)}catch(e){return false}}
+function markSeen(id){try{const a=JSON.parse(localStorage.getItem(SEEN)||'[]')||[];a.push(id);localStorage.setItem(SEEN,JSON.stringify(a.slice(-50)))}catch(e){}}
+
+function popup(html,buttons){
+ document.getElementById('hpwPopup')?.remove();
+ const m=document.createElement('div');m.id='hpwPopup';m.className='hrx-overlay';m.setAttribute('role','dialog');m.setAttribute('aria-modal','true');
+ m.innerHTML=`<div class="hrx-dialog hpw-pop">${html}<div class="hrx-actions">${buttons.map((b,i)=>`<button type="button" class="${b.primary?'primary':''}" data-i="${i}">${esc(b.label)}</button>`).join('')}</div></div>`;
+ m.querySelectorAll('[data-i]').forEach(el=>el.onclick=()=>{m.remove();buttons[Number(el.dataset.i)].run?.()});
+ document.body.appendChild(m);
+}
+function showStartPopup(o){
+ popup(`<h2>กรุณาชำระเงินภายใน 1 ชั่วโมงนะคะ ⏰</h2>
+  <p>ร้านได้รับคำสั่งซื้อของคุณเรียบร้อยแล้วค่ะ เพื่อยืนยันคิว กรุณาโอนเงินและแนบสลิปภายใน <span class="hpw-time">${esc(clock(deadline(o)))}</span></p>
+  <ul><li>เลขคิวจะออกให้หลังจากระบบตรวจสลิปผ่านแล้วเท่านั้น</li><li>หากไม่ได้ชำระภายในเวลาที่กำหนด ระบบจะยกเลิกออเดอร์นี้อัตโนมัติ และต้องสั่งซื้อใหม่อีกครั้งค่ะ</li></ul>`,
+  [{label:'รับทราบ ไปชำระเงินเลย ♡',primary:true}])
+}
+function showExpiredPopup(){
+ popup(`<h2>บิลนี้หมดเวลาชำระแล้วค่ะ</h2>
+  <p>ออเดอร์นี้ถูกยกเลิกอัตโนมัติ เนื่องจากไม่ได้ชำระเงินภายใน 1 ชั่วโมง หากยังต้องการสินค้า สามารถสั่งซื้อใหม่ได้เลยค่ะ ♡</p>
+  <p style="font-size:11.5px;color:#9a7a88">หากโอนเงินไปแล้ว กรุณาติดต่อร้านพร้อมแนบสลิป ร้านจะช่วยตรวจสอบให้ค่ะ</p>`,
+  [{label:'ปิด'},{label:'เลือกสินค้าใหม่',primary:true,run:()=>{if(typeof showPage==='function')showPage('home')}}])
+}
+
+function banner(root){
+ let b=root.querySelector('#hpwBanner');
+ if(!b){b=document.createElement('div');b.id='hpwBanner';b.className='hpw-banner';const anchor=root.querySelector('.hrx-code');if(anchor)anchor.insertAdjacentElement('afterend',b);else root.querySelector('.hrx-done')?.prepend(b)}
+ return b
+}
+function lock(root){
+ root.querySelector('.hrx-payment')?.classList.add('hpw-locked');
+ root.querySelectorAll('#hrxSlipInput,#hrxVerifySlipBtn,#hrxConfirmPayment').forEach(el=>{el.disabled=true});
+}
+function mount(root,o){
+ clearInterval(timer);timer=null;
+ if(!root||!o)return;
+ if(isExpired(o)){
+  const b=banner(root);b.classList.add('hpw-expired');
+  b.innerHTML='<b>บิลนี้หมดเวลาชำระแล้ว</b><small>ออเดอร์ถูกยกเลิกอัตโนมัติเพราะไม่ได้ชำระภายใน 1 ชั่วโมง</small><button type="button">เลือกสินค้าใหม่</button>';
+  b.querySelector('button').onclick=()=>{if(typeof showPage==='function')showPage('home')};
+  lock(root);return
+ }
+ if(!awaiting(o))return;
+ const end=deadline(o),b=banner(root);
+ const tick=()=>{
+  const ms=end-Date.now();
+  if(ms<=0){expire(o.id);return}
+  b.innerHTML=`กรุณาชำระเงินภายใน<span class="hpw-left">${left(ms)}</span><small>ก่อน ${esc(clock(end))} · หากเลยเวลา ออเดอร์จะถูกยกเลิกอัตโนมัติ · เลขคิวจะออกหลังตรวจสลิปผ่าน</small>`
+ };
+ tick();timer=setInterval(()=>{if(!document.body.contains(b)){clearInterval(timer);return}tick()},1000);
+ if(!seen(o.id)){markSeen(o.id);showStartPopup(o)}
+}
+function expire(id){
+ const a=rows(),o=a.find(x=>x.id===id);
+ if(o&&o.payment_state!=='expired'&&!o.payment_customer_confirmed_at){o.payment_state='expired';try{if(typeof saveOrders==='function')saveOrders(a)}catch(e){}}
+ const root=document.getElementById('v8CartContent');
+ if(root&&root.querySelector('.hrx-done'))mount(root,o||{payment_state:'expired'});
+ showExpiredPopup()
+}
+window.hlgPaymentWindow={
+ notice:()=>'<div class="hpw-notice"><b>⏰ ชำระเงินภายใน 1 ชั่วโมง</b>หลังกดตกลง กรุณาโอนเงินและแนบสลิปภายใน 1 ชั่วโมง หากเลยเวลา ระบบจะยกเลิกออเดอร์นี้ให้อัตโนมัติค่ะ</div>',
+ mount,expire,isExpired
+};
+})();
+</script>
+<style id="hlg-sponge-style">
+.hlg-sponge{display:flex;align-items:center;gap:7px;margin-top:7px;padding:6px 9px;border:1px dashed #e7a9c4;border-radius:10px;background:#fff6fa;font-size:11px;color:#7a4a60;cursor:pointer;line-height:1.35}
+.hlg-sponge input{width:16px;height:16px;margin:0;accent-color:#d45a8a;flex:none}
+.hlg-sponge b{color:#d45a8a;white-space:nowrap}
+</style>
+<script id="hlg-sponge-js">
+(function(){
+'use strict';
+// Optional foam insert so a bag stands upright: +40 THB per bag, only for sizes
+// other than the flat "normal" bag. Mirrors SPONGE_* in /data/pricing-engine.js.
+const K='hlg_unified_cart_v1',SK='hlg_cart_selection_final_v1',MK='hlg_sponge_v1',PRICE=40,SIZES=['large','easy','maxi'];
+function read(){try{const a=JSON.parse(localStorage.getItem(K)||'[]');return Array.isArray(a)?a:[]}catch(e){return []}}
+function sels(){try{return JSON.parse(localStorage.getItem(SK)||'{}')||{}}catch(e){return {}}}
+function eligible(x){
+ if(!x||x.type!=='bag')return false;
+ try{const p=(window.ALL_PATTERNS||[]).find(p=>p.name===x.name);return !!p&&SIZES.includes(p.sizeKey)}catch(e){return false}
+}
+function feeOf(items){
+ return (Array.isArray(items)?items:[]).reduce((n,x)=>n+(x&&x.sponge&&eligible(x)?PRICE*Math.max(1,Math.floor(Number(x.qty)||1)):0),0)
+}
+window.hlgSponge={price:PRICE,sizes:SIZES,eligible:eligible,feeOf:feeOf};
+
+// Fold the add-on into the quote so cart totals, the confirm dialog and the saved order all agree.
+const prevQuote=window.hlgTierQuote;
+if(typeof prevQuote==='function')window.hlgTierQuote=function(items){
+ const q=prevQuote.apply(this,arguments),fee=feeOf(items);
+ return q&&fee?Object.assign({},q,{subtotal:(Number(q.subtotal)||0)+fee,sponge:fee}):q
+};
+
+// Bag lines are rebuilt from the picker whenever the cart syncs, which drops per-line flags.
+// The choice is therefore remembered by bag name and re-applied to the cart before every render.
+function memory(){try{const m=JSON.parse(localStorage.getItem(MK)||'{}');return m&&typeof m==='object'&&!Array.isArray(m)?m:{}}catch(e){return {}}}
+function remember(m){try{localStorage.setItem(MK,JSON.stringify(m))}catch(e){}}
+function restamp(){
+ const cart=read(),m=memory(),keep={};let changed=false;
+ cart.forEach(x=>{
+  if(!eligible(x))return;
+  if(x.sponge===true)keep[x.name]=true;
+  else if(m[x.name]===true){x.sponge=true;keep[x.name]=true;changed=true}
+ });
+ if(changed){try{localStorage.setItem(K,JSON.stringify(cart))}catch(e){}}
+ if(Object.keys(keep).length!==Object.keys(m).length)remember(keep)
+}
+function chosen(){const s=sels();return read().filter(x=>s[x._cartId]!==false)}
+function updateRow(){
+ const base=document.getElementById('hlgItemSubtotal');if(!base)return;
+ const row=base.closest('.v8cf-row');if(!row)return;
+ let sp=document.getElementById('hlgSpongeRow');
+ if(!sp){sp=document.createElement('div');sp.className='v8cf-row';sp.id='hlgSpongeRow';sp.innerHTML='<span id="hlgSpongeLabel"></span><b id="hlgSpongeAmount"></b>';row.insertAdjacentElement('afterend',sp)}
+ const items=chosen(),fee=feeOf(items),bags=fee/PRICE;
+ sp.style.display=fee?'':'none';
+ document.getElementById('hlgSpongeLabel').textContent='🧽 ฟองน้ำให้กระเป๋าตั้งได้ ('+bags+' ใบ)';
+ document.getElementById('hlgSpongeAmount').textContent='+'+fee.toLocaleString()+' ฿';
+}
+function decorate(){
+ const a=read();
+ document.querySelectorAll('#v8CartContent .v8cf-item').forEach((el,i)=>{
+  const x=a[i];if(!x||!eligible(x)||el.querySelector('.hlg-sponge'))return;
+  const info=el.querySelector('.v8cf-info');if(!info)return;
+  const label=document.createElement('label');label.className='hlg-sponge';
+  label.innerHTML='<input type="checkbox"'+(x.sponge?' checked':'')+'><span>🧽 เพิ่มฟองน้ำให้กระเป๋าตั้งได้ <b>+'+PRICE+' ฿ / ใบ</b></span>';
+  label.querySelector('input').onchange=function(){
+   const cart=read(),line=cart.find(y=>y._cartId===x._cartId);if(!line)return;
+   line.sponge=this.checked;
+   try{localStorage.setItem(K,JSON.stringify(cart))}catch(e){return}
+   const m=memory();if(this.checked)m[line.name]=true;else delete m[line.name];remember(m);
+   if(typeof window.hlgShippingUpdate==='function')window.hlgShippingUpdate();else updateRow()
+  };
+  info.appendChild(label)
+ });
+ updateRow()
+}
+const prevRender=window.renderUnifiedCart;
+if(typeof prevRender==='function')window.renderUnifiedCart=function(){try{restamp()}catch(e){}const r=prevRender.apply(this,arguments);try{decorate()}catch(e){console.warn('sponge option failed',e)}return r};
+const prevUpdate=window.hlgShippingUpdate;
+if(typeof prevUpdate==='function')window.hlgShippingUpdate=function(){try{restamp()}catch(e){}const r=prevUpdate.apply(this,arguments);try{updateRow()}catch(e){}return r};
 })();
 </script>
 </body>

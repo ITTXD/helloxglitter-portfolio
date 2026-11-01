@@ -176,7 +176,9 @@ function normalizeItems(input, catalog) {
     }
     seen.add(product.sku);
     totalQty += qty;
-    out.push({ sku: product.sku, qty: qty });
+    const entry = { sku: product.sku, qty: qty };
+    if (raw.sponge === true) entry.sponge = true;
+    out.push(entry);
   });
 
   if (totalQty > MAX_TOTAL_QTY) {

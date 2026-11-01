@@ -29,6 +29,10 @@
     easy: 'Easy Bag',
     maxi: 'Maxi'
   };
+  // Optional add-on: foam insert so the bag stands upright. Not offered on the
+  // flat "normal" size. Charged per bag and never discounted by promos/coupons.
+  var SPONGE_PRICE = 40;
+  var SPONGE_SIZES = ['large', 'easy', 'maxi'];
   var SHIPPING_DEFAULTS = { base: 40, extra: 25, rules: [] };
   var TIER_DEFAULTS = {
     enabled: false,
@@ -713,6 +717,10 @@
   // Main quote
   // --------------------------------------------------------------------------
 
+  function spongeEligible(product) {
+    return !!product && product.type === 'bag' && SPONGE_SIZES.indexOf(text(product.sizeKey)) >= 0;
+  }
+
   function resolveLine(item, catalog, pricing, now, maxQty) {
     var product = catalog.lookup(item);
     if (!product) {
@@ -723,7 +731,10 @@
     }
     var qty = positiveQty(item.qty, maxQty);
     var resolved = resolveItemPrice(product, pricing, now);
+    var sponge = item.sponge === true && spongeEligible(product);
     return {
+      sponge: sponge,
+      spongeFee: sponge ? SPONGE_PRICE * qty : 0,
       sku: product.sku,
       aliases: product.aliases,
       legacySku: legacySku(product),
@@ -769,7 +780,8 @@
     var coupon = couponQuote(resolved, tier, input.coupon);
 
     var subtotal = Math.max(0, Number(tier.subtotal) || 0);
-    var totalBeforeShipping = Math.max(0, subtotal - coupon.discount);
+    var spongeTotal = resolved.reduce(function (sum, item) { return sum + item.spongeFee; }, 0);
+    var totalBeforeShipping = Math.max(0, subtotal - coupon.discount) + spongeTotal;
     var shippingCost = Math.max(0, Number(tier.shipping && tier.shipping.total) || 0);
     var grandTotal = totalBeforeShipping + shippingCost;
 
@@ -786,6 +798,8 @@
         categoryId: item.categoryId,
         productId: item.productId,
         qty: item.qty,
+        sponge: item.sponge,
+        sponge_fee: item.spongeFee,
         base_price: item.basePrice,
         unit_price: item.unitPrice,
         line_subtotal: item.lineSubtotal,
@@ -816,6 +830,7 @@
         eligible_subtotal: coupon.eligible_subtotal
       } : null,
       coupon_discount: coupon.discount,
+      sponge_total: roundMoney(spongeTotal),
       total_before_shipping: roundMoney(totalBeforeShipping),
       shipping: tier.shipping,
       shipping_cost: roundMoney(shippingCost),
@@ -846,6 +861,9 @@
   return {
     VERSION: VERSION,
     MAX_QTY: MAX_QTY,
+    SPONGE_PRICE: SPONGE_PRICE,
+    SPONGE_SIZES: SPONGE_SIZES,
+    spongeEligible: spongeEligible,
     canonicalSku: canonicalSku,
     legacySku: legacySku,
     parseBangkokDate: parseBangkokDate,

@@ -32,6 +32,7 @@
     item_discount: 'ส่วนลดราคาสินค้า',
     tier_discount: 'ส่วนลดโปรจำนวน',
     coupon_discount: 'ส่วนลดคูปอง',
+    sponge_total: 'ค่าฟองน้ำ',
     subtotal: 'ยอดหลังโปรจำนวน',
     total_before_shipping: 'ยอดก่อนค่าส่ง',
     shipping_cost: 'ค่าจัดส่ง',
@@ -340,6 +341,7 @@
         items.push(bySku[product.sku]);
       }
       bySku[product.sku].qty += qty;
+      if (line.sponge === true && root.HLGPricing.spongeEligible(product)) bySku[product.sku].sponge = true;
     });
 
     return { items: items, unresolved: unresolved, invalid: invalid };
@@ -896,7 +898,11 @@
           }
 
           var payload = {
-            items: mapped.items.map(function (item) { return { sku: item.sku, qty: item.qty }; }),
+            items: mapped.items.map(function (item) {
+              var entry = { sku: item.sku, qty: item.qty };
+              if (item.sponge === true) entry.sponge = true;
+              return entry;
+            }),
             address: address
           };
           if (coupon && coupon.code) payload.coupon_code = coupon.code;

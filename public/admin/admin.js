@@ -2,9 +2,11 @@
 var allOrders = [];
 var filteredOrders = [];
 var currentFilter = 'all';
-var currentDateFilter = 'all';
-var currentTrackingDateFilter = 'all';
 var currentModalOrder = null;
+var selectedOrderIds = {};
+var editingTrackingId = null;
+// Inclusive YYYY-MM-DD ranges picked from the calendar, per view. Empty = no limit.
+var dateRanges = { orders: { from: '', to: '' }, tracking: { from: '', to: '' }, summary: { from: '', to: '' } };
 var currentChannelFilter = 'all';
 var deleteTargetId = null;
 
@@ -31,7 +33,7 @@ function showToast(type, msg) {
 
 // ==================== LOADING ====================
 function showTableLoading() {
-  document.getElementById('orderTableBody').innerHTML = '<tr><td colspan="8"><div class="loading-row"><i class="ti ti-loader"></i><div>กำลังโหลด...</div></div></td></tr>';
+  document.getElementById('orderTableBody').innerHTML = '<tr><td colspan="10"><div class="loading-row"><i class="ti ti-loader"></i><div>กำลังโหลด...</div></div></td></tr>';
   document.getElementById('emptyState').style.display = 'none';
 }
 
@@ -126,6 +128,7 @@ function loadOrders() {
         return;
       }
       allOrders = data;
+      dropExpiredBills();
       updateFilterBadges();
       filterOrders();
       renderProductSummary();
@@ -150,6 +153,7 @@ function refreshData() {
     .then(function(data) {
       if (Array.isArray(data)) {
         allOrders = data;
+        dropExpiredBills();
         updateFilterBadges();
         filterOrders();
         showToast('success', 'รีเฟรชเรียบร้อย');
@@ -166,9 +170,10 @@ function refreshData() {
 
 // ==================== FILTER ====================
 function updateFilterBadges() {
-  var dateFiltered = allOrders.filter(function(o) { return isWithinDateRange(o.created_at, currentDateFilter); });
-  var counts = { all: dateFiltered.length, 0: 0, 1: 0, 2: 0, 3: 0 };
-  dateFiltered.forEach(function(o) {
+  var dateFiltered = allOrders.filter(function(o) { return inDateRange(o, 'orders'); });
+  var paid = dateFiltered.filter(function(o) { return !isAwaitingPayment(o); });
+  var counts = { all: paid.length, 0: 0, 1: 0, 2: 0, 3: 0, unpaid: dateFiltered.length - paid.length };
+  paid.forEach(function(o) {
     if (counts[o.status] !== undefined) counts[o.status]++;
   });
   document.querySelectorAll('.ftab').forEach(function(tab) {
@@ -178,34 +183,15 @@ function updateFilterBadges() {
   });
 }
 
-function switchDateOrderFilter(filter) {
-  currentDateFilter = filter;
-  document.querySelectorAll('.dftab').forEach(function(tab) {
-    tab.classList.toggle('active', tab.dataset.dfilter === filter);
-  });
-  updateFilterBadges();
-  filterOrders();
-}
-
-function isWithinDateRange(created_at, filter) {
-  if (filter === 'all') return true;
-  if (!created_at) return false;
-  var d = new Date(created_at);
-  var cutoff19 = new Date('2026-06-20T00:00:00');
-  var cutoff20 = new Date('2026-06-20T00:00:00');
-  var cutoff26 = new Date('2026-06-26T00:00:00');
-  if (filter === 'upto19') return d < cutoff19;
-  if (filter === '20to25') return d >= cutoff20 && d < cutoff26;
-  if (filter === 'after25') return d >= cutoff26;
-  return true;
-}
-
 function filterOrders() {
   var search = (document.getElementById('searchInput').value || '').toLowerCase().trim();
 
   filteredOrders = allOrders.filter(function(o) {
-    if (currentFilter !== 'all' && String(o.status) !== currentFilter) return false;
-    if (!isWithinDateRange(o.created_at, currentDateFilter)) return false;
+    // Unpaid bills are not real orders yet: they only show under "รอชำระ".
+    if (currentFilter === 'unpaid') { if (!isAwaitingPayment(o)) return false; }
+    else if (isAwaitingPayment(o)) return false;
+    else if (currentFilter !== 'all' && String(o.status) !== currentFilter) return false;
+    if (!inDateRange(o, 'orders')) return false;
 
     // Channel filter
     if (currentChannelFilter === 'shopee') {
@@ -229,7 +215,12 @@ function filterOrders() {
     return true;
   });
 
+  // Selection only ever covers rows the admin can see.
+  var visible = {};
+  filteredOrders.forEach(function(o) { visible[o._docId] = true; });
+  Object.keys(selectedOrderIds).forEach(function(id) { if (!visible[id]) delete selectedOrderIds[id]; });
   renderTable();
+  updateBulkBar();
 }
 
 // ==================== PRODUCT SUMMARY ====================
@@ -254,7 +245,9 @@ function renderProductSummary() {
   var stickers = {};
   var bags = {};
 
-  allOrders.forEach(function(o) {
+  var orders = allOrders.filter(function(o) { return isPaidOrder(o) && inDateRange(o, 'summary'); });
+  renderSummaryTotals(orders);
+  orders.forEach(function(o) {
     var qtys = o.pattern_qtys || {};
     var names = o.patterns || [];
     var customer = (o.customer_info || '').split('\n')[0] || '-';
@@ -262,7 +255,7 @@ function renderProductSummary() {
       var qty = qtys[name] || o.qty || 1;
       var price = priceMap[name] || (o.type === 'sticker' ? (typeof STICKER_PRICE !== 'undefined' ? STICKER_PRICE : 69) : 0);
       var obj = { qty: qty, price: price, customer: customer, orderId: o.id, email: o.email || '' };
-      if (o.type === 'wallpaper') {
+      if (o.type === 'wallpaper' || (isWallpaperOrder(o) && /wallpaper/i.test(name))) {
         if (!wallpapers[name]) wallpapers[name] = { total: 0, totalPrice: 0, buyers: [] };
         wallpapers[name].total += qty;
         wallpapers[name].totalPrice += qty * price;
@@ -316,7 +309,7 @@ function renderProductSummary() {
   if (hasWallpaper) html += renderGroup('Wallpaper', 'ti-brush', wallpapers);
   if (hasStickers) html += renderGroup('สติกเกอร์', 'ti-star', stickers);
   if (hasBags) html += renderGroup('กระเป๋า', 'ti-shopping-bag', bags);
-  if (!html) html = '<div class="summary-empty">ยังไม่มีข้อมูลสินค้า</div>';
+  if (!html) html = '<div class="summary-empty">ไม่มียอดขายในช่วงวันที่เลือก</div>';
 
   el.innerHTML = html;
 }
@@ -326,6 +319,8 @@ function renderTable() {
   var tbody = document.getElementById('orderTableBody');
   var empty = document.getElementById('emptyState');
 
+  var selectAll = document.getElementById('selectAllOrders');
+  if (selectAll) selectAll.checked = filteredOrders.length > 0 && filteredOrders.every(function(o) { return selectedOrderIds[o._docId]; });
   if (filteredOrders.length === 0) {
     tbody.innerHTML = '';
     empty.style.display = 'block';
@@ -342,8 +337,10 @@ function renderTable() {
 
     var grandTotal = (o.total_price || 0) + (o.shipping_cost != null ? o.shipping_cost : 0);
 
+    var isWp = isWallpaperOrder(o);
+    var unpaid = isAwaitingPayment(o);
     var statusOptions = '';
-    if (o.type === 'wallpaper') {
+    if (isWp) {
       statusOptions = '<option value="0"' + (o.status === 0 ? ' selected' : '') + '>รอยืนยัน</option><option value="1"' + (o.status === 1 ? ' selected' : '') + '>ยืนยันแล้ว</option>';
     } else {
       for (var i = 0; i < STATUS_LABELS.length; i++) {
@@ -365,14 +362,19 @@ function renderTable() {
         : ' <i class="ti ti-receipt" style="color:#d97706;font-size:11px" title="มีสลิป (รอตรวจ)"></i>';
     }
 
-    return '<tr class="order-row' + (o.type === 'wallpaper' ? ' order-wallpaper' : '') + (isShopee ? ' order-shopee' : '') + '" onclick="openOrder(\'' + escapeHtmlAttr(o.id) + '\')">'
+    var checked = selectedOrderIds[o._docId] ? ' checked' : '';
+    var statusCell = unpaid
+      ? '<span class="unpaid-pill" title="ยังไม่ชำระ ระบบจะยกเลิกอัตโนมัติเมื่อหมดเวลา">⏰ รอชำระ<small>' + escapeHtml(paymentDeadlineText(o)) + '</small></span>'
+      : '<select class="status-select s' + o.status + '" data-docid="' + escapeHtmlAttr(o._docId) + '" data-orderid="' + escapeHtmlAttr(o.id) + '" onchange="inlineChangeStatus(this)">' + statusOptions + '</select>';
+    return '<tr class="order-row' + (isWp ? ' order-wallpaper' : '') + (isShopee ? ' order-shopee' : '') + (unpaid ? ' order-unpaid' : '') + (checked ? ' order-selected' : '') + '" onclick="openOrder(\'' + escapeHtmlAttr(o.id) + '\')">'
+      + '<td class="td-check" onclick="event.stopPropagation()"><input type="checkbox"' + checked + ' onchange="toggleOrderSelected(\'' + escapeHtmlAttr(o._docId) + '\', this.checked)" aria-label="เลือก ' + escapeHtmlAttr(o.id) + '"/></td>'
       + '<td class="order-id">' + escapeHtml(o.id) + queueTxt + slipBadge + (o.fast_track ? '<br><span style="color:#8c30d8;font-size:10px;font-weight:800;background:#f3e8fc;padding:2px 4px;border-radius:4px">⚡ FAST TRACK</span>' : '') + shopeeBadge + '</td>'
       + '<td class="order-customer">' + custDisplay + '</td>'
       + '<td class="order-patterns">' + escapeHtml(patterns) + '</td>'
       + '<td class="order-qty">' + (o.total_bags || 0) + '</td>'
       + '<td class="order-price">' + grandTotal.toLocaleString() + ' ฿</td>'
-      + '<td class="order-tracking" style="font-size:11px;color:#807078">' + escapeHtml(o.tracking_number || '') + '</td>'
-      + '<td onclick="event.stopPropagation()"><select class="status-select s' + o.status + '" data-docid="' + escapeHtmlAttr(o._docId) + '" data-orderid="' + escapeHtmlAttr(o.id) + '" onchange="inlineChangeStatus(this)">' + statusOptions + '</select></td>'
+      + '<td class="order-tracking" onclick="event.stopPropagation()">' + trackingCellHTML(o) + '</td>'
+      + '<td onclick="event.stopPropagation()">' + statusCell + '</td>'
       + '<td class="order-date">' + dateStr + '</td>'
       + '<td><i class="ti ti-chevron-right" style="color:#c0b0b8"></i></td>'
       + '</tr>';
@@ -432,7 +434,9 @@ function openOrder(id) {
   html += '<div class="m-section">';
   html += '<div class="m-section-title">สถานะ</div>';
   html += '<div class="m-status-row">';
-  if (order.type === 'wallpaper') {
+  if (isAwaitingPayment(order)) {
+    html += '<div class="unpaid-note">⏰ ยังไม่ชำระเงิน — ' + escapeHtml(paymentDeadlineText(order)) + '<br><small>ออเดอร์นี้ยังไม่นับเป็นออเดอร์จริง พิมพ์ใบปะหน้าไม่ได้ และจะถูกลบอัตโนมัติเมื่อครบ 1 ชั่วโมง</small></div>';
+  } else if (isWallpaperOrder(order)) {
     html += '<button class="m-status-btn s0' + (order.status === 0 ? ' active' : '') + '" onclick="changeStatus(0)"><i class="ti ti-clock"></i> รอยืนยัน</button>';
     html += '<button class="m-status-btn s1' + (order.status === 1 ? ' active' : '') + '" onclick="changeStatus(1)"><i class="ti ti-circle-check"></i> ยืนยันแล้ว</button>';
   } else {
@@ -478,6 +482,12 @@ function openOrder(id) {
   // Patterns with images and promo pricing
   html += '<div class="m-section">';
   html += '<div class="m-section-title">สินค้าที่สั่ง</div>';
+  var spongeLines = spongeItems(order);
+  if (spongeLines.length) {
+    html += '<div class="m-note" style="background:#fff6fa;border:1px dashed #e7a9c4;border-radius:10px;padding:8px 10px;margin-bottom:8px;font-size:13px">🧽 <b>ใส่ฟองน้ำ:</b> '
+      + spongeLines.map(function(x) { return escapeHtml(x.name) + ' × ' + x.qty; }).join(', ')
+      + ' (+' + spongeLines.reduce(function(n, x) { return n + 40 * x.qty; }, 0) + ' ฿)</div>';
+  }
   html += '<div class="m-patterns">';
 
   var pq = order.pattern_qtys || {};
@@ -551,7 +561,7 @@ function openOrder(id) {
   if (order.slip_data) {
     html += '<div class="m-section">';
     html += '<div class="m-section-title">สลีปโอนเงิน' + (order.slip_verified ? ' <span style="color:#16a34a;font-size:12px;font-weight:700">✓ EasySlip ตรวจสอบผ่านแล้ว</span>' : '') + '</div>';
-    html += '<img class="slip-admin-img" src="' + order.slip_data + '" alt="สลีป" onclick="window.open(\'' + order.slip_data + '\',\'_blank\')"/>';
+    html += '<img class="slip-admin-img" src="' + escapeHtmlAttr(order.slip_data) + '" alt="สลีป" title="แตะเพื่อดูภาพเต็ม" onclick="openLightbox(this.src)"/>';
     if (order.slip_uploaded_at) {
       var slipDate = new Date(order.slip_uploaded_at);
       html += '<div style="font-size:11px;color:#a09098;margin-top:6px">อัปโหลดเมื่อ: ' + slipDate.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + '</div>';
@@ -729,36 +739,11 @@ function switchView(view) {
 }
 
 // ==================== TRACKING INPUT VIEW ====================
-function isWithinTrackingDateRange(created_at, filter) {
-  if (filter === 'all') return true;
-  if (!created_at) return false;
-  var d = new Date(created_at);
-  var cutoff19 = new Date('2026-06-19T00:00:00');
-  var cutoff20 = new Date('2026-06-20T00:00:00');
-  var cutoff24 = new Date('2026-06-24T00:00:00');
-  var cutoff26 = new Date('2026-06-26T00:00:00');
-  if (filter === 'before19') return d < cutoff19;
-  if (filter === 'upto19') return d >= cutoff19 && d < cutoff20;
-  if (filter === '20to23') return d >= cutoff20 && d < cutoff24;
-  if (filter === '20to25') return d >= cutoff20 && d < cutoff26;
-  if (filter === 'after23') return d >= cutoff24;
-  if (filter === 'after25') return d >= cutoff26;
-  return true;
-}
-
-function switchTrackingDateFilter(filter) {
-  currentTrackingDateFilter = filter;
-  document.querySelectorAll('#trackingDateTabs .dftab').forEach(function(tab) {
-    tab.classList.toggle('active', tab.dataset.tfilter === filter);
-  });
-  renderTrackingView();
-}
-
 function renderTrackingView() {
   var list = document.getElementById('trackingList');
   var search = (document.getElementById('trackingSearch').value || '').toLowerCase().trim();
   var orders = allOrders.slice().filter(function(o) {
-    return isWithinTrackingDateRange(o.created_at, currentTrackingDateFilter);
+    return isPaidOrder(o) && inDateRange(o, 'tracking');
   }).sort(function(a, b) {
     return new Date(a.created_at) - new Date(b.created_at);
   });
@@ -839,7 +824,11 @@ var printSelectedOrders = {};
 function renderPrintTable() {
   var tbody = document.getElementById('printTableBody');
   var empty = document.getElementById('printEmptyState');
-  var confirmedOrders = allOrders.filter(function(o) { return o.status >= 1 && o.type !== 'wallpaper'; });
+  // Labels only for paid, confirmed parcels — an unpaid bill must never reach the packer.
+  var confirmedOrders = allOrders.filter(function(o) { return isPaidOrder(o) && o.status >= 1 && o.type !== 'wallpaper'; });
+  Object.keys(printSelectedOrders).forEach(function(id) {
+    if (!confirmedOrders.some(function(o) { return o._docId === id; })) delete printSelectedOrders[id];
+  });
 
   if (confirmedOrders.length === 0) {
     tbody.innerHTML = '';
@@ -975,7 +964,7 @@ function buildLabelHTML(order) {
   var pq = order.pattern_qtys || {};
   var patternList = (order.patterns || []).map(function(name) {
     var qty = pq[name] || order.qty || 1;
-    return escapeHtml(name) + ' × ' + qty;
+    return escapeHtml(name) + ' × ' + qty + (hasSponge(order, name) ? ' 🧽+ฟองน้ำ' : '');
   }).join('  ·  ');
 
   var d = new Date(order.created_at);
@@ -1017,7 +1006,8 @@ async function generateLabelsPDF() {
 
     var orders = ids.map(function(docId) {
       return allOrders.find(function(o) { return o._docId === docId; });
-    }).filter(Boolean);
+    }).filter(function(o) { return o && isPaidOrder(o); });
+    if (!orders.length) throw new Error('no paid orders selected');
 
     var { jsPDF } = window.jspdf;
     var pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [150, 100] });
@@ -1081,6 +1071,15 @@ async function markPrinted(docIds) {
 // ==================== HELPERS ====================
 function toggleBuyers(el) { el.classList.toggle('open'); }
 
+// Items the customer asked to get a foam insert (+40 THB per bag).
+function spongeItems(order) {
+  return (order && Array.isArray(order.items) ? order.items : []).filter(function(x) { return x && x.sponge === true; })
+    .map(function(x) { return { name: x.name || '', qty: Math.max(1, Number(x.qty) || 1) }; });
+}
+function hasSponge(order, patternName) {
+  return spongeItems(order).some(function(x) { return x.name && String(patternName).indexOf(x.name) === 0; });
+}
+
 function escapeHtml(s) {
   if (!s) return '';
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -1089,6 +1088,374 @@ function escapeHtml(s) {
 function escapeHtmlAttr(s) {
   if (!s) return '';
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ==================== PAYMENT STATE ====================
+// Mirrors /order-lifecycle.js: a storefront bill is unpaid until its slip is
+// confirmed and the server deletes it 1 hour after it was created.
+function isAwaitingPayment(o) {
+  return !!o && o.payment_state === 'awaiting_payment' && !o.slip_verified;
+}
+
+function isPaidOrder(o) {
+  if (!o) return false;
+  if (o.payment_state === 'paid' || o.slip_verified) return true;
+  if (o.payment_state === 'awaiting_payment') return false;
+  return o.channel === 'shopee' || !!o.shopee_order_sn || Number(o.status) >= 1;
+}
+
+function isWallpaperOrder(o) {
+  if (!o) return false;
+  if (o.type === 'wallpaper') return true;
+  return Array.isArray(o.items) && o.items.some(function(x) { return x && x.type === 'wallpaper'; });
+}
+
+function paymentDeadlineMs(o) {
+  var t = Date.parse((o && o.payment_deadline) || '');
+  return isFinite(t) ? t : NaN;
+}
+
+function paymentDeadlineText(o) {
+  var t = paymentDeadlineMs(o);
+  if (!isFinite(t)) return 'ไม่มีกำหนดเวลา';
+  var left = t - Date.now();
+  if (left <= 0) return 'หมดเวลาแล้ว';
+  var time = new Date(t).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+  return 'หมดเวลา ' + time + ' น. (อีก ' + Math.ceil(left / 60000) + ' นาที)';
+}
+
+// Drop bills whose hour is up straight away; the server deletes them on its next read.
+function dropExpiredBills() {
+  var now = Date.now();
+  var before = allOrders.length;
+  allOrders = allOrders.filter(function(o) {
+    return !(isAwaitingPayment(o) && isFinite(paymentDeadlineMs(o)) && paymentDeadlineMs(o) <= now);
+  });
+  return allOrders.length !== before;
+}
+
+// ==================== DATE RANGE (CALENDAR) ====================
+function orderTimeMs(o) {
+  var raw = o && o.created_at;
+  if (raw && typeof raw === 'object' && raw.seconds) return raw.seconds * 1000;
+  var t = Date.parse(raw || '');
+  return isFinite(t) ? t : NaN;
+}
+
+function toYMD(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function inDateRange(o, key) {
+  var r = dateRanges[key];
+  if (!r || (!r.from && !r.to)) return true;
+  var t = orderTimeMs(o);
+  if (!isFinite(t)) return false;
+  if (r.from && t < new Date(r.from + 'T00:00:00').getTime()) return false;
+  if (r.to && t > new Date(r.to + 'T23:59:59.999').getTime()) return false;
+  return true;
+}
+
+function presetRange(preset) {
+  var now = new Date();
+  var today = toYMD(now);
+  if (preset === 'today') return { from: today, to: today };
+  if (preset === 'week') {
+    var monday = new Date(now);
+    monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+    return { from: toYMD(monday), to: today };
+  }
+  if (preset === 'month') return { from: toYMD(new Date(now.getFullYear(), now.getMonth(), 1)), to: today };
+  return { from: '', to: '' };
+}
+
+function initDateRange(containerId, onChange) {
+  var el = document.getElementById(containerId);
+  if (!el) return;
+  var key = el.dataset.range;
+  el.innerHTML = '<div class="dr-presets">'
+    + [['all', 'ทั้งหมด'], ['today', 'วันนี้'], ['week', 'สัปดาห์นี้'], ['month', 'เดือนนี้']].map(function(p) {
+      return '<button type="button" class="dr-preset' + (p[0] === 'all' ? ' active' : '') + '" data-preset="' + p[0] + '">' + p[1] + '</button>';
+    }).join('')
+    + '</div><div class="dr-inputs"><label><span>ตั้งแต่</span><input type="date" class="dr-from" aria-label="ตั้งแต่วันที่"/></label>'
+    + '<label><span>ถึง</span><input type="date" class="dr-to" aria-label="ถึงวันที่"/></label></div>';
+  var from = el.querySelector('.dr-from');
+  var to = el.querySelector('.dr-to');
+  function apply(range, preset) {
+    if (range.from && range.to && range.from > range.to) range = { from: range.to, to: range.from };
+    dateRanges[key] = range;
+    from.value = range.from;
+    to.value = range.to;
+    el.querySelectorAll('.dr-preset').forEach(function(b) { b.classList.toggle('active', b.dataset.preset === preset); });
+    onChange();
+  }
+  el.addEventListener('click', function(e) {
+    var b = e.target.closest('.dr-preset');
+    if (b) apply(presetRange(b.dataset.preset), b.dataset.preset);
+  });
+  function fromInputs() { apply({ from: from.value, to: to.value }, from.value || to.value ? '' : 'all'); }
+  from.addEventListener('change', fromInputs);
+  to.addEventListener('change', fromInputs);
+}
+
+function renderSummaryTotals(orders) {
+  var el = document.getElementById('summaryTotals');
+  if (!el) return;
+  var revenue = 0, pieces = 0;
+  orders.forEach(function(o) {
+    revenue += (Number(o.total_price) || 0) + (Number(o.shipping_cost) || 0);
+    pieces += Array.isArray(o.items) && o.items.length
+      ? o.items.reduce(function(n, x) { return n + (Number(x.qty) || 1); }, 0)
+      : (Number(o.total_bags) || 0);
+  });
+  el.innerHTML = '<div class="st-card"><b>' + orders.length.toLocaleString() + '</b><span>ออเดอร์ที่ชำระแล้ว</span></div>'
+    + '<div class="st-card"><b>' + revenue.toLocaleString() + ' ฿</b><span>ยอดขาย (รวมค่าส่ง)</span></div>'
+    + '<div class="st-card"><b>' + pieces.toLocaleString() + '</b><span>จำนวนชิ้น</span></div>';
+}
+
+// ==================== INLINE TRACKING (PACKING) ====================
+function trackingCellHTML(o) {
+  if (isAwaitingPayment(o)) return '<span class="trk-muted">รอชำระก่อน</span>';
+  if (o.type === 'wallpaper') return '<span class="trk-muted">ไฟล์ดิจิทัล ไม่ต้องส่งพัสดุ</span>';
+  var id = escapeHtmlAttr(o._docId);
+  if (o.tracking_number && editingTrackingId !== o._docId) {
+    return '<div class="trk-saved"><span class="trk-num">' + (o.tracking_carrier ? '<small>' + escapeHtml(o.tracking_carrier) + '</small>' : '') + escapeHtml(o.tracking_number) + '</span>'
+      + '<button type="button" class="trk-btn trk-edit" onclick="editInlineTracking(\'' + id + '\')"><i class="ti ti-pencil"></i> แก้ไข</button></div>';
+  }
+  var editing = editingTrackingId === o._docId;
+  return '<div class="trk-form" data-docid="' + id + '">'
+    + '<input class="trk-carrier" list="carrierOptions" placeholder="ขนส่ง" value="' + escapeHtmlAttr(o.tracking_carrier || '') + '" aria-label="ขนส่ง"/>'
+    + '<input class="trk-input" placeholder="ใส่เลขพัสดุ" value="' + escapeHtmlAttr(o.tracking_number || '') + '" aria-label="เลขพัสดุ" onkeydown="if(event.key===\'Enter\')saveInlineTracking(\'' + id + '\')"/>'
+    + '<div class="trk-actions"><button type="button" class="trk-btn trk-ok" onclick="saveInlineTracking(\'' + id + '\')"><i class="ti ti-check"></i> ' + (editing ? 'บันทึก' : 'ยืนยัน') + '</button>'
+    + (editing ? '<button type="button" class="trk-btn" onclick="cancelInlineTracking()">ยกเลิก</button>' : '') + '</div></div>';
+}
+
+function editInlineTracking(docId) {
+  editingTrackingId = docId;
+  renderTable();
+  var input = document.querySelector('.trk-form[data-docid="' + CSS.escape(docId) + '"] .trk-input');
+  if (input) { input.focus(); input.select(); }
+}
+
+function cancelInlineTracking() {
+  editingTrackingId = null;
+  renderTable();
+}
+
+function saveInlineTracking(docId) {
+  var form = document.querySelector('.trk-form[data-docid="' + CSS.escape(docId) + '"]');
+  var order = allOrders.find(function(o) { return o._docId === docId; });
+  if (!form || !order) return;
+  var number = form.querySelector('.trk-input').value.trim();
+  var carrier = form.querySelector('.trk-carrier').value.trim();
+  if (!number) { showToast('warn', 'กรุณาใส่เลขพัสดุก่อน'); return; }
+  var body = { tracking_number: number, tracking_carrier: carrier };
+  // A tracking number means the parcel has gone out.
+  var shipped = STATUS_LABELS.length - 1;
+  if (!isWallpaperOrder(order) && Number(order.status) < shipped) body.status = shipped;
+  form.querySelectorAll('input,button').forEach(function(x) { x.disabled = true; });
+  fetch('/api/orders/' + encodeURIComponent(docId), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  })
+    .then(function(r) { return r.json().then(function(d) { if (!r.ok || d.error) throw new Error(d.error || r.status); return d; }); })
+    .then(function() {
+      order.tracking_number = number;
+      order.tracking_carrier = carrier;
+      if (body.status !== undefined) order.status = body.status;
+      editingTrackingId = null;
+      showToast('success', 'บันทึกเลขพัสดุ ' + (order.queue_no || order.id) + ' แล้ว');
+      updateFilterBadges();
+      filterOrders();
+      loadStats();
+    })
+    .catch(function(err) {
+      showToast('error', 'บันทึกเลขพัสดุไม่สำเร็จ: ' + err.message);
+      form.querySelectorAll('input,button').forEach(function(x) { x.disabled = false; });
+    });
+}
+
+// ==================== BULK ACTIONS ====================
+function initBulkBar() {
+  var sel = document.getElementById('bulkStatus');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— เลือกสถานะใหม่ —</option>' + STATUS_LABELS.map(function(label, i) {
+    return '<option value="' + i + '">' + escapeHtml(label) + '</option>';
+  }).join('');
+  sel.addEventListener('change', updateBulkBar);
+  updateBulkBar();
+}
+
+function selectedOrders() {
+  return filteredOrders.filter(function(o) { return selectedOrderIds[o._docId]; });
+}
+
+function updateBulkBar() {
+  var n = selectedOrders().length;
+  var count = document.getElementById('bulkCount');
+  if (!count) return;
+  count.textContent = n;
+  document.getElementById('bulkBar').classList.toggle('has-selection', n > 0);
+  document.getElementById('bulkDeleteBtn').disabled = n === 0;
+  document.getElementById('bulkStatusBtn').disabled = n === 0 || document.getElementById('bulkStatus').value === '';
+}
+
+function toggleOrderSelected(docId, checked) {
+  if (checked) selectedOrderIds[docId] = true;
+  else delete selectedOrderIds[docId];
+  renderTable();
+  updateBulkBar();
+}
+
+function toggleSelectAllOrders(checked) {
+  filteredOrders.forEach(function(o) {
+    if (checked) selectedOrderIds[o._docId] = true;
+    else delete selectedOrderIds[o._docId];
+  });
+  renderTable();
+  updateBulkBar();
+}
+
+function runBulk(ids, action, status) {
+  return fetch('/api/orders/bulk', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ ids: ids, action: action, status: status }),
+  }).then(function(r) {
+    return r.json().then(function(d) { if (!r.ok || d.error) throw new Error(d.error || r.status); return d; });
+  });
+}
+
+function afterBulk(result, verb) {
+  var ok = (result.done || []).length, bad = (result.failed || []).length;
+  showToast(bad ? 'warn' : 'success', verb + ' ' + ok + ' รายการ' + (bad ? ' (ไม่สำเร็จ ' + bad + ')' : ''));
+  selectedOrderIds = {};
+  loadOrders();
+  loadStats();
+}
+
+function bulkChangeStatus() {
+  var orders = selectedOrders().filter(function(o) { return !isAwaitingPayment(o); });
+  var status = Number(document.getElementById('bulkStatus').value);
+  if (!orders.length) { showToast('warn', 'ออเดอร์ที่ยังไม่ชำระเปลี่ยนสถานะไม่ได้'); return; }
+  if (!confirm('เปลี่ยนสถานะ ' + orders.length + ' ออเดอร์ เป็น “' + STATUS_LABELS[status] + '” ?')) return;
+  var btn = document.getElementById('bulkStatusBtn');
+  btn.disabled = true;
+  runBulk(orders.map(function(o) { return o._docId; }), 'status', status)
+    .then(function(res) { afterBulk(res, 'เปลี่ยนสถานะแล้ว'); })
+    .catch(function(err) { showToast('error', 'เปลี่ยนสถานะไม่สำเร็จ: ' + err.message); })
+    .finally(updateBulkBar);
+}
+
+function confirmBulkDelete(orders, message) {
+  if (!orders.length) { showToast('warn', 'ไม่มีออเดอร์ให้ลบ'); return; }
+  document.getElementById('deleteModalMsg').textContent = message;
+  var btn = document.getElementById('deleteConfirmBtn');
+  btn.onclick = function() {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader"></i> กำลังลบ...';
+    runBulk(orders.map(function(o) { return o._docId; }), 'delete')
+      .then(function(res) { closeDeleteModal(); afterBulk(res, 'ลบแล้ว'); })
+      .catch(function(err) { showToast('error', 'ลบไม่สำเร็จ: ' + err.message); })
+      .finally(function() { btn.disabled = false; btn.innerHTML = '<i class="ti ti-trash"></i> ลบ'; });
+  };
+  document.getElementById('deleteModal').classList.remove('hidden');
+}
+
+function bulkDeleteSelected() {
+  var orders = selectedOrders();
+  confirmBulkDelete(orders, 'ลบออเดอร์ที่เลือก ' + orders.length + ' รายการ? ลบแล้วกู้คืนไม่ได้');
+}
+
+function bulkDeleteAllShown() {
+  confirmBulkDelete(filteredOrders.slice(), 'ลบออเดอร์ทั้งหมดที่แสดงอยู่ ' + filteredOrders.length + ' รายการ (ตามแท็บ ช่วงวันที่ และคำค้นหาปัจจุบัน)? ลบแล้วกู้คืนไม่ได้');
+}
+
+// ==================== EXPORT ADDRESSES (EXCEL) ====================
+var XLSX_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+var xlsxLoading = null;
+function loadXlsx() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (!xlsxLoading) {
+    xlsxLoading = new Promise(function(resolve, reject) {
+      var s = document.createElement('script');
+      s.src = XLSX_SRC;
+      s.onload = function() { window.XLSX ? resolve(window.XLSX) : reject(new Error('XLSX missing')); };
+      s.onerror = function() { xlsxLoading = null; reject(new Error('โหลดตัวสร้าง Excel ไม่สำเร็จ')); };
+      document.head.appendChild(s);
+    });
+  }
+  return xlsxLoading;
+}
+
+function exportAddressesExcel() {
+  var picked = selectedOrders();
+  var orders = (picked.length ? picked : filteredOrders).slice();
+  if (!orders.length) { showToast('warn', 'ไม่มีออเดอร์สำหรับ Export'); return; }
+  var rows = orders.map(function(o, i) {
+    var lines = (o.customer_info || '').split('\n');
+    var name = o.customer_name || lines[0] || '';
+    var phone = o.customer_phone || lines[1] || '';
+    var address = o.customer_address || lines.slice(2).join('\n') || '';
+    var items = Array.isArray(o.items) && o.items.length
+      ? o.items.map(function(x) { return (x.name || 'สินค้า') + (x.variant ? ' (' + x.variant + ')' : '') + ' x' + (Number(x.qty) || 1) + (x.sponge ? ' +ฟองน้ำ' : ''); })
+      : (o.patterns || []).map(function(n) { return n + ' x' + ((o.pattern_qtys || {})[n] || o.qty || 1); });
+    var qty = Array.isArray(o.items) && o.items.length
+      ? o.items.reduce(function(n, x) { return n + (Number(x.qty) || 1); }, 0)
+      : (Number(o.total_bags) || 0);
+    var d = new Date(orderTimeMs(o));
+    return {
+      'ลำดับ': i + 1,
+      'เลขคิว': o.queue_no || '',
+      'รหัสออเดอร์': o.id || '',
+      'ชื่อผู้รับ': name,
+      'เบอร์โทร': String(phone || ''),
+      'ที่อยู่': address,
+      'ชื่อ + เบอร์ + ที่อยู่ (สำหรับคัดลอก)': [name, phone, address].filter(Boolean).join('\n'),
+      'สินค้า': items.join('\n'),
+      'จำนวนชิ้น': qty,
+      'ยอดรวม (บาท)': (Number(o.total_price) || 0) + (Number(o.shipping_cost) || 0),
+      'สถานะ': isAwaitingPayment(o) ? 'รอชำระ' : (STATUS_LABELS[o.status] || ''),
+      'ขนส่ง': o.tracking_carrier || '',
+      'เลขพัสดุ': o.tracking_number || '',
+      'วันที่สั่ง': isFinite(d.getTime()) ? d.toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' }) : '',
+    };
+  });
+  loadXlsx().then(function(XLSX) {
+    var ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [6, 10, 22, 22, 13, 45, 45, 40, 9, 12, 14, 14, 18, 20].map(function(w) { return { wch: w }; });
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'ที่อยู่จัดส่ง');
+    XLSX.writeFile(wb, 'helloxglitter-ที่อยู่-' + toYMD(new Date()) + '.xlsx');
+    showToast('success', 'Export ' + rows.length + ' ออเดอร์แล้ว');
+  }).catch(function(err) { showToast('error', err.message); });
+}
+
+// ==================== AUTO REFRESH ====================
+// Keeps unpaid bills from lingering on screen once their hour is up.
+function startOrderAutoRefresh() {
+  setInterval(function() {
+    if (document.hidden || !allOrders.length) return;
+    if (dropExpiredBills()) { updateFilterBadges(); filterOrders(); }
+    else if (currentFilter === 'unpaid' && !editingTrackingId) renderTable();
+  }, 30000);
+  setInterval(function() {
+    var dash = document.getElementById('dashboardPage');
+    if (document.hidden || !dash || dash.classList.contains('hidden') || editingTrackingId) return;
+    if (!document.getElementById('orderModal').classList.contains('hidden')) return;
+    fetch('/api/orders', { credentials: 'include' })
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if (!Array.isArray(data)) return;
+        allOrders = data;
+        updateFilterBadges();
+        filterOrders();
+      })
+      .catch(function() {});
+  }, 120000);
 }
 
 // ==================== INIT ====================
@@ -1105,11 +1472,11 @@ document.addEventListener('DOMContentLoaded', function() {
     filterOrders();
   });
 
-  document.getElementById('filterDateTabs').addEventListener('click', function(e) {
-    var tab = e.target.closest('.dftab');
-    if (!tab) return;
-    switchDateOrderFilter(tab.dataset.dfilter);
-  });
+  initDateRange('ordersDateRange', function() { updateFilterBadges(); filterOrders(); });
+  initDateRange('trackingDateRange', renderTrackingView);
+  initDateRange('summaryDateRange', renderProductSummary);
+  initBulkBar();
+  startOrderAutoRefresh();
 });
 function copyCustomerInfo(name, phone, address) {
   var text = [name, phone, address].filter(Boolean).join("\n");

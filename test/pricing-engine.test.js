@@ -485,6 +485,42 @@ test('the same file exposes window.HLGPricing in a browser-like VM', () => {
   );
 });
 
+test('sponge add-on is +40 per bag, skips the normal size, and ignores non-bag items', () => {
+  const catalog = HLGPricing.createCatalog({
+    patterns: [
+      { name: 'Flat', size: '15 × 16 inch', sizeKey: 'normal', priceOrig: 399 },
+      { name: 'Gusset', size: '15.5 × 4 × 16 inch', sizeKey: 'large', priceOrig: 499 },
+      { name: 'Easy', size: '10.5 × 5 × 14 inch', sizeKey: 'easy', priceOrig: 425 },
+      { name: 'Maxi', size: '13.5 × 6 × 17 inch', sizeKey: 'maxi', priceOrig: 550 }
+    ],
+    stickers: [{ name: 'Star', price: 60 }]
+  });
+  const bag = (name, size, qty, sponge) => ({ type: 'bag', name, variant: size, qty, sponge });
+  const quote = HLGPricing.computeQuote({
+    catalog,
+    address: '10110',
+    items: [
+      bag('Flat', '15 × 16 inch', 1, true),
+      bag('Gusset', '15.5 × 4 × 16 inch', 2, true),
+      bag('Easy', '10.5 × 5 × 14 inch', 1, true),
+      bag('Maxi', '13.5 × 6 × 17 inch', 3, false),
+      { type: 'sticker', name: 'Star', qty: 1, sponge: true }
+    ]
+  });
+  assert.deepStrictEqual(quote.items.map(i => i.sponge_fee), [0, 80, 40, 0, 0]);
+  near(quote.sponge_total, 120);
+  near(quote.total_before_shipping, quote.subtotal + 120);
+  near(quote.grand_total, quote.subtotal + 120 + quote.shipping_cost);
+
+  const without = HLGPricing.computeQuote({
+    catalog,
+    address: '10110',
+    items: [bag('Gusset', '15.5 × 4 × 16 inch', 2, false)]
+  });
+  near(without.sponge_total, 0);
+  near(without.grand_total, without.subtotal + without.shipping_cost);
+});
+
 console.log('\n========================================');
 console.log(`  RESULT: ${PASSED} passed, ${FAILED} failed`);
 console.log('========================================');
