@@ -13,7 +13,6 @@
 <meta name="twitter:description" content="&#8203;"/>
 <!-- Tabler Icons -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css"/>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script id="hlg-foundation-helpers">
   window.escHtml = function(s) {
@@ -4048,7 +4047,7 @@ async function renderInline(){
 
     for(let i=0;i<a.length;i++){
       const x=a[i];if(x.hidden&&!isAdmin())continue;
-      const fallbackPvImg = (x.target === 'wallpaper' || /wallpaper/i.test(x.name)) ? '/images/wallphone.png' : ((x.target === 'preorder' || /กระเป๋า/i.test(x.name)) ? '/images/normal-01.jpg' : null);
+      const fallbackPvImg = (x.target === 'wallpaper' || /wallpaper/i.test(x.name)) ? '/images/wallphone.jpg' : ((x.target === 'preorder' || /กระเป๋า/i.test(x.name)) ? '/images/normal-01.jpg' : null);
       const u = images[i] || fallbackPvImg;
       const card=document.createElement('div');
       card.className='v8-inline-preview-card '+(isAdmin()?'admin':'customer')+(x.hidden?' v8-inline-hidden':'');
@@ -6396,8 +6395,8 @@ if(document.readyState!=='loading'){
     <div class="sec-title"><i class="ti ti-photo"></i> Wallpaper <span style="font-size:12px;color:#b8a0d0;font-weight:400">— เลือกจำนวนได้</span></div>
     <div class="gallery" id="wallpaperGallery">
       <div class="gcard wp-card" id="wpCard" onclick="wpTogglePattern('Wallpaper')">
-        <img class="gimg wp-card-img" src="https://helloxglitterstore.vercel.app/images/wallphone.png" onerror="handleImgError(this, 'Wallpaper', './images/wallphone.png')" alt="Wallpaper Special Set"/>
-        <div class="gzoom wp-zoom" onclick="event.stopPropagation();openImgLightbox('https://helloxglitterstore.vercel.app/images/wallphone.png')" title="ซูมดูรูปขนาดใหญ่"><i class="ti ti-zoom-in"></i></div>
+        <img class="gimg wp-card-img" loading="lazy" decoding="async" src="https://helloxglitterstore.vercel.app/images/wallphone.jpg" onerror="handleImgError(this, 'Wallpaper', './images/wallphone.jpg')" alt="Wallpaper Special Set"/>
+        <div class="gzoom wp-zoom" onclick="event.stopPropagation();openImgLightbox('https://helloxglitterstore.vercel.app/images/wallphone.jpg')" title="ซูมดูรูปขนาดใหญ่"><i class="ti ti-zoom-in"></i></div>
         <div class="glabel wp-card-info">
           <div class="gname wp-card-name">Wallpaper Special Set</div>
           <div class="gsize">Digital Download</div>
@@ -6632,9 +6631,9 @@ var NORMAL_PATTERNS = [
   {name:'Totally Cute',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:CDN_BASE+'/images/normal-31.jpg',localImg:'./images/normal-31.jpg'},
   {name:'Forevermore',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:CDN_BASE+'/images/normal-32.jpg',localImg:'./images/normal-32.jpg'},
   {name:'Sugarplum',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:CDN_BASE+'/images/normal-33.jpg',localImg:'./images/normal-33.jpg'},
-  {name:'Veggies',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:CDN_BASE+'/images/normal-34.png',localImg:'./images/normal-34.png'},
-  {name:'Floral Cottage',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:CDN_BASE+'/images/normal-35.png',localImg:'./images/normal-35.png'},
-  {name:'Picnic',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:CDN_BASE+'/images/normal-36.png',localImg:'./images/normal-36.png'}
+  {name:'Veggies',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:CDN_BASE+'/images/normal-34-web.jpg',localImg:'./images/normal-34-web.jpg'},
+  {name:'Floral Cottage',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:CDN_BASE+'/images/normal-35-web.jpg',localImg:'./images/normal-35-web.jpg'},
+  {name:'Picnic',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:CDN_BASE+'/images/normal-36-web.jpg',localImg:'./images/normal-36-web.jpg'}
 ];
 
 var LARGE_PATTERNS = [
@@ -6653,27 +6652,27 @@ var EASY_PATTERNS = [
 ];
 
 var MAXI_PATTERNS = [
-  {name:'Diary\'s Musketeers',size:'13.5 × 6 × 17 inch',sizeKey:'maxi',priceOrig:550,img:CDN_BASE+'/images/Maxxi2.png',localImg:'./images/Maxxi2.png'}
+  {name:'Diary\'s Musketeers',size:'13.5 × 6 × 17 inch',sizeKey:'maxi',priceOrig:550,img:CDN_BASE+'/images/Maxxi2.jpg',localImg:'./images/Maxxi2.jpg'}
 ];
 
 var ALL_PATTERNS = NORMAL_PATTERNS.concat(LARGE_PATTERNS).concat(EASY_PATTERNS).concat(MAXI_PATTERNS);
 
 var STICKER_PATTERNS = [
-  {name:'Black Swan',img:CDN_BASE+'/sticker/BlackSwan.PNG',localImg:'./sticker/BlackSwan.PNG',price:69},
-  {name:'Castle purple (Alexa)',img:CDN_BASE+'/sticker/Castle%20purple%20(Alexa).PNG',localImg:'./sticker/Castle%20purple%20(Alexa).PNG',price:69},
-  {name:'Castle purple (Liana)',img:CDN_BASE+'/sticker/Castle%20purple%20(Liana)PNG.PNG',localImg:'./sticker/Castle%20purple%20(Liana)PNG.PNG',price:69},
-  {name:'Elina (Rainbow Magic)',img:CDN_BASE+'/sticker/Elina%20(Rainbow%20Magic).png',localImg:'./sticker/Elina%20(Rainbow%20Magic).png',price:69},
-  {name:'Elina Mermaidia',img:CDN_BASE+'/sticker/Elina%20Mermaidia.PNG',localImg:'./sticker/Elina%20Mermaidia.PNG',price:69},
-  {name:'Nori Mermaidia',img:CDN_BASE+'/sticker/Nori%20Mermaidia.PNG',localImg:'./sticker/Nori%20Mermaidia.PNG',price:69},
-  {name:'Nutcracker🍬',img:CDN_BASE+'/sticker/Nutcracker%F0%9F%8D%AC.PNG',localImg:'./sticker/Nutcracker%F0%9F%8D%AC.PNG',price:69},
-  {name:'Rapunzel (Paint)',img:CDN_BASE+'/sticker/Rapunzel%20(Paint).PNG',localImg:'./sticker/Rapunzel%20(Paint).PNG',price:69},
-  {name:'Rapunzel (princess)',img:CDN_BASE+'/sticker/Rapunzel%20(princess).PNG',localImg:'./sticker/Rapunzel%20(princess).PNG',price:69},
-  {name:'Swan Lake',img:CDN_BASE+'/sticker/SwanlakePNG.PNG',localImg:'./sticker/SwanlakePNG.PNG',price:69}
+  {name:'Black Swan',img:CDN_BASE+'/sticker/BlackSwan.webp',localImg:'./sticker/BlackSwan.webp',price:69},
+  {name:'Castle purple (Alexa)',img:CDN_BASE+'/sticker/Castle%20purple%20(Alexa).webp',localImg:'./sticker/Castle%20purple%20(Alexa).webp',price:69},
+  {name:'Castle purple (Liana)',img:CDN_BASE+'/sticker/Castle%20purple%20(Liana)PNG.webp',localImg:'./sticker/Castle%20purple%20(Liana)PNG.webp',price:69},
+  {name:'Elina (Rainbow Magic)',img:CDN_BASE+'/sticker/Elina%20(Rainbow%20Magic).webp',localImg:'./sticker/Elina%20(Rainbow%20Magic).webp',price:69},
+  {name:'Elina Mermaidia',img:CDN_BASE+'/sticker/Elina%20Mermaidia.webp',localImg:'./sticker/Elina%20Mermaidia.webp',price:69},
+  {name:'Nori Mermaidia',img:CDN_BASE+'/sticker/Nori%20Mermaidia.webp',localImg:'./sticker/Nori%20Mermaidia.webp',price:69},
+  {name:'Nutcracker🍬',img:CDN_BASE+'/sticker/Nutcracker%F0%9F%8D%AC.webp',localImg:'./sticker/Nutcracker%F0%9F%8D%AC.webp',price:69},
+  {name:'Rapunzel (Paint)',img:CDN_BASE+'/sticker/Rapunzel%20(Paint).webp',localImg:'./sticker/Rapunzel%20(Paint).webp',price:69},
+  {name:'Rapunzel (princess)',img:CDN_BASE+'/sticker/Rapunzel%20(princess).webp',localImg:'./sticker/Rapunzel%20(princess).webp',price:69},
+  {name:'Swan Lake',img:CDN_BASE+'/sticker/SwanlakePNG.webp',localImg:'./sticker/SwanlakePNG.webp',price:69}
 ];
 
 var WP_PATTERNS = [
-  {name:'Wallpaper',price:99,img:CDN_BASE+'/images/wallphone.png',localImg:'./images/wallphone.png'},
-  {name:'Wallpaper Special Set',price:99,img:CDN_BASE+'/images/wallphone.png',localImg:'./images/wallphone.png'}
+  {name:'Wallpaper',price:99,img:CDN_BASE+'/images/wallphone.jpg',localImg:'./images/wallphone.jpg'},
+  {name:'Wallpaper Special Set',price:99,img:CDN_BASE+'/images/wallphone.jpg',localImg:'./images/wallphone.jpg'}
 ];
 
 var BASE_SHIPPING = 0;
@@ -6894,7 +6893,7 @@ function buildGallery() {
 
     html += '<div class="gcard' + (isPicked ? ' picked' : '') + '" onclick="togglePattern(\'' + safeName + '\')">'
       + flashBadge
-      + '<img class="gimg" src="' + p.img + '" onerror="handleImgError(this, \'' + safeName + '\', \'' + (p.localImg || '') + '\')" alt="' + escHtml(p.name) + '" />'
+      + '<img class="gimg" loading="lazy" decoding="async" src="' + p.img + '" onerror="handleImgError(this, \'' + safeName + '\', \'' + (p.localImg || '') + '\')" alt="' + escHtml(p.name) + '" />'
       + '<div class="gzoom" onclick="event.stopPropagation();openImgLightbox(\'' + p.img + '\')"><i class="ti ti-zoom-in"></i></div>'
       + '<div class="glabel">'
       + '<div class="gname">' + escHtml(p.name) + '</div>'
@@ -7030,7 +7029,7 @@ function stickerBuildGallery() {
     var safeImg = p.img.replace(/'/g, "\\'");
     var safeName = p.name.replace(/'/g, "\\'");
     return '<div class="gcard" onclick="openStickerPreview(\'' + safeImg + '\')" style="cursor:zoom-in;">'
-      + '<img class="gimg" src="' + p.img + '" onerror="handleImgError(this, \'' + safeName + '\', \'' + (p.localImg || '') + '\')" alt="' + escHtml(p.name) + '"/>'
+      + '<img class="gimg" loading="lazy" decoding="async" src="' + p.img + '" onerror="handleImgError(this, \'' + safeName + '\', \'' + (p.localImg || '') + '\')" alt="' + escHtml(p.name) + '"/>'
       + '<div class="gzoom"><i class="ti ti-zoom-in"></i></div>'
       + '<div class="glabel">'
       + '<div class="gname">' + escHtml(p.name) + '</div>'
@@ -7505,6 +7504,8 @@ function toggleSelectAllOrders(){var boxes=Array.from(document.querySelectorAll(
 function getSelectedOrderIds(){return Array.from(document.querySelectorAll('.order-select:checked')).map(function(x){return x.value})}
 function exportSelectedOrdersExcel(){
   if(!isAdmin())return;var ids=getSelectedOrderIds();if(!ids.length){showToast('เลือกออเดอร์ก่อน Export นะคะ');return}
+  // The Excel library is only fetched when an admin exports (falls back to CSV if it cannot load).
+  if(!window.XLSX&&!exportSelectedOrdersExcel._tried){exportSelectedOrdersExcel._tried=true;var lib=document.createElement('script');lib.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';lib.onload=lib.onerror=function(){exportSelectedOrdersExcel()};document.head.appendChild(lib);return}
   var rows=getOrders().filter(function(o){return ids.indexOf(o.id)>-1});
   var data=rows.map(function(o){var qty=Number(o.total_bags||0);return {
     'เลขคิว':o.queue_no||'', 'Order ID':o.id||'', 'ชื่อผู้รับ':o.customer_name||'', 'เบอร์โทร':normalizePhone(o.customer_phone), 'ที่อยู่':o.customer_address||'',
@@ -7908,7 +7909,7 @@ function renderWallpaperGallery() {
       name: 'Wallpaper Special Set',
       size: 'Digital Download',
       price: 99,
-      image_url: 'https://helloxglitterstore.vercel.app/images/wallphone.png',
+      image_url: 'https://helloxglitterstore.vercel.app/images/wallphone.jpg',
       download_url: 'https://drive.google.com/drive/folders/1xhovSRun2q6O4g7S_wDKwuHuETZVk10-?usp=sharing'
     }];
   }
@@ -7932,7 +7933,7 @@ function renderWallpaperGallery() {
       window.wpPicked[p.name] = displayQty;
     }
 
-    var img = p.image_url || p.imageUrl || 'https://helloxglitterstore.vercel.app/images/wallphone.png';
+    var img = p.image_url || p.imageUrl || 'https://helloxglitterstore.vercel.app/images/wallphone.jpg';
     var name = p.name || 'Wallpaper';
     var price = Number(p.price || 99);
     var sizeLabel = p.size || 'Digital Download';
@@ -7940,7 +7941,7 @@ function renderWallpaperGallery() {
 
     html += `
       <div class="gcard wp-card ${isPicked ? 'picked' : ''}" id="wpCard-${esc(pId)}" data-wp-id="${esc(pId)}" data-hlg-badge="${esc(window.hlgBadgeKey ? window.hlgBadgeKey({type:'wallpaper',name:name,id:pId}) : '')}" onclick="wpTogglePattern('${esc(pId)}')">
-        <img class="gimg wp-card-img" src="${esc(img)}" onerror="handleImgError(this, '${esc(name)}', './images/wallphone.png')" alt="${esc(name)}"/>
+        <img class="gimg wp-card-img" loading="lazy" decoding="async" src="${esc(img)}" onerror="handleImgError(this, '${esc(name)}', './images/wallphone.jpg')" alt="${esc(name)}"/>
         <div class="gzoom wp-zoom" onclick="event.stopPropagation();openImgLightbox('${esc(img)}')" title="ซูมดูรูปขนาดใหญ่"><i class="ti ti-zoom-in"></i></div>
         ${isAdm ? `
           <div class="wp-card-admin-bar" style="position:absolute;top:8px;left:8px;z-index:10;display:flex;gap:4px" onclick="event.stopPropagation()">
@@ -8166,6 +8167,8 @@ var bgMusic = null;
 function getAudio() {
   if (!bgMusic) {
     bgMusic = new Audio(CDN_BASE + '/music/dereks-tune.mp3');
+    // Fetch the song only once it actually plays, not while the page is loading.
+    bgMusic.preload = 'none';
     bgMusic.loop = true;
     bgMusic.volume = 0.5;
     bgMusic.onerror = function() {
@@ -18203,6 +18206,18 @@ dialog.hlgc-product-dialog::backdrop{background:rgba(43,22,39,.60);backdrop-filt
 </style>
 <style id="hlg-receipt-png-style">
 #hlgReceiptImageViewer{position:fixed;inset:0;z-index:1000003;display:flex;justify-content:center;align-items:center;box-sizing:border-box;padding:calc(10px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom));background:rgba(42,23,39,.78);backdrop-filter:blur(6px)}#hlgReceiptImageViewer .hrp-viewer{width:min(100%,600px);max-height:100%;overflow:auto;border-radius:18px;background:#fff8fb;padding:14px;box-sizing:border-box;text-align:center;-webkit-overflow-scrolling:touch}#hlgReceiptImageViewer img{display:block;width:100%;height:auto;max-width:100%;border-radius:12px;box-shadow:0 4px 22px #8f49643a;touch-action:auto}#hlgReceiptImageViewer h3{color:#b44678;margin:2px 0 5px}#hlgReceiptImageViewer p{font-size:12px;color:#856675;line-height:1.5}#hlgReceiptImageViewer .hrp-buttons{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:10px 0}#hlgReceiptImageViewer .hrp-buttons a,#hlgReceiptImageViewer .hrp-buttons button{border:0;border-radius:10px;background:#be4a7a;color:#fff;padding:10px 14px;font:inherit;font-size:13px;text-decoration:none;cursor:pointer}#hlgReceiptImageViewer .hrp-buttons .hrp-close{background:#f3dce7;color:#8d4367}
+</style>
+<style id="hlg-smooth-scroll-css">
+/* Smooth scrolling and hover. These effects made the browser redo layout or re-blur the page on every frame:
+   - the floating hearts moved with margin-top (layout each frame) → move with translate on the GPU instead
+   - backdrop blur on every product card's zoom button, the sticky navbar and the notice cards
+   - decorations inside pages that are not on screen kept animating */
+@keyframes v8MarbleFloatY{from{translate:0 0}to{translate:0 var(--moveY)}}
+.v8-marble-heart{will-change:transform}
+.gzoom{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;background:rgba(255,255,255,.93)}
+.navbar{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;background:#fff}
+.v8-page-glass-card{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;background-color:rgba(255,255,255,.8)}
+.page:not(.active) *,.page:not(.active) *::before,.page:not(.active) *::after{animation-play-state:paused!important}
 </style>
 <style id="hlg-sales-lock-css">
 .gcard.hlg-locked{position:relative;cursor:not-allowed}

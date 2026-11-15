@@ -7,6 +7,12 @@
       "permanent": false
     }
   ],
+  "headers": [
+    {
+      "source": "/(images|sticker|music)/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=604800" }]
+    }
+  ],
   "rewrites": [
     { "source": "/designer", "destination": "/From_Designer/designer.html" },
     { "source": "/admin", "destination": "/api/admin-logout" },
