@@ -15084,7 +15084,7 @@ document.addEventListener('DOMContentLoaded',ensure);if(document.readyState!=='l
   100%{transform:translate3d(var(--drift),112vh,0);opacity:0}
 }
 #hlgSnowLayer.hlg-snow-paused .hlg-snowflake{animation-play-state:paused}
-@media(max-width:600px){.hlg-snowflake:nth-child(n+43){display:none}}
+@media(max-width:600px){.hlg-snowflake:nth-child(n+29){display:none}}
 @media(prefers-reduced-motion:reduce){#hlgSnowLayer .hlg-snowflake{animation:none;top:var(--staticTop);opacity:.55}}
 </style>
 <script id="hlg-snow-background-js">
@@ -18218,6 +18218,19 @@ dialog.hlgc-product-dialog::backdrop{background:rgba(43,22,39,.60);backdrop-filt
 .navbar{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;background:#fff}
 .v8-page-glass-card{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;background-color:rgba(255,255,255,.8)}
 .page:not(.active) *,.page:not(.active) *::before,.page:not(.active) *::after{animation-play-state:paused!important}
+/* Frame rate: work the GPU had to redo on every frame while scrolling or while the decorations move.
+   - the page background was background-attachment:fixed (whole screen repainted per scroll frame) → its own fixed layer
+   - blur behind the bottom menu, slide captions and back button was recomputed per frame
+   - each floating heart carried a 36px drop-shadow filter applied again on every animation frame */
+body{background:none!important;background-attachment:scroll!important}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:
+  radial-gradient(circle at 18% 16%, rgba(255,255,255,.72) 0 7%, rgba(255,255,255,0) 23%),
+  radial-gradient(circle at 78% 28%, rgba(255,246,252,.92) 0 12%, rgba(255,246,252,0) 34%),
+  radial-gradient(circle at 52% 72%, rgba(255,255,255,.72) 0 10%, rgba(255,255,255,0) 30%),
+  linear-gradient(180deg,#fff4f9 0%,#fff7fb 46%,#fff2f7 100%)}
+#v8BottomQuickNav{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;background:rgba(255,255,255,.97)}
+.promo-slide-caption,.page-backbtn{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+.v8-marble-heart{filter:none!important}
 /* Pages that are not showing are not rendered at all, so their pictures are not fetched until the page opens. */
 .page:not(.active){content-visibility:hidden}
 </style>
