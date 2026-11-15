@@ -35,9 +35,9 @@ var NORMAL_PATTERNS=[
   {name:'Totally Cute',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'/images/normal-31.jpg'},
   {name:'Forevermore',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'/images/normal-32.jpg'},
   {name:'Sugarplum',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'/images/normal-33.jpg'},
-  {name:'Veggies',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'/images/normal-34.png'},
-  {name:'Floral Cottage',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'/images/normal-35.png'},
-  {name:'Picnic',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'/images/normal-36.png'}
+  {name:'Veggies',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'/images/normal-34-web.jpg'},
+  {name:'Floral Cottage',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'/images/normal-35-web.jpg'},
+  {name:'Picnic',size:'15 × 16 inch',sizeKey:'normal',priceOrig:399,img:'/images/normal-36-web.jpg'}
 ];
 var LARGE_PATTERNS=[
   {name:'Magic Pegasus',size:'15.5 × 4 × 16 inch',sizeKey:'large',priceOrig:499,img:'/images/large-01.jpg'},
@@ -53,14 +53,14 @@ var EASY_PATTERNS=[
   {name:'Diary\'s MARIE (purple)',size:'10.5 × 5 × 14 inch',sizeKey:'easy',priceOrig:425,img:'/images/easy-02.jpg'}
 ];
 var MAXI_PATTERNS=[
-  {name:'Diary\'s Musketeers',size:'13.5 × 6 × 17 inch',sizeKey:'maxi',priceOrig:550,img:'/images/Maxxi2.png'}
+  {name:'Diary\'s Musketeers',size:'13.5 × 6 × 17 inch',sizeKey:'maxi',priceOrig:550,img:'/images/Maxxi2.jpg'}
 ];
 var ALL_PATTERNS = NORMAL_PATTERNS.concat(LARGE_PATTERNS).concat(EASY_PATTERNS).concat(MAXI_PATTERNS);
 
 // ==================== WALLPAPER PATTERNS ====================
 var WP_PATTERNS = [
-  {name:'Wallpaper',price:99,img:'/images/wallphone.png',localImg:'./images/wallphone.png'},
-  {name:'Wallpaper Special Set',price:99,img:'/images/wallphone.png',localImg:'./images/wallphone.png'}
+  {name:'Wallpaper',price:99,img:'/images/wallphone.jpg',localImg:'./images/wallphone.jpg'},
+  {name:'Wallpaper Special Set',price:99,img:'/images/wallphone.jpg',localImg:'./images/wallphone.jpg'}
 ];
 
 // ==================== PROMO TIERS (disabled — using full prices) ====================
@@ -151,16 +151,16 @@ var STICKER_SHIPPING = 50;
 var STICKER_FREE_SHIPPING_QTY = 3;
 
 var STICKER_PATTERNS = [
-  {name:'Black Swan',img:'/sticker/BlackSwan.PNG',price:69},
-  {name:'Castle purple (Alexa)',img:'/sticker/Castle%20purple%20(Alexa).PNG',price:69},
-  {name:'Castle purple (Liana)',img:'/sticker/Castle%20purple%20(Liana)PNG.PNG',price:69},
-  {name:'Elina (Rainbow Magic)',img:'/sticker/Elina%20(Rainbow%20Magic).png',price:69},
-  {name:'Elina Mermaidia',img:'/sticker/Elina%20Mermaidia.PNG',price:69},
-  {name:'Nori Mermaidia',img:'/sticker/Nori%20Mermaidia.PNG',price:69},
-  {name:'Nutcracker🍬',img:'/sticker/Nutcracker%F0%9F%8D%AC.PNG',price:69},
-  {name:'Rapunzel (Paint)',img:'/sticker/Rapunzel%20(Paint).PNG',price:69},
-  {name:'Rapunzel (princess)',img:'/sticker/Rapunzel%20(princess).PNG',price:69},
-  {name:'Swan Lake',img:'/sticker/SwanlakePNG.PNG',price:69},
+  {name:'Black Swan',img:'/sticker/BlackSwan.webp',price:69},
+  {name:'Castle purple (Alexa)',img:'/sticker/Castle%20purple%20(Alexa).webp',price:69},
+  {name:'Castle purple (Liana)',img:'/sticker/Castle%20purple%20(Liana)PNG.webp',price:69},
+  {name:'Elina (Rainbow Magic)',img:'/sticker/Elina%20(Rainbow%20Magic).webp',price:69},
+  {name:'Elina Mermaidia',img:'/sticker/Elina%20Mermaidia.webp',price:69},
+  {name:'Nori Mermaidia',img:'/sticker/Nori%20Mermaidia.webp',price:69},
+  {name:'Nutcracker🍬',img:'/sticker/Nutcracker%F0%9F%8D%AC.webp',price:69},
+  {name:'Rapunzel (Paint)',img:'/sticker/Rapunzel%20(Paint).webp',price:69},
+  {name:'Rapunzel (princess)',img:'/sticker/Rapunzel%20(princess).webp',price:69},
+  {name:'Swan Lake',img:'/sticker/SwanlakePNG.webp',price:69},
 ];
 
 function computeStickerPrice(picked) {

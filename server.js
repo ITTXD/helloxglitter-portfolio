@@ -2534,12 +2534,21 @@ function serveStatic(req, res) {
       res.end('404 Not Found');
       return;
     }
-    res.writeHead(200, {
+    // Pages and scripts are always re-checked (a 304 when unchanged, so a new deploy shows at once);
+    // pictures, music and fonts may be kept for a day.
+    const etag = '"' + crypto.createHash('sha1').update(data).digest('base64') + '"';
+    const longLived = /^(image|audio|video|font)\//.test(contentType);
+    const headers = {
       'Content-Type': contentType,
-      'Cache-Control': 'no-store, no-cache, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0',
-    });
+      'Cache-Control': longLived ? 'public, max-age=86400, stale-while-revalidate=604800' : 'public, max-age=0, must-revalidate',
+      'ETag': etag,
+    };
+    if (req.headers && req.headers['if-none-match'] === etag) {
+      res.writeHead(304, headers);
+      res.end();
+      return;
+    }
+    res.writeHead(200, headers);
     res.end(data);
   });
 }
