@@ -90,7 +90,7 @@
   .hlg-stock-card b { display: block; color: #80425f; }
   .hlg-stock-card small { color: #947c89; }
   .hlg-stock-card input[type="number"] { width: 95px; max-width: 100%; padding: 9px; border: 1px solid #e8cbd9; border-radius: 10px; font: inherit; }
-  #stockManagerContainer button { border: 1px solid #dcaabe; border-radius: 10px; background: #fff4f8; color: #a53d69; padding: 9px 12px; font: inherit; font-weight: 700; cursor: pointer; }
+  #stockManagerContainer button, #lockManagerContainer button { border: 1px solid #dcaabe; border-radius: 10px; background: #fff4f8; color: #a53d69; padding: 9px 12px; font: inherit; font-weight: 700; cursor: pointer; }
   .hlg-stock-qty { color: #96627b; font-weight: 700; }
   .hlg-stock-low { color: #d3486c; }
   .hlg-stock-off { color: #8c8590; }
@@ -159,6 +159,7 @@
       <button class="topbar-tab" data-view="products" onclick="switchView('products')"><i class="ti ti-box"></i> สินค้าและโปรโมชั่น</button>
       <button class="topbar-tab" data-view="coupons" onclick="switchView('coupons')"><i class="ti ti-ticket"></i> คูปอง</button>
       <button class="topbar-tab" data-view="stock" onclick="switchView('stock')"><i class="ti ti-package"></i> สต็อก</button>
+      <button class="topbar-tab" data-view="lock" onclick="switchView('lock')"><i class="ti ti-lock"></i> ล็อกการขาย</button>
       <button class="topbar-tab" data-view="receipt" onclick="switchView('receipt')"><i class="ti ti-receipt"></i> ใบสรุป / ขอบคุณ</button>
       <button class="topbar-tab" data-view="summary" onclick="switchView('summary')"><i class="ti ti-file-description"></i> สรุปยอด</button>
       <button class="topbar-tab" data-view="print" onclick="switchView('print')"><i class="ti ti-printer"></i> พิมพ์ใบแปะหน้าพัสดุ</button>
@@ -328,6 +329,15 @@
     </div>
   </div>
 
+  <!-- VIEW: SALES LOCK -->
+  <div id="viewLock" class="admin-view hidden">
+    <div style="padding:20px;max-width:1000px;margin:0 auto">
+      <h2><i class="ti ti-lock"></i> ล็อกการขาย</h2>
+      <p style="color:#807078;margin-top:8px">ปิดรับออเดอร์ชั่วคราว ทั้งร้าน ทั้งหมวด หรือเฉพาะบางสินค้า ตั้งเวลาปลดล็อกเองได้</p>
+      <div id="lockManagerContainer"></div>
+    </div>
+  </div>
+
   <!-- VIEW: RECEIPT / THANK-YOU -->
   <div id="viewReceipt" class="admin-view hidden">
     <div style="padding:20px;max-width:1000px;margin:0 auto">
@@ -439,7 +449,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="/data/site-sync.js"></script>
+<script src="/data/sales-lock.js"></script>
 <script src="/data/patterns.js"></script>
-<script src="/admin/admin.js?v=20261102a"></script>
+<script src="/admin/admin.js?v=20261115a"></script>
 </body>
 </html>
