@@ -18218,6 +18218,8 @@ dialog.hlgc-product-dialog::backdrop{background:rgba(43,22,39,.60);backdrop-filt
 .navbar{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;background:#fff}
 .v8-page-glass-card{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;background-color:rgba(255,255,255,.8)}
 .page:not(.active) *,.page:not(.active) *::before,.page:not(.active) *::after{animation-play-state:paused!important}
+/* Pages that are not showing are not rendered at all, so their pictures are not fetched until the page opens. */
+.page:not(.active){content-visibility:hidden}
 </style>
 <style id="hlg-sales-lock-css">
 .gcard.hlg-locked{position:relative;cursor:not-allowed}
