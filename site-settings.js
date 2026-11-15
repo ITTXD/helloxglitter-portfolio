@@ -17,6 +17,8 @@
  */
 'use strict';
 
+const salesLock = require('./sales-lock');
+
 const DOC_ID = 'site_kv';
 
 // Every key a customer-facing page reads that only the admin writes.
@@ -43,6 +45,7 @@ const SYNC_KEYS = [
   'hlg_public_copy_v1',
   'hlg_v6_home_products',
   'hlg_collections_v1',
+  'hlg_sales_lock_v1',
 ];
 const ALLOWED = new Set(SYNC_KEYS);
 const MAX_VALUE_CHARS = 200 * 1024;
@@ -107,6 +110,28 @@ async function handleSiteSettingsApi(req, res, pathname, method, ctx) {
   return false;
 }
 
+/**
+ * Why a customer request may not be placed right now ("ล็อกการขาย"), or ''.
+ * @param store { get(collection, id) }
+ * @param kind 'order' | 'quote' | 'sticker' | 'wallpaper' — which request body shape
+ */
+async function salesLockProblem(store, kind, body) {
+  const b = body && typeof body === 'object' ? body : {};
+  let items = [];
+  if (kind === 'wallpaper') items = [{ type: 'wallpaper', name: 'Wallpaper Special Set', variant: 'Digital Download' }];
+  else if (kind === 'sticker') {
+    const pats = b.order && Array.isArray(b.order.patterns) ? b.order.patterns : [];
+    items = pats.map(p => ({ type: 'sticker', name: typeof p === 'string' ? p : String((p && p.name) || ''), variant: '' }));
+    if (!items.length) items = [{ type: 'sticker', name: '', variant: '' }];
+  } else if (Array.isArray(b.items) && b.items.length) items = b.items;
+  // Legacy bag form: only pattern names, always bags.
+  else if (Array.isArray(b.patterns)) items = b.patterns.map(p => ({ type: 'bag', name: String(p || ''), variant: '' }));
+  if (!items.length) return '';
+  const kv = (await store.get('settings', DOC_ID)) || {};
+  const found = salesLock.problem(items, kv.values && kv.values[salesLock.KEY]);
+  return found ? found.text : '';
+}
+
 // Stock key used by the storefront guard and the admin stock editor.
 function stockKey(item) {
   return JSON.stringify([String(item.type || 'bag'), String(item.name || ''), String(item.variant || '')]);
@@ -133,4 +158,4 @@ function stockUsed(inventoryJson, orders) {
   return used;
 }
 
-module.exports = { handleSiteSettingsApi, stockUsed, stockKey, SYNC_KEYS, DOC_ID };
+module.exports = { handleSiteSettingsApi, stockUsed, stockKey, SYNC_KEYS, DOC_ID, salesLockProblem };

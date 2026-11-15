@@ -536,6 +536,9 @@ module.exports = async (req, res) => {
       }
 
       const body = await readBody(req);
+      // ล็อกการขาย: the admin has paused these items (admin-created orders are exempt).
+      const lockedSale = isAdmin(req) ? '' : await siteSettings.salesLockProblem(storyStore, 'quote', body);
+      if (lockedSale) { sendJson(res, 423, { error: lockedSale, code: 'SALES_LOCKED' }); return; }
       try {
         const now = Date.now();
         const config = await pricingConfig.loadConfig(firestorePricingStore);
@@ -994,6 +997,9 @@ module.exports = async (req, res) => {
     // POST /api/wallpaper/order — ลูกค้าสั่งซื้อ Wallpaper (ไม่ต้อง auth)
     if (pathname === '/api/wallpaper/order' && method === 'POST') {
       const body = await readBody(req);
+      // ล็อกการขาย: the admin has paused these items (admin-created orders are exempt).
+      const lockedSale = isAdmin(req) ? '' : await siteSettings.salesLockProblem(storyStore, 'wallpaper', body);
+      if (lockedSale) { sendJson(res, 423, { error: lockedSale, code: 'SALES_LOCKED' }); return; }
       if (!body.customer_info) {
         sendJson(res, 400, { error: 'กรุณากรอกข้อมูลให้ครบ' }); return;
       }
@@ -1372,6 +1378,9 @@ module.exports = async (req, res) => {
     // POST /api/orders — ลูกค้าสั่งซื้อ (ไม่ต้อง auth)
     if (pathname === '/api/orders' && method === 'POST') {
       const body = await readBody(req);
+      // ล็อกการขาย: the admin has paused these items (admin-created orders are exempt).
+      const lockedSale = isAdmin(req) ? '' : await siteSettings.salesLockProblem(storyStore, 'order', body);
+      if (lockedSale) { sendJson(res, 423, { error: lockedSale, code: 'SALES_LOCKED' }); return; }
       const cust = extractCustomerFields(body);
       const patterns = (body.patterns && body.patterns.length > 0)
         ? body.patterns
@@ -1644,6 +1653,9 @@ module.exports = async (req, res) => {
     // POST /api/sticker/order — สร้างออเดอร์สติกเกอร์ + ตรวจสอบสลีปผ่าน EasySlip (ไม่ต้อง auth)
     if (pathname === '/api/sticker/order' && method === 'POST') {
       const body = await readBody(req);
+      // ล็อกการขาย: the admin has paused these items (admin-created orders are exempt).
+      const lockedSale = isAdmin(req) ? '' : await siteSettings.salesLockProblem(storyStore, 'sticker', body);
+      if (lockedSale) { sendJson(res, 423, { error: lockedSale, code: 'SALES_LOCKED' }); return; }
       const orderData = body.order;
       const slipData = body.slip_data;
 

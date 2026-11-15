@@ -790,6 +790,9 @@ function switchView(view) {
   var vs = document.getElementById('viewStock');
   if (vs) vs.classList.toggle('hidden', view !== 'stock');
   if (view === 'stock') { if (typeof window.hlgRenderStock === 'function') window.hlgRenderStock(); }
+  var vl = document.getElementById('viewLock');
+  if (vl) vl.classList.toggle('hidden', view !== 'lock');
+  if (view === 'lock') { if (typeof window.hlgRenderSalesLock === 'function') window.hlgRenderSalesLock(); }
   var vr = document.getElementById('viewReceipt');
   if (vr) vr.classList.toggle('hidden', view !== 'receipt');
   if (view === 'receipt') { if (typeof window.hlgRenderReceipt === 'function') window.hlgRenderReceipt(); }
@@ -3698,6 +3701,96 @@ async function deletePreviewCard(idx) {
   window.hlgRenderFonts = renderFonts;
   window.hlgRenderCoupons = renderCoupons;
   window.hlgRenderStock = renderStock;
+
+  /* ================= SALES LOCK (ล็อกการขาย) ================= */
+  // Rules live in localStorage hlg_sales_lock_v1; site-sync.js pushes every save to the shop.
+  // Matching is done by /data/sales-lock.js, the same file the storefront and server use.
+  var lockEditing = null;
+  var LOCK_TARGETS = [['all', 'ทั้งร้าน (ทุกสินค้า)'], ['type:bag', 'กระเป๋าทุกลาย'], ['size:normal', 'กระเป๋า Normal'], ['size:large', 'กระเป๋า Large'], ['size:easy', 'กระเป๋า Easy Bag'], ['size:maxi', 'กระเป๋า Maxi'], ['type:sticker', 'สติกเกอร์ทั้งหมด'], ['type:wallpaper', 'Wallpaper'], ['type:custom', 'สินค้าหมวดที่สร้างเอง'], ['selected', 'เลือกสินค้าเอง…']];
+  function lockCore() { return window.hlgSalesLockCore; }
+  function lockLoad() { return lockCore().parse(localStorage.getItem(lockCore().KEY)).rules; }
+  function lockSave(rules) {
+    try { localStorage.setItem(lockCore().KEY, JSON.stringify({ rules: rules })); return true; }
+    catch (e) { adminToast('บันทึกไม่สำเร็จ'); return false; }
+  }
+  function lockTargetName(r) {
+    if (r.target === 'selected') return 'สินค้าที่เลือก ' + (r.skus || []).length + ' ชิ้น';
+    var t = LOCK_TARGETS.find(function(x) { return x[0] === r.target; });
+    return t ? t[1] : r.target;
+  }
+  function lockState(r) {
+    if (r.enabled === false) return ['ปิดอยู่', '#8a7a82'];
+    if (lockCore().active(r)) return ['🔒 กำลังล็อก', '#c0392b'];
+    var start = r.start ? Date.parse(r.start + '+07:00') : NaN;
+    return Number.isFinite(start) && Date.now() < start ? ['รอเวลาเริ่ม', '#b7791f'] : ['หมดเวลาแล้ว', '#8a7a82'];
+  }
+  function lockQuick(target, message) {
+    var rules = lockLoad();
+    rules.unshift({ id: 'l' + Date.now(), target: target, message: message, enabled: true, start: '', end: '', updated: Date.now() });
+    if (lockSave(rules)) { lockPaint(); adminToast('ล็อกแล้ว ลูกค้าจะสั่งไม่ได้จนกว่าจะปลด ✓'); }
+  }
+  function lockPickList(picked) {
+    var q = (($('#hlgLockSearch') || {}).value || '').toLowerCase();
+    var set = new Set(picked || []);
+    return catalog().filter(function(x) { return (x.name + ' ' + (x.variant || '')).toLowerCase().indexOf(q) >= 0; }).map(function(x) {
+      var k = lockCore().sku(x);
+      return '<label style="display:flex;gap:7px;align-items:center;padding:4px 0;font-size:12px"><input type="checkbox" class="hlg-lock-sku" value="' + esc(k) + '" ' + (set.has(k) ? 'checked' : '') + '> ' + esc(x.name) + ' <small style="color:#947c89">' + esc(x.variant || x.type) + '</small></label>';
+    }).join('') || '<small>ไม่พบสินค้าค่ะ</small>';
+  }
+  function lockPicked() { return Array.prototype.map.call(document.querySelectorAll('.hlg-lock-sku:checked'), function(i) { return i.value; }); }
+  function lockPaint() {
+    var root = $('#lockManagerContainer');
+    if (!root) return;
+    if (!lockCore()) { root.innerHTML = '<div class="hlg-stock-intro">โหลดระบบล็อกไม่สำเร็จ กรุณารีเฟรชหน้าค่ะ</div>'; return; }
+    var rules = lockLoad();
+    var edit = lockEditing ? rules.find(function(r) { return r.id === lockEditing; }) : null;
+    var f = edit || { target: 'type:bag', message: '', start: '', end: '', skus: [] };
+    root.innerHTML = '<div class="hlg-stock-intro"><b>ล็อกการขาย ♡</b><br>สินค้าที่ล็อกยังโชว์ในหน้าร้าน แต่ลูกค้ากดเลือกและสั่งซื้อไม่ได้ ปลดล็อกเมื่อไหร่ก็กลับมาขายได้ทันที บิลที่ลูกค้าสร้างไว้ก่อนล็อกยังจ่ายได้ตามปกติ</div>'
+      + '<div class="hlg-stock-toolbar"><button type="button" id="hlgLockQuickBag">🔒 ปิดรับกระเป๋าทั้งหมด</button><button type="button" id="hlgLockQuickAll">🔒 ปิดร้านชั่วคราว</button></div>'
+      + '<div class="hlg-stock-intro" style="background:#fff"><b>' + (edit ? 'แก้ไขกฎล็อก' : 'สร้างกฎล็อกเอง') + '</b>'
+      + '<div style="display:grid;gap:9px;margin-top:9px">'
+      + '<label>ล็อกอะไร <select id="hlgLockTarget" style="padding:8px;border:1px solid #e8cbd9;border-radius:10px;font:inherit">' + LOCK_TARGETS.map(function(t) { return '<option value="' + t[0] + '"' + (t[0] === f.target ? ' selected' : '') + '>' + t[1] + '</option>'; }).join('') + '</select></label>'
+      + '<div id="hlgLockPick" style="' + (f.target === 'selected' ? '' : 'display:none') + '"><input id="hlgLockSearch" type="search" placeholder="ค้นหาชื่อสินค้า" style="width:100%;box-sizing:border-box;padding:8px;border:1px solid #e8cbd9;border-radius:10px;font:inherit"><div id="hlgLockPickList" style="max-height:220px;overflow:auto;border:1px solid #f0d7e3;border-radius:10px;padding:6px 10px;margin-top:6px">' + lockPickList(f.skus) + '</div></div>'
+      + '<label>ข้อความถึงลูกค้า <input id="hlgLockMsg" type="text" maxlength="120" value="' + esc(f.message || '') + '" placeholder="' + esc(lockCore().DEFAULT_MESSAGE) + '" style="width:100%;box-sizing:border-box;padding:8px;border:1px solid #e8cbd9;border-radius:10px;font:inherit"></label>'
+      + '<div style="display:flex;gap:10px;flex-wrap:wrap"><label>เริ่มล็อก (ไม่ใส่ = ทันที) <input id="hlgLockStart" type="datetime-local" value="' + esc(f.start || '') + '"></label><label>ปลดล็อกเอง (ไม่ใส่ = จนกว่าจะปลด) <input id="hlgLockEnd" type="datetime-local" value="' + esc(f.end || '') + '"></label></div>'
+      + '<div class="hlg-stock-toolbar" style="margin:0"><button type="button" id="hlgLockSave">' + (edit ? '💾 บันทึกการแก้ไข' : '＋ เพิ่มกฎล็อก') + '</button>' + (edit ? '<button type="button" id="hlgLockCancel">ยกเลิก</button>' : '') + '</div>'
+      + '</div></div>'
+      + '<h3 style="margin:16px 0 8px;color:#80425f">กฎล็อกทั้งหมด</h3>'
+      + (rules.map(function(r) {
+        var st = lockState(r);
+        return '<div class="hlg-stock-card" data-lock-id="' + esc(r.id) + '"><div><b>' + esc(lockTargetName(r)) + '</b><small>' + esc(lockCore().message(r)) + '</small></div>'
+          + '<div style="color:' + st[1] + ';font-weight:800;font-size:12px">' + st[0] + '</div>'
+          + '<small>' + (r.start ? esc(r.start.replace('T', ' ')) : 'เริ่มทันที') + ' – ' + (r.end ? esc(r.end.replace('T', ' ')) : 'ไม่กำหนด') + '</small>'
+          + '<div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" data-lock-act="toggle">' + (r.enabled === false ? 'เปิดล็อก' : '🔓 ปลดล็อก') + '</button><button type="button" data-lock-act="edit">แก้ไข</button><button type="button" data-lock-act="delete">ลบ</button></div></div>';
+      }).join('') || '<div class="hlg-stock-intro">ยังไม่มีกฎล็อก ตอนนี้ลูกค้าสั่งซื้อได้ทุกอย่างค่ะ</div>');
+    $('#hlgLockQuickBag').onclick = function() { lockQuick('type:bag', 'ปิดรับออเดอร์กระเป๋าชั่วคราวค่ะ'); };
+    $('#hlgLockQuickAll').onclick = function() { if (confirm('ปิดร้านชั่วคราว ลูกค้าจะสั่งซื้อไม่ได้ทุกสินค้า ใช่ไหมคะ?')) lockQuick('all', 'ร้านปิดรับออเดอร์ชั่วคราวค่ะ'); };
+    $('#hlgLockTarget').onchange = function() { $('#hlgLockPick').style.display = this.value === 'selected' ? '' : 'none'; };
+    $('#hlgLockSearch').oninput = function() { var keep = lockPicked(); $('#hlgLockPickList').innerHTML = lockPickList(keep); };
+    var cancel = $('#hlgLockCancel'); if (cancel) cancel.onclick = function() { lockEditing = null; lockPaint(); };
+    $('#hlgLockSave').onclick = function() {
+      var target = $('#hlgLockTarget').value, skus = target === 'selected' ? lockPicked() : [];
+      var start = $('#hlgLockStart').value, end = $('#hlgLockEnd').value;
+      if (target === 'selected' && !skus.length) { adminToast('กรุณาเลือกสินค้าอย่างน้อย 1 ชิ้น'); return; }
+      if (start && end && end <= start) { adminToast('เวลาปลดล็อกต้องอยู่หลังเวลาเริ่ม'); return; }
+      var next = lockLoad(), row = { id: lockEditing || 'l' + Date.now(), target: target, skus: skus, message: $('#hlgLockMsg').value.trim(), enabled: true, start: start, end: end, updated: Date.now() };
+      var i = next.findIndex(function(r) { return r.id === row.id; });
+      if (i >= 0) { row.enabled = next[i].enabled !== false; next[i] = row; } else next.unshift(row);
+      if (lockSave(next)) { lockEditing = null; lockPaint(); adminToast('บันทึกกฎล็อกแล้ว ✓'); }
+    };
+    root.querySelectorAll('[data-lock-act]').forEach(function(b) {
+      b.onclick = function() {
+        var id = b.closest('[data-lock-id]').dataset.lockId, next = lockLoad(), i = next.findIndex(function(r) { return r.id === id; });
+        if (i < 0) return;
+        var act = b.dataset.lockAct;
+        if (act === 'edit') { lockEditing = id; lockPaint(); root.scrollIntoView({ block: 'start' }); return; }
+        if (act === 'delete') { if (!confirm('ลบกฎล็อกนี้ใช่ไหมคะ?')) return; next.splice(i, 1); }
+        if (act === 'toggle') { next[i].enabled = next[i].enabled === false; next[i].updated = Date.now(); }
+        if (lockSave(next)) { if (lockEditing === id) lockEditing = null; lockPaint(); adminToast(act === 'delete' ? 'ลบแล้ว' : next[i].enabled === false ? 'ปลดล็อกแล้ว ลูกค้าสั่งได้ตามปกติ ✓' : 'เปิดล็อกแล้ว ✓'); }
+      };
+    });
+  }
+  window.hlgRenderSalesLock = lockPaint;
   window.hlgRenderReceipt = renderReceipt;
   window.hlgApplyAdminFont = applyFont;
 
