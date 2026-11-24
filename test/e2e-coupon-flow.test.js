@@ -4,6 +4,7 @@
 const http = require('http');
 const assert = require('assert');
 
+// Needs a server started with LINE_DEV_LOGIN=1 (sign-in by id; production requires a LINE access token).
 const BASE_URL = 'http://localhost:3000';
 
 function request(method, path, body = null, headers = {}) {

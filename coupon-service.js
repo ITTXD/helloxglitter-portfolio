@@ -369,25 +369,95 @@ async function markCouponAsUsed(db, code, orderId) {
   return coupon;
 }
 
-/**
- * Verify or mock LINE User session
+/* ---------- LINE identity ----------
+ * The login cookie carries an HMAC of the LINE user id, so a customer cannot claim to be
+ * someone else by editing the cookie or sending another id in a request body.
+ * The id itself only comes from LINE: /api/auth/line/verify asks api.line.me who owns the
+ * LIFF access token (fetchLineProfile).
  */
+const crypto = require('crypto');
+function lineSecret() {
+  return process.env.SESSION_SECRET || process.env.ADMIN_PASSWORD || 'hlg-line-session-v1';
+}
+function signLineId(id) {
+  return crypto.createHmac('sha256', lineSecret()).update('line:' + String(id)).digest('hex');
+}
+function lineSessionCookies(user) {
+  const id = encodeURIComponent(user.line_user_id);
+  return [
+    `line_user_id=${id}; Path=/; SameSite=Lax; Max-Age=31536000`,
+    `line_display_name=${encodeURIComponent(user.line_display_name || '')}; Path=/; SameSite=Lax; Max-Age=31536000`,
+    `line_sig=${signLineId(user.line_user_id)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`,
+  ];
+}
+function clearLineSessionCookies() {
+  return ['line_user_id=; Path=/; Max-Age=0', 'line_display_name=; Path=/; Max-Age=0', 'line_sig=; Path=/; Max-Age=0'];
+}
+
+/** Logged-in LINE customer from a signed cookie, or null (unsigned or tampered cookies count as logged out). */
 function parseLineUserFromRequest(req) {
-  const header = req.headers.cookie || '';
+  const header = (req.headers && req.headers.cookie) || '';
   const cookies = {};
   header.split(';').forEach(c => {
     const [k, ...v] = c.split('=');
-    if (k) cookies[k.trim()] = decodeURIComponent(v.join('='));
+    if (k) { try { cookies[k.trim()] = decodeURIComponent(v.join('=')); } catch (e) { cookies[k.trim()] = v.join('='); } }
   });
+  if (!cookies.line_user_id || !cookies.line_sig) return null;
+  const want = signLineId(cookies.line_user_id);
+  const got = String(cookies.line_sig);
+  if (got.length !== want.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(want))) return null;
+  return {
+    line_user_id: cookies.line_user_id,
+    line_display_name: cookies.line_display_name || 'ลูกค้า LINE',
+    line_picture_url: cookies.line_picture_url || '',
+  };
+}
 
-  if (cookies.line_user_id) {
-    return {
-      line_user_id: cookies.line_user_id,
-      line_display_name: cookies.line_display_name || 'ลูกค้า LINE',
-      line_picture_url: cookies.line_picture_url || '',
-    };
+/** Ask LINE who owns a LIFF access token. Returns { userId, displayName, pictureUrl } or null. */
+async function fetchLineProfile(accessToken, fetchImpl) {
+  const token = String(accessToken || '').trim();
+  if (!token) return null;
+  try {
+    const res = await (fetchImpl || fetch)('https://api.line.me/v2/profile', { headers: { Authorization: 'Bearer ' + token } });
+    if (!res || !res.ok) return null;
+    const p = await res.json();
+    return p && p.userId ? { userId: String(p.userId), displayName: p.displayName || '', pictureUrl: p.pictureUrl || '' } : null;
+  } catch (e) {
+    return null;
   }
-  return null;
+}
+
+/* ---------- earning ---------- */
+/** Money spent on stickers in an order (only the sticker lines when the cart also had other things). */
+function stickerSpend(order) {
+  const items = Array.isArray(order && order.items) ? order.items : [];
+  if (items.length) {
+    return items.reduce((n, x) => n + (x && x.type === 'sticker' ? (Number(x.price) || 0) * Math.max(1, Number(x.qty) || 1) : 0), 0);
+  }
+  return order && order.type === 'sticker' ? Number(order.total_price || 0) : 0;
+}
+
+function digits(s) { return String(s || '').replace(/\D/g, ''); }
+
+/**
+ * Why this customer may not claim a coupon for this order, or ''.
+ * The order must be paid, belong to the customer (same LINE account, or the phone number on
+ * the order when it was placed without LINE), and have enough sticker spend.
+ */
+function claimProblem(order, { lineUserId, phone, campaign, isPaid }) {
+  if (!order) return 'ไม่พบออเดอร์นี้ในระบบ';
+  if (!isPaid(order)) return 'ออเดอร์นี้ยังไม่ได้รับการยืนยันการชำระเงิน';
+  const owner = String(order.line_user_id || '').trim();
+  if (owner) {
+    if (owner !== lineUserId) return 'ออเดอร์นี้เป็นของบัญชี LINE อื่น ไม่สามารถเคลมได้ค่ะ';
+  } else {
+    const p = digits(phone), o = digits(order.customer_phone);
+    if (!p || p.length < 9 || p !== o) return 'กรุณากรอกเบอร์โทรที่ใช้สั่งออเดอร์นี้ให้ถูกต้องค่ะ';
+  }
+  const spend = stickerSpend(order);
+  if (!spend) return 'ออเดอร์นี้ไม่มีสินค้าหมวด Sticker';
+  if (spend < Number(campaign.threshold_amount || 0)) return `ยอดซื้อสติกเกอร์ (${spend} ฿) ไม่ถึงเกณฑ์ขั้นต่ำ ${campaign.threshold_amount} ฿`;
+  return '';
 }
 
 module.exports = {
@@ -402,4 +472,10 @@ module.exports = {
   validateCouponForCheckout,
   markCouponAsUsed,
   parseLineUserFromRequest,
+  signLineId,
+  lineSessionCookies,
+  clearLineSessionCookies,
+  fetchLineProfile,
+  stickerSpend,
+  claimProblem,
 };

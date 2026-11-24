@@ -19243,6 +19243,7 @@ window.openLineAccount=function(){
                 method:'POST',
                 headers:{'Content-Type':'application/json'},
                 body:JSON.stringify({
+                  access_token:window.liff.getAccessToken?.()||'',
                   line_user_id:profile.userId,
                   line_display_name:profile.displayName,
                   line_picture_url:profile.pictureUrl
@@ -19314,7 +19315,7 @@ window.openCoupons=async function(){
 
   let coupons=[];
   try{
-    const res=await fetch(`/api/coupons/my-coupons?line_user_id=${encodeURIComponent(user.line_user_id)}`);
+    const res=await fetch('/api/coupons/my-coupons',{credentials:'include'});
     if(res.ok){
       const data=await res.json();
       coupons=data.coupons||[];
@@ -19339,11 +19340,12 @@ window.openCoupons=async function(){
     </div>
     <div class="hlg-claim-box">
       <h5>⚡ มีออเดอร์ Sticker ที่ชำระเงินแล้ว?</h5>
-      <div style="font-size:11px;color:#856475">กรอกรหัสออเดอร์ Sticker เพื่อกดรับสิทธิ์คูปองย้อนหลัง:</div>
+      <div style="font-size:11px;color:#856475">ปกติคูปองจะเข้าอัตโนมัติเมื่อชำระเงิน ถ้ายังไม่ได้ กรอกเลขออเดอร์ที่มีสติกเกอร์เพื่อรับสิทธิ์ย้อนหลัง:</div>
       <div class="hlg-claim-input-group">
-        <input id="claimOrderIdInp" placeholder="เช่น STK-20260909-XXXX">
+        <input id="claimOrderIdInp" placeholder="เลขออเดอร์ เช่น HLG-261030-XXXXX">
         <button type="button" id="btnClaimOrder">รับคูปอง</button>
       </div>
+      <input id="claimPhoneInp" inputmode="tel" placeholder="เบอร์โทรที่ใช้สั่ง (ถ้าตอนสั่งไม่ได้ล็อกอิน LINE)" aria-label="เบอร์โทรที่ใช้สั่ง" style="width:100%;box-sizing:border-box;margin-top:6px;padding:9px 11px;border:1px solid #ecc7d7;border-radius:10px;font:inherit;font-size:16px">
       <div id="claimResultMsg" style="font-size:11px;margin-top:6px"></div>
     </div>`;
   }else{
@@ -19378,9 +19380,10 @@ window.openCoupons=async function(){
     <div class="hlg-claim-box" style="margin-top:14px">
       <h5>⚡ มีออเดอร์ Sticker ที่ยังไม่ได้รับคูปอง?</h5>
       <div class="hlg-claim-input-group">
-        <input id="claimOrderIdInp" placeholder="รหัสออเดอร์ Sticker เช่น STK-...">
+        <input id="claimOrderIdInp" placeholder="เลขออเดอร์ เช่น HLG-261030-XXXXX">
         <button type="button" id="btnClaimOrder">รับคูปอง</button>
       </div>
+      <input id="claimPhoneInp" inputmode="tel" placeholder="เบอร์โทรที่ใช้สั่ง (ถ้าตอนสั่งไม่ได้ล็อกอิน LINE)" aria-label="เบอร์โทรที่ใช้สั่ง" style="width:100%;box-sizing:border-box;margin-top:6px;padding:9px 11px;border:1px solid #ecc7d7;border-radius:10px;font:inherit;font-size:16px">
       <div id="claimResultMsg" style="font-size:11px;margin-top:6px"></div>
     </div>`;
   }
@@ -19394,7 +19397,8 @@ window.openCoupons=async function(){
       const res=await fetch('/api/coupons/claim',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({order_id:orderId,line_user_id:user.line_user_id})
+        credentials:'include',
+        body:JSON.stringify({order_id:orderId,phone:($('#claimPhoneInp')?.value||'').trim()})
       });
       const data=await res.json();
       if(!res.ok||data.error)throw new Error(data.error||'ไม่สามารถรับสิทธิ์ได้');
@@ -19544,6 +19548,7 @@ async function linkLineProfile(){
     headers:{'Content-Type':'application/json'},
     credentials:'include',
     body:JSON.stringify({
+      access_token:window.liff.getAccessToken?.()||'',
       line_user_id:profile.userId,
       line_display_name:profile.displayName,
       line_picture_url:profile.pictureUrl
@@ -19571,6 +19576,10 @@ async function initLineLiff(){
     liffReadyResolve(true);
     if(window.liff.isLoggedIn()){
       await linkLineProfile();
+    }else if(!data.authenticated&&getLineUser()){
+      // Saved from an older visit but the server no longer recognises it (sessions are now signed):
+      // show the customer as signed out so they log in with LINE again.
+      setLineUser(null);refreshLineUi();
     }else if(inLineApp()&&!getLineUser()&&sessionStorage.getItem(LINE_AUTO_TRIED)!=='1'){
       // Inside LINE the login is a silent hop through the app, so do it for the customer.
       sessionStorage.setItem(LINE_AUTO_TRIED,'1');
