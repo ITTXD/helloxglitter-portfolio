@@ -2306,8 +2306,9 @@ function renderProductsView() {
             <textarea id="hlgProdDesc" rows="8" maxlength="4000" placeholder="เช่น ขนาด วัสดุ ของแถม วันเปิด–ปิดพรี วันจัดส่ง" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff;resize:vertical;line-height:1.6"></textarea>
           </label>
           <label style="display:block;font-size:13px;color:#765461;font-weight:600">
-            อัปโหลดรูปสินค้า
-            <input id="hlgImageFile" type="file" accept="image/*" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+            รูปสินค้า <small style="font-weight:400;color:#9a7f8c">(เลือกได้หลายรูป รูปแรกเป็นรูปปก ลูกค้าปัดดูได้)</small>
+            <input id="hlgImageFile" type="file" accept="image/*" multiple style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+            <div id="hlgProdThumbs" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px"></div>
           </label>
           <label style="display:block;font-size:13px;color:#765461;font-weight:600">
             หรือใส่ลิงก์รูป HTTPS
@@ -2338,6 +2339,8 @@ function renderProductsView() {
     document.getElementById("hlgDownloadWrap").style.display = isWp ? "" : "none";
   };
   document.getElementById("hlgProductForm").onsubmit = saveProduct;
+  document.getElementById("hlgImageFile").onchange = addProductPictures;
+  paintProductPictures();
   document.getElementById("hlgProductCancel").onclick = resetProductForm;
   renderProductList();
 }
@@ -2398,6 +2401,47 @@ function renderProductList() {
   });
 }
 
+// Pictures of the product being edited; the first is the cover.
+let productPictures = [];
+function productPictureList(x) {
+  const list = Array.isArray(x && x.images) ? x.images.filter(Boolean) : [];
+  const first = (x && (x.image_url || x.imageUrl)) || "";
+  if (first && list.indexOf(first) < 0) list.unshift(first);
+  return list;
+}
+function paintProductPictures() {
+  const box = document.getElementById("hlgProdThumbs");
+  if (!box) return;
+  box.innerHTML = productPictures.map((u, i) => `<div style="position:relative;width:72px;height:72px;border-radius:10px;overflow:hidden;border:1px solid #f0d0de;background:#fff5f9"><img src="${escapeHtmlAttr(u)}" style="width:100%;height:100%;object-fit:cover">${i === 0 ? '<span style="position:absolute;left:0;right:0;bottom:0;background:#bc4b7bdd;color:#fff;font-size:10px;text-align:center">รูปปก</span>' : `<button type="button" data-pic-move="${i}" title="เลื่อนไปข้างหน้า" style="position:absolute;left:3px;bottom:3px;border:0;border-radius:6px;background:#fffe;color:#a8406f;font-size:11px;cursor:pointer">◀</button>`}<button type="button" data-pic-del="${i}" title="ลบรูป" style="position:absolute;right:3px;top:3px;border:0;border-radius:6px;background:#fffe;color:#c03865;font-weight:800;cursor:pointer">×</button></div>`).join("");
+  box.querySelectorAll("[data-pic-del]").forEach(b => b.onclick = () => { productPictures.splice(Number(b.dataset.picDel), 1); paintProductPictures(); });
+  box.querySelectorAll("[data-pic-move]").forEach(b => b.onclick = () => { const i = Number(b.dataset.picMove); const x = productPictures.splice(i, 1)[0]; productPictures.splice(i - 1, 0, x); paintProductPictures(); });
+}
+// Pictures are shrunk before upload so several fit in one save request.
+function shrinkPicture(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 1400 / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); resolve(c.toDataURL("image/jpeg", 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(Error("อ่านไฟล์รูปภาพไม่สำเร็จ")); };
+    img.src = url;
+  });
+}
+async function addProductPictures() {
+  const input = document.getElementById("hlgImageFile");
+  const files = Array.from(input.files || []);
+  input.value = "";
+  for (const f of files) {
+    if (productPictures.length >= 12) { showToast("error", "ใส่รูปได้สูงสุด 12 รูปต่อสินค้า"); break; }
+    try { productPictures.push(await shrinkPicture(f)); } catch (err) { showToast("error", err.message); }
+  }
+  paintProductPictures();
+}
+
 function editProductRow(id) {
   const x = customProducts.find(r => r.id === id);
   if (!x) return;
@@ -2407,8 +2451,10 @@ function editProductRow(id) {
   document.getElementById("hlgSize").value = x.sizeKey || x.size_key || "normal";
   document.getElementById("hlgPrice").value = x.price;
   document.getElementById("hlgProdDesc").value = x.description || "";
-  document.getElementById("hlgImageUrl").value = x.image_url || x.imageUrl || "";
+  document.getElementById("hlgImageUrl").value = "";
   document.getElementById("hlgImageFile").value = "";
+  productPictures = productPictureList(x);
+  paintProductPictures();
 
   const isBag = (x.category_id || x.type) === "bag";
   const isWp = (x.category_id || x.type) === "wallpaper";
@@ -2429,6 +2475,8 @@ function resetProductForm() {
   document.getElementById("hlgProdDesc").value = "";
   document.getElementById("hlgImageUrl").value = "";
   document.getElementById("hlgImageFile").value = "";
+  productPictures = [];
+  paintProductPictures();
   const dlInput = document.getElementById("hlgDownloadUrl");
   if (dlInput) dlInput.value = "";
   const dlWrap = document.getElementById("hlgDownloadWrap");
@@ -2446,21 +2494,15 @@ async function saveProduct(e) {
   const price = Number(document.getElementById("hlgPrice").value);
   const sizeKey = document.getElementById("hlgSize").value;
   const description = document.getElementById("hlgProdDesc").value.trim();
-  const file = document.getElementById("hlgImageFile").files[0];
   const imageUrlInput = document.getElementById("hlgImageUrl").value.trim();
   const downloadUrlInput = document.getElementById("hlgDownloadUrl") ? document.getElementById("hlgDownloadUrl").value.trim() : "";
 
   if (!name || isNaN(price) || price < 0) { showToast("กรอกชื่อและราคาที่ถูกต้อง"); return; }
 
-  let image_url = imageUrlInput;
-  if (file) {
-    try {
-      image_url = await fileToBase64(file);
-    } catch (err) {
-      showToast("อ่านไฟล์รูปภาพไม่สำเร็จ");
-      return;
-    }
-  }
+  // A pasted link joins the pictures (as cover when there is none yet).
+  const images = productPictures.slice();
+  if (imageUrlInput && images.indexOf(imageUrlInput) < 0) images.push(imageUrlInput);
+  const image_url = images[0] || "";
 
   const sizeMap = { normal: 'Normal · 15×16"', large: 'Large · 15.5×4×16"', easy: 'Easy Bag · 10.5×5×14"', maxi: 'Maxi · 13.5×6×17"' };
   const payload = {
@@ -2470,6 +2512,7 @@ async function saveProduct(e) {
     price,
     description,
     image_url,
+    images,
     download_url: downloadUrlInput,
     download_link: downloadUrlInput,
     size_key: category_id === 'bag' ? sizeKey : '',
