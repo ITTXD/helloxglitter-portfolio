@@ -13,6 +13,11 @@ const {
   validateCouponForCheckout,
   markCouponAsUsed,
   parseLineUserFromRequest,
+  lineSessionCookies,
+  clearLineSessionCookies,
+  fetchLineProfile,
+  stickerSpend,
+  claimProblem,
 } = require('../coupon-service');
 const { sendCouponFlexMessage, sendOrderReceiptFlexMessage } = require('../line-service');
 const pricingConfig = require('../pricing-config');
@@ -557,7 +562,6 @@ module.exports = async (req, res) => {
           categories: Array.isArray(storefront.categories) ? storefront.categories : []
         }, { now: now });
         const cookieUser = parseLineUserFromRequest(req);
-        const bodyLineUserId = body && typeof body === 'object' && !Array.isArray(body) ? body.line_user_id : '';
         const result = await quoteService.issueQuote({
           body: body,
           config: config,
@@ -568,7 +572,8 @@ module.exports = async (req, res) => {
           store: firestoreQuoteStore,
           couponValidator: validateCouponForCheckout,
           db: db,
-          lineUserId: cookieUser ? cookieUser.line_user_id : bodyLineUserId,
+          // Coupons in a quote belong to the signed-in LINE account only.
+          lineUserId: cookieUser ? cookieUser.line_user_id : '',
           now: now
         });
         sendJson(res, 200, result.response);
@@ -1230,31 +1235,21 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // POST /api/auth/line/verify — ยืนยันหรือจำลองการเข้าสู่ระบบ LINE
+    // POST /api/auth/line/verify — sign in with LINE. The account comes from LINE itself:
+    // the LIFF access token is checked with api.line.me, a user id in the body is not trusted.
     if (pathname === '/api/auth/line/verify' && method === 'POST') {
       const body = await readBody(req);
-      const lineUserId = (body.line_user_id || body.userId || '').trim();
-      const displayName = (body.line_display_name || body.displayName || 'ลูกค้า LINE').trim();
-      const pictureUrl = (body.line_picture_url || body.pictureUrl || '').trim();
-
-      if (!lineUserId) {
-        sendJson(res, 400, { error: 'กรุณาระบุ LINE User ID' });
+      const profile = await fetchLineProfile(body.access_token);
+      // Tests / local dev without LINE may sign in by id when LINE_DEV_LOGIN=1.
+      const devId = !profile && process.env.LINE_DEV_LOGIN === '1' ? String(body.line_user_id || body.userId || '').trim() : '';
+      if (!profile && !devId) {
+        sendJson(res, 401, { error: 'ยืนยันบัญชี LINE ไม่สำเร็จ กรุณาเข้าสู่ระบบ LINE อีกครั้งค่ะ' });
         return;
       }
-
-      const user = {
-        line_user_id: lineUserId,
-        line_display_name: displayName,
-        line_picture_url: pictureUrl,
-      };
-
-      res.writeHead(200, {
-        'Content-Type': 'application/json',
-        'Set-Cookie': [
-          `line_user_id=${encodeURIComponent(lineUserId)}; Path=/; SameSite=Lax`,
-          `line_display_name=${encodeURIComponent(displayName)}; Path=/; SameSite=Lax`,
-        ],
-      });
+      const user = profile
+        ? { line_user_id: profile.userId, line_display_name: profile.displayName || 'ลูกค้า LINE', line_picture_url: profile.pictureUrl || '' }
+        : { line_user_id: devId, line_display_name: String(body.line_display_name || body.displayName || 'ลูกค้า LINE').trim(), line_picture_url: String(body.line_picture_url || body.pictureUrl || '').trim() };
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Set-Cookie': lineSessionCookies(user) });
       res.end(JSON.stringify({ success: true, user }));
       return;
     }
@@ -1281,8 +1276,7 @@ module.exports = async (req, res) => {
       res.writeHead(200, {
         'Content-Type': 'application/json',
         'Set-Cookie': [
-          'line_user_id=; Path=/; Max-Age=0',
-          'line_display_name=; Path=/; Max-Age=0',
+          ...clearLineSessionCookies(),
         ],
       });
       res.end(JSON.stringify({ success: true }));
@@ -1291,9 +1285,9 @@ module.exports = async (req, res) => {
 
     // GET /api/coupons/my-coupons — ดึงคูปองของลูกค้าตาม LINE User ID
     if (pathname === '/api/coupons/my-coupons' && method === 'GET') {
-      const queryUser = url.searchParams ? url.searchParams.get('line_user_id') : null;
+      // Only the signed-in customer's own coupons (a line_user_id in the URL is ignored).
       const user = parseLineUserFromRequest(req);
-      const lineUserId = queryUser || (user ? user.line_user_id : null);
+      const lineUserId = user ? user.line_user_id : null;
       if (!lineUserId) {
         sendJson(res, 200, { success: true, coupons: [] });
         return;
@@ -1303,48 +1297,31 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // POST /api/coupons/claim — เคลมคูปองย้อนหลังด้วยเลขออเดอร์สติกเกอร์ที่ชำระแล้ว
+    // POST /api/coupons/claim — claim the coupon of a paid order with stickers, for its own customer only
     if (pathname === '/api/coupons/claim' && method === 'POST') {
       const body = await readBody(req);
-      const orderId = (body.order_id || '').trim();
+      const orderId = String(body.order_id || '').trim();
       const lineUser = parseLineUserFromRequest(req);
-      const lineUserId = (body.line_user_id || (lineUser ? lineUser.line_user_id : '')).trim();
-      const displayName = body.line_display_name || (lineUser ? lineUser.line_display_name : 'ลูกค้า LINE');
-
       if (!orderId) { sendJson(res, 400, { error: 'กรุณาระบุเลขออเดอร์' }); return; }
-      if (!lineUserId) { sendJson(res, 400, { error: 'กรุณาเข้าสู่ระบบ LINE ก่อนเคลมคูปอง' }); return; }
-
+      if (!lineUser) { sendJson(res, 401, { error: 'กรุณาเข้าสู่ระบบ LINE ก่อนเคลมคูปอง' }); return; }
       const qOrder = query(collection(db, 'orders'), where('id', '==', orderId), limit(1));
       const snapOrder = await getDocs(qOrder);
-      if (snapOrder.empty) {
-        sendJson(res, 404, { error: 'ไม่พบออเดอร์นี้ในระบบ' });
-        return;
-      }
-      const order = { _docId: snapOrder.docs[0].id, ...snapOrder.docs[0].data() };
-
-      if (order.type !== 'sticker') {
-        sendJson(res, 400, { error: 'ออเดอร์นี้ไม่ใช่สินค้าหมวด Sticker' });
-        return;
-      }
-      if (order.status !== 1) {
-        sendJson(res, 400, { error: 'ออเดอร์นี้ยังไม่ได้รับการยืนยันการชำระเงิน' });
-        return;
-      }
-
+      const order = snapOrder.empty ? null : { _docId: snapOrder.docs[0].id, ...snapOrder.docs[0].data() };
       const campaign = await getCouponCampaign(db);
-      const stickerSpend = Number(order.total_price || 0);
-      if (stickerSpend < campaign.threshold_amount) {
-        sendJson(res, 400, { error: `ยอดซื้อสติกเกอร์ (${stickerSpend} ฿) ไม่ถึงเกณฑ์ขั้นต่ำ ${campaign.threshold_amount} ฿` });
-        return;
-      }
-
+      if (!campaign.active) { sendJson(res, 400, { error: 'ตอนนี้ไม่มีแคมเปญคูปองค่ะ' }); return; }
+      const problem = claimProblem(order, { lineUserId: lineUser.line_user_id, phone: body.phone, campaign, isPaid: lifecycle.isPaid });
+      if (problem) { sendJson(res, order ? 400 : 404, { error: problem }); return; }
       const coupon = await issueCouponForStickerOrder({
         db,
         orderId,
-        lineUserId,
-        lineDisplayName: displayName,
+        lineUserId: lineUser.line_user_id,
+        lineDisplayName: lineUser.line_display_name,
       });
-
+      // A coupon already issued for this order to another account stays with that account.
+      if (coupon && coupon.line_user_id && coupon.line_user_id !== lineUser.line_user_id) {
+        sendJson(res, 409, { error: 'คูปองของออเดอร์นี้ถูกเคลมไปแล้วค่ะ' });
+        return;
+      }
       sendJson(res, 200, { success: true, coupon });
       return;
     }
@@ -1354,7 +1331,7 @@ module.exports = async (req, res) => {
       const body = await readBody(req);
       const code = body.code || body.coupon_code;
       const lineUser = parseLineUserFromRequest(req);
-      const lineUserId = body.line_user_id || (lineUser ? lineUser.line_user_id : null);
+      const lineUserId = lineUser ? lineUser.line_user_id : null;
       const subtotal = Number(body.subtotal != null ? body.subtotal : (body.subtotal_satang != null ? body.subtotal_satang / 100 : 0));
       const items = body.items || (body.category ? [{ type: body.category, price: subtotal }] : []);
 
@@ -1419,7 +1396,7 @@ module.exports = async (req, res) => {
         const valResult = await validateCouponForCheckout({
           db,
           code: couponCode,
-          lineUserId,
+          lineUserId: lineUser ? lineUser.line_user_id : '',
           items: patterns,
           subtotal: basePrice,
         });
@@ -1715,7 +1692,7 @@ module.exports = async (req, res) => {
 
       const campaign = await getCouponCampaign(db);
       let issuedCoupon = null;
-      if (campaign.active && totalPrice >= campaign.threshold_amount && lineUserId) {
+      if (campaign.active && totalPrice >= campaign.threshold_amount && lineUser) {
         try {
           issuedCoupon = await issueCouponForStickerOrder({
             db,
@@ -1888,7 +1865,7 @@ module.exports = async (req, res) => {
         const valResult = await validateCouponForCheckout({
           db,
           code: couponCode,
-          lineUserId,
+          lineUserId: lineUser ? lineUser.line_user_id : '',
           items: patterns,
           subtotal: basePrice,
         });
@@ -2081,7 +2058,23 @@ module.exports = async (req, res) => {
         });
       }
 
-      sendJson(res, 201, { success: true, order });
+      // Sticker spend reached the campaign: the coupon is issued now, with the paid order.
+      let issuedCoupon = null;
+      try {
+        const campaign = await getCouponCampaign(db);
+        const owner = lineUser ? lineUser.line_user_id : String(order.line_user_id || '').trim();
+        const spend = stickerSpend(order);
+        if (campaign.active && owner && spend > 0 && spend >= Number(campaign.threshold_amount || 0)) {
+          issuedCoupon = await issueCouponForStickerOrder({ db, orderId, lineUserId: owner, lineDisplayName: lineUser ? lineUser.line_display_name : 'ลูกค้า LINE' });
+          if (issuedCoupon && issuedCoupon.line_user_id === owner) {
+            sendCouponFlexMessage(owner, issuedCoupon).catch(err => console.warn('[LINE OA] Coupon push flex message error:', err.message));
+          }
+        }
+      } catch (cErr) {
+        console.warn('[COUPON] Error issuing coupon on confirm:', cErr.message);
+      }
+
+      sendJson(res, 201, { success: true, order, coupon: issuedCoupon });
       return;
     }
 

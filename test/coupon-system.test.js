@@ -15,6 +15,7 @@ process.env.FIREBASE_APP_ID = '1:123:web:abc';
 process.env.ADMIN_PASSWORD = 'helloxglitter';
 process.env.SESSION_SECRET = 'test-secret';
 process.env.EASYSLIP_API_KEY = 'test-easyslip-key';
+process.env.LINE_DEV_LOGIN = '1'; // sign in by id in tests (production needs a LINE access token)
 
 // Mock global fetch for EasySlip verification
 global.fetch = async (url, opts) => {
@@ -128,8 +129,14 @@ Module.prototype.require = function(request) {
   return origRequire.apply(this, arguments);
 };
 
-const serverHandler = require('../server');
+// COUPON_TEST_TARGET=vercel runs the same cases against api/[...path].js (the live handler).
+const serverHandler = require(process.env.COUPON_TEST_TARGET === 'vercel' ? '../api/[...path]' : '../server');
 const couponService = require('../coupon-service');
+
+// Signed LINE session cookie, as /api/auth/line/verify sets it.
+function lineCookie(id) {
+  return 'line_user_id=' + encodeURIComponent(id) + '; line_sig=' + couponService.signLineId(id);
+}
 
 function createReq(method, url, body = null, cookies = '') {
   return {
@@ -148,6 +155,8 @@ function createRes() {
     _status: 200,
     _headers: {},
     _body: '',
+    setHeader(k, v) { this._headers[k] = v; },
+    getHeader(k) { return this._headers[k]; },
     writeHead: (status, headers = {}) => {
       res._status = status;
       res._headers = { ...res._headers, ...headers };
@@ -253,7 +262,7 @@ async function runTests() {
 
   await itAsync('GET /api/auth/line/me returns current session info', async () => {
     const res = createRes();
-    const cookie = 'line_user_id=U_LINE_TEST_1; line_display_name=%E0%B8%84%E0%B8%B8%E0%B8%93%E0%B8%AA%E0%B8%A1%E0%B8%8A%E0%B8%B2%E0%B8%A2';
+    const cookie = lineCookie('U_LINE_TEST_1');
     await serverHandler(createReq('GET', '/api/auth/line/me', null, cookie), res);
     assert.strictEqual(res._status, 200);
     const data = JSON.parse(res._body);
@@ -275,7 +284,7 @@ async function runTests() {
       },
       slip_data: 'data:image/jpeg;base64,MOCK_SLIP',
       line_user_id: 'U_LINE_TEST_1'
-    }), res);
+    }, lineCookie('U_LINE_TEST_1')), res);
 
     assert.strictEqual(res._status, 201);
     const data = JSON.parse(res._body);
@@ -298,7 +307,7 @@ async function runTests() {
       slip_data: 'data:image/jpeg;base64,MOCK_SLIP_QUALIFY',
       line_user_id: 'U_LINE_TEST_1',
       line_display_name: 'คุณสมชาย'
-    }), res);
+    }, lineCookie('U_LINE_TEST_1')), res);
 
     assert.strictEqual(res._status, 201);
     const data = JSON.parse(res._body);
@@ -313,7 +322,7 @@ async function runTests() {
 
   await itAsync('GET /api/coupons/my-coupons displays the active coupon in wallet', async () => {
     const res = createRes();
-    await serverHandler(createReq('GET', '/api/coupons/my-coupons?line_user_id=U_LINE_TEST_1'), res);
+    await serverHandler(createReq('GET', '/api/coupons/my-coupons', null, lineCookie('U_LINE_TEST_1')), res);
     assert.strictEqual(res._status, 200);
     const data = JSON.parse(res._body);
     assert.strictEqual(data.success, true);
@@ -330,7 +339,7 @@ async function runTests() {
       line_user_id: 'U_LINE_TEST_1',
       items: [{ type: 'bag', name: 'Merilah Pink', price: 399, qty: 1 }],
       subtotal: 399
-    }), res);
+    }, lineCookie('U_LINE_TEST_1')), res);
 
     assert.strictEqual(res._status, 200);
     const data = JSON.parse(res._body);
@@ -345,7 +354,7 @@ async function runTests() {
       line_user_id: 'U_OTHER_USER',
       items: [{ type: 'bag', name: 'Merilah Pink', price: 399, qty: 1 }],
       subtotal: 399
-    }), res);
+    }, lineCookie('U_OTHER_USER')), res);
 
     assert.strictEqual(res._status, 400);
     const data = JSON.parse(res._body);
@@ -365,7 +374,7 @@ async function runTests() {
         line_user_id: 'U_LINE_TEST_1'
       },
       slip_data: 'data:image/jpeg;base64,MOCK_SLIP_BAG'
-    }), res);
+    }, lineCookie('U_LINE_TEST_1')), res);
 
     assert.strictEqual(res._status, 201);
     const data = JSON.parse(res._body);
@@ -393,7 +402,7 @@ async function runTests() {
         line_user_id: 'U_LINE_TEST_1'
       },
       slip_data: 'data:image/jpeg;base64,MOCK_SLIP_BAG_2'
-    }), res);
+    }, lineCookie('U_LINE_TEST_1')), res);
 
     assert.strictEqual(res._status, 400);
     const data = JSON.parse(res._body);
@@ -416,7 +425,7 @@ async function runTests() {
       line_user_id: 'U_LINE_TEST_1',
       items: [{ type: 'bag', name: 'Blair', price: 399, qty: 1 }],
       subtotal: 399
-    }), res);
+    }, lineCookie('U_LINE_TEST_1')), res);
 
     assert.strictEqual(res._status, 400);
     const data = JSON.parse(res._body);
@@ -436,7 +445,7 @@ async function runTests() {
       line_user_id: 'U_LINE_TEST_1',
       items: [{ type: 'sticker', name: 'Sticker 1', price: 69, qty: 1 }],
       subtotal: 69
-    }), res);
+    }, lineCookie('U_LINE_TEST_1')), res);
 
     assert.strictEqual(res._status, 400);
     const data = JSON.parse(res._body);
@@ -459,7 +468,7 @@ async function runTests() {
       total_price: 399,
       coupon_code: freshCoupon.code,
       line_user_id: 'U_LINE_TEST_1'
-    }), res);
+    }, lineCookie('U_LINE_TEST_1')), res);
 
     assert.strictEqual(res._status, 201);
     const data = JSON.parse(res._body);
@@ -469,6 +478,106 @@ async function runTests() {
     // Verify it is now used
     const c = await couponService.findCouponByCode(null, freshCoupon.code);
     assert.strictEqual(c.status, 'used');
+  });
+
+
+  console.log('\n── 6. IDENTITY, CLAIM OWNERSHIP, AUTO-ISSUE ON CONFIRM ──');
+  await itAsync('An unsigned or edited LINE cookie counts as signed out', async () => {
+    let res = createRes();
+    await serverHandler(createReq('GET', '/api/auth/line/me', null, 'line_user_id=U_LINE_TEST_1'), res);
+    assert.strictEqual(JSON.parse(res._body).authenticated, false);
+    res = createRes();
+    await serverHandler(createReq('GET', '/api/auth/line/me', null, 'line_user_id=U_SOMEONE_ELSE; line_sig=' + couponService.signLineId('U_LINE_TEST_1')), res);
+    assert.strictEqual(JSON.parse(res._body).authenticated, false);
+  });
+
+  await itAsync('Without LINE_DEV_LOGIN, sign-in needs a LINE access token (an id in the body is refused)', async () => {
+    process.env.LINE_DEV_LOGIN = '';
+    try {
+      const res = createRes();
+      await serverHandler(createReq('POST', '/api/auth/line/verify', { line_user_id: 'U_LINE_TEST_1' }), res);
+      assert.strictEqual(res._status, 401);
+    } finally { process.env.LINE_DEV_LOGIN = '1'; }
+  });
+
+  await itAsync('A LINE access token signs in as the account LINE returns', async () => {
+    const realFetch = global.fetch;
+    global.fetch = async (url, opts) => url === 'https://api.line.me/v2/profile' && opts.headers.Authorization === 'Bearer GOOD'
+      ? { ok: true, status: 200, json: async () => ({ userId: 'U_FROM_LINE', displayName: 'จาก LINE' }) }
+      : realFetch(url, opts);
+    try {
+      const res = createRes();
+      await serverHandler(createReq('POST', '/api/auth/line/verify', { access_token: 'GOOD', line_user_id: 'U_FAKE' }), res);
+      assert.strictEqual(res._status, 200);
+      assert.strictEqual(JSON.parse(res._body).user.line_user_id, 'U_FROM_LINE');
+      assert.ok(res._headers['Set-Cookie'].some(c => c.startsWith('line_sig=' + couponService.signLineId('U_FROM_LINE'))));
+    } finally { global.fetch = realFetch; }
+  });
+
+  await itAsync('A LINE id in the body cannot borrow someone else\'s coupon', async () => {
+    const c = await couponService.issueCouponForStickerOrder({ db: null, orderId: 'HXG-OWNER-ONLY', lineUserId: 'U_LINE_TEST_1' });
+    const res = createRes();
+    await serverHandler(createReq('POST', '/api/coupons/validate', {
+      code: c.code, line_user_id: 'U_LINE_TEST_1', items: [{ type: 'bag', name: 'Blair', price: 399, qty: 1 }], subtotal: 399
+    }, lineCookie('U_ATTACKER')), res);
+    assert.strictEqual(res._status, 400);
+  });
+
+  function paidOrder(id, fields) {
+    inMemoryStore.orders['doc_' + id] = Object.assign({ id, status: 2, payment_state: 'paid', slip_verified: true, customer_phone: '0811111111' }, fields);
+  }
+
+  await itAsync('Claim: only the order\'s own LINE account, any paid status, sticker lines of a mixed cart', async () => {
+    paidOrder('HLG-CLAIM-1', { type: 'bag', line_user_id: 'U_BUYER', items: [
+      { type: 'sticker', name: 'S', price: 69, qty: 5 }, { type: 'bag', name: 'B', price: 399, qty: 1 } ] });
+    let res = createRes();
+    await serverHandler(createReq('POST', '/api/coupons/claim', { order_id: 'HLG-CLAIM-1' }, lineCookie('U_ATTACKER')), res);
+    assert.strictEqual(res._status, 400, res._body);
+    assert.ok(JSON.parse(res._body).error.includes('บัญชี LINE อื่น'));
+    res = createRes();
+    await serverHandler(createReq('POST', '/api/coupons/claim', { order_id: 'HLG-CLAIM-1' }, lineCookie('U_BUYER')), res);
+    assert.strictEqual(res._status, 200, res._body);
+    assert.strictEqual(JSON.parse(res._body).coupon.line_user_id, 'U_BUYER');
+  });
+
+  await itAsync('Claim: an order placed without LINE needs its phone number', async () => {
+    paidOrder('HLG-CLAIM-2', { type: 'sticker', items: [{ type: 'sticker', name: 'S', price: 69, qty: 5 }] });
+    let res = createRes();
+    await serverHandler(createReq('POST', '/api/coupons/claim', { order_id: 'HLG-CLAIM-2', phone: '0899999999' }, lineCookie('U_ATTACKER')), res);
+    assert.strictEqual(res._status, 400);
+    res = createRes();
+    await serverHandler(createReq('POST', '/api/coupons/claim', { order_id: 'HLG-CLAIM-2', phone: '081-111-1111' }, lineCookie('U_BUYER2')), res);
+    assert.strictEqual(res._status, 200, res._body);
+  });
+
+  await itAsync('Claim: not signed in, not paid, or too little sticker spend is refused', async () => {
+    paidOrder('HLG-CLAIM-3', { line_user_id: 'U_BUYER', items: [{ type: 'sticker', name: 'S', price: 69, qty: 1 }] });
+    paidOrder('HLG-CLAIM-4', { line_user_id: 'U_BUYER', payment_state: 'awaiting_payment', slip_verified: false, status: 0, items: [{ type: 'sticker', name: 'S', price: 69, qty: 5 }] });
+    let res = createRes();
+    await serverHandler(createReq('POST', '/api/coupons/claim', { order_id: 'HLG-CLAIM-3' }), res);
+    assert.strictEqual(res._status, 401);
+    res = createRes();
+    await serverHandler(createReq('POST', '/api/coupons/claim', { order_id: 'HLG-CLAIM-3' }, lineCookie('U_BUYER')), res);
+    assert.ok(JSON.parse(res._body).error.includes('ไม่ถึงเกณฑ์'), res._body);
+    res = createRes();
+    await serverHandler(createReq('POST', '/api/coupons/claim', { order_id: 'HLG-CLAIM-4' }, lineCookie('U_BUYER')), res);
+    assert.ok(JSON.parse(res._body).error.includes('ยังไม่ได้รับการยืนยัน'), res._body);
+  });
+
+  await itAsync('Confirming a paid cart with enough stickers issues the coupon right away', async () => {
+    const res = createRes();
+    await serverHandler(createReq('POST', '/api/orders/confirm', {
+      order: {
+        customer_name: 'คุณสติกเกอร์', customer_phone: '0822222222', customer_address: 'กรุงเทพ 10110',
+        items: [{ type: 'sticker', name: 'Sticker Pack', price: 69, qty: 5 }],
+        patterns: ['Sticker Pack'], total_price: 345, shipping_cost: 0
+      },
+      slip_data: 'data:image/jpeg;base64,MOCK_SLIP_CONFIRM_STICKER'
+    }, lineCookie('U_AUTO')), res);
+    assert.strictEqual(res._status, 201, res._body);
+    const data = JSON.parse(res._body);
+    assert.ok(data.coupon, 'coupon issued');
+    assert.strictEqual(data.coupon.line_user_id, 'U_AUTO');
   });
 
   console.log('\n========================================');
