@@ -248,6 +248,14 @@ function sendJson(res, status, data) {
   res.end(JSON.stringify(data));
 }
 
+// Extra product pictures (first one is also image_url). Links or data: URLs; the latter are moved to media on save.
+function productImages(list, cover) {
+  const out = (Array.isArray(list) ? list : []).map(x => String(x || '').trim()).filter(Boolean);
+  const first = String(cover || '').trim();
+  if (first && out.indexOf(first) < 0) out.unshift(first);
+  return out.slice(0, 12);
+}
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let body = '';
@@ -887,6 +895,7 @@ module.exports = async (req, res) => {
         price: price,
         description: String(body.description || '').trim(),
         image_url: String(body.image_url || '').trim(),
+        images: productImages(body.images, body.image_url),
         download_url: String(body.download_url || body.download_link || '').trim(),
         size: String(body.size || '').trim(),
         size_key: String(body.size_key || '').trim(),
@@ -929,6 +938,7 @@ module.exports = async (req, res) => {
       if (body.category_id) prod.category_id = String(body.category_id).trim();
       if (body.description !== undefined) prod.description = String(body.description).trim();
       if (body.image_url !== undefined) prod.image_url = String(body.image_url).trim();
+      if (body.images !== undefined) { prod.images = productImages(body.images, prod.image_url); if (prod.images.length) prod.image_url = prod.images[0]; }
       if (body.download_url !== undefined || body.download_link !== undefined) prod.download_url = String(body.download_url || body.download_link || '').trim();
       if (body.size !== undefined) prod.size = String(body.size).trim();
       if (body.size_key !== undefined) prod.size_key = String(body.size_key).trim();

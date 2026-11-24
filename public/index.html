@@ -17301,13 +17301,14 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
               </div>
               <div>
                 <label style="display:inline-block;border:1px solid #e5a8bf;background:#fff0f6;color:#b83a6f;border-radius:10px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">
-                  <span>เลือกรูปภาพสินค้า</span>
-                  <input type="file" id="hlgProdModalFile" accept="image/*" style="display:none">
+                  <span>＋ เพิ่มรูปสินค้า (เลือกได้หลายรูป)</span>
+                  <input type="file" id="hlgProdModalFile" accept="image/*" multiple style="display:none">
                 </label>
-                <div style="font-size:11px;color:#967684;margin-top:5px">ระบบย่อขนาดรูปอัตโนมัติ ไม่เปลืองเน็ต</div>
+                <div style="font-size:11px;color:#967684;margin-top:5px">รูปแรกเป็นรูปปก ลูกค้าปัดดูรูปอื่นได้ในกล่องรายละเอียด · ระบบย่อรูปให้อัตโนมัติ</div>
               </div>
               <input type="hidden" id="hlgProdModalImgData">
             </div>
+            <div id="hlgProdModalThumbs" class="hlg-pm-thumbs"></div>
           </div>
 
           <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
@@ -17320,15 +17321,14 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
 
       var fileInput = pm.querySelector('#hlgProdModalFile');
       fileInput.onchange = async function() {
-        var file = fileInput.files && fileInput.files[0];
-        if (!file) return;
-        try {
-          var compressed = await compressImage(file, 1000, 0.78);
-          pm.querySelector('#hlgProdModalImgData').value = compressed;
-          pm.querySelector('#hlgProdModalImgPrev').innerHTML = `<img src="${compressed}" style="width:100%;height:100%;object-fit:cover">`;
-        } catch(err) {
-          alert(err.message || 'เลือกรูปภาพไม่สำเร็จ');
+        var files = Array.prototype.slice.call(fileInput.files || []);
+        fileInput.value = '';
+        for (var i = 0; i < files.length; i++) {
+          if (hlgPmImages.length >= 12) { alert('ใส่รูปได้สูงสุด 12 รูปต่อสินค้าค่ะ'); break; }
+          try { hlgPmImages.push(await compressImage(files[i], 1000, 0.78)); }
+          catch(err) { alert(err.message || 'เลือกรูปภาพไม่สำเร็จ'); }
         }
+        hlgPmPaint();
       };
       pm.onclick = function(e) { if (e.target === pm) hlgCloseProductModal(); };
     }
@@ -17437,9 +17437,8 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
         pm.querySelector('#hlgProdModalName').value = p.name || '';
         pm.querySelector('#hlgProdModalPrice').value = p.price != null ? p.price : (isWp ? 99 : '');
         pm.querySelector('#hlgProdModalDesc').value = p.description || (isWp ? 'Digital Download' : '');
-        var img = p.image_url || p.imageUrl || '';
-        pm.querySelector('#hlgProdModalImgData').value = img;
-        pm.querySelector('#hlgProdModalImgPrev').innerHTML = img ? `<img src="${esc(img)}" style="width:100%;height:100%;object-fit:cover">` : '<span style="font-size:26px">📷</span>';
+        hlgPmImages = productImageList(p);
+        hlgPmPaint();
         if (dlInput) dlInput.value = p.download_url || p.download_link || '';
       }
     } else {
@@ -17447,8 +17446,8 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
       pm.querySelector('#hlgProdModalName').value = '';
       pm.querySelector('#hlgProdModalPrice').value = isWp ? '99' : '';
       pm.querySelector('#hlgProdModalDesc').value = isWp ? 'Digital Download' : '';
-      pm.querySelector('#hlgProdModalImgData').value = '';
-      pm.querySelector('#hlgProdModalImgPrev').innerHTML = '<span style="font-size:26px">📷</span>';
+      hlgPmImages = [];
+      hlgPmPaint();
       if (dlInput) dlInput.value = '';
     }
     pm.style.display = 'flex';
@@ -17537,7 +17536,8 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
         name: name,
         price: price,
         description: desc,
-        image_url: img,
+        image_url: hlgPmImages[0] || img,
+        images: hlgPmImages.slice(),
         download_url: dlVal,
         download_link: dlVal
       };
@@ -17802,6 +17802,29 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
     return r;
   };
 
+  // Pictures of one product: images[] when saved with several, else the single image_url.
+  function productImageList(p) {
+    var list = Array.isArray(p && p.images) ? p.images.filter(Boolean) : [];
+    var first = (p && (p.image_url || p.imageUrl)) || '';
+    if (first && list.indexOf(first) < 0) list.unshift(first);
+    return list;
+  }
+  window.hlgProductImageList = productImageList;
+
+  // Pictures being edited in the product modal (first = cover).
+  var hlgPmImages = [];
+  function hlgPmPaint() {
+    var pm = document.getElementById('hlgProductModal');
+    if (!pm) return;
+    pm.querySelector('#hlgProdModalImgData').value = hlgPmImages[0] || '';
+    pm.querySelector('#hlgProdModalImgPrev').innerHTML = hlgPmImages[0] ? `<img src="${esc(hlgPmImages[0])}" style="width:100%;height:100%;object-fit:cover">` : '<span style="font-size:26px">📷</span>';
+    pm.querySelector('#hlgProdModalThumbs').innerHTML = hlgPmImages.map(function(u, i) {
+      return `<div class="hlg-pm-thumb"><img src="${esc(u)}" alt="">${i === 0 ? '<span class="hlg-pm-cover">รูปปก</span>' : `<button type="button" title="ย้ายเป็นรูปปก" onclick="hlgPmMove(${i})">◀</button>`}<button type="button" class="hlg-pm-del" title="ลบรูป" onclick="hlgPmRemove(${i})">×</button></div>`;
+    }).join('');
+  }
+  window.hlgPmRemove = function(i) { hlgPmImages.splice(i, 1); hlgPmPaint(); };
+  window.hlgPmMove = function(i) { if (i > 0) { var x = hlgPmImages.splice(i, 1)[0]; hlgPmImages.splice(i - 1, 0, x); hlgPmPaint(); } };
+
   window.hlgEnsureCategoryPage = function(categoryId) {
     if (!categoryId) return null;
     if (categoryId === 'wallpaper') {
@@ -17912,12 +17935,24 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
     return pageEl;
   };
 
+  window.hlgGalleryStep = function(btn, dir) {
+    var g = btn.closest('.hlg-cat-detail').querySelector('.hlg-cat-gallery');
+    if (g) g.scrollBy({ left: dir * g.clientWidth, behavior: 'smooth' });
+  };
+  window.hlgGalleryDots = function(g) {
+    var i = Math.round(g.scrollLeft / Math.max(1, g.clientWidth));
+    g.parentNode.querySelectorAll('.hlg-cat-gallery-dots i').forEach(function(d, k) { d.classList.toggle('on', k === i); });
+  };
+
   // Full-width box under the product grid with the whole description, line breaks kept.
   window.hlgShowProductDetail = function(productId, categoryId, quiet) {
     var host = document.getElementById('catDetail-' + categoryId);
     var p = getCustomProducts().find(function(x) { return String(x.id) === String(productId); });
     if (!host || !p) return;
-    var img = p.image_url || p.imageUrl || '';
+    var pics = productImageList(p), img = pics[0] || '';
+    var gallery = pics.length > 1 ? `
+        <div class="hlg-cat-gallery" onscroll="hlgGalleryDots(this)">${pics.map(function(u, i) { return `<img src="${esc(u)}" alt="${esc(p.name)} รูปที่ ${i + 1}" loading="lazy" onclick="openImgLightbox && openImgLightbox(this.src)">`; }).join('')}</div>
+        <div class="hlg-cat-gallery-nav"><button type="button" onclick="hlgGalleryStep(this,-1)" aria-label="รูปก่อนหน้า">‹</button><span class="hlg-cat-gallery-dots">${pics.map(function(_, i) { return `<i class="${i ? '' : 'on'}"></i>`; }).join('')}</span><button type="button" onclick="hlgGalleryStep(this,1)" aria-label="รูปถัดไป">›</button></div>` : '';
     host.innerHTML = `
       <div class="hlg-cat-detail">
         <button type="button" class="hlg-cat-detail-close" onclick="this.closest('.hlg-cat-detail').remove()" aria-label="ปิดรายละเอียด">×</button>
@@ -17930,6 +17965,7 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
             <div class="hlg-cat-detail-buy"><b>${Number(p.price).toLocaleString()} ฿</b><button type="button" class="hlg-cat-add-btn" onclick="hlgAddCustomProductToCart('${esc(p.id)}')">＋ ใส่ตะกร้า</button></div>
           </div>
         </div>
+        ${gallery}
         <div class="hlg-cat-detail-body">${esc(p.description || '')}</div>
       </div>`;
     if (!quiet) host.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -18252,6 +18288,20 @@ dialog.hlgc-product-dialog::backdrop{background:rgba(43,22,39,.60);backdrop-filt
 .hlg-cat-detail-buy .hlg-cat-add-btn{border:none;border-radius:10px;background:#bc4b7b;color:#fff;padding:8px 14px;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
 .hlg-cat-detail-body{white-space:pre-line;font-size:14px;line-height:1.75;border-top:1px solid #f6dde8;padding-top:12px;overflow-wrap:anywhere}
 @media(max-width:520px){.hlg-cat-detail-head img{width:88px;height:88px}}
+.hlg-cat-gallery{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:0;border-radius:14px;background:#fff;margin:4px 0 6px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.hlg-cat-gallery::-webkit-scrollbar{display:none}
+.hlg-cat-gallery img{flex:0 0 100%;width:100%;max-height:520px;object-fit:contain;scroll-snap-align:center;cursor:zoom-in;background:#fff}
+.hlg-cat-gallery-nav{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px}
+.hlg-cat-gallery-nav button{border:1px solid #efc3d4;background:#fff;color:#b84070;width:32px;height:32px;border-radius:50%;font-size:20px;line-height:1;cursor:pointer}
+.hlg-cat-gallery-dots{display:flex;gap:5px}
+.hlg-cat-gallery-dots i{width:7px;height:7px;border-radius:50%;background:#f1c9d9}
+.hlg-cat-gallery-dots i.on{background:#c94a7c;width:16px;border-radius:4px}
+.hlg-pm-thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.hlg-pm-thumb{position:relative;width:70px;height:70px;border-radius:12px;overflow:hidden;border:1px solid #f0d0de;background:#fff5f9}
+.hlg-pm-thumb img{width:100%;height:100%;object-fit:cover}
+.hlg-pm-thumb button{position:absolute;bottom:3px;left:3px;border:0;border-radius:6px;background:rgba(255,255,255,.92);color:#a8406f;font-size:11px;padding:1px 5px;cursor:pointer}
+.hlg-pm-thumb .hlg-pm-del{left:auto;right:3px;top:3px;bottom:auto;color:#c03865;font-weight:800}
+.hlg-pm-cover{position:absolute;left:0;right:0;bottom:0;background:rgba(188,75,123,.88);color:#fff;font-size:10px;text-align:center;padding:1px 0}
 </style>
 <style id="hlg-smooth-scroll-css">
 /* Smooth scrolling and hover. These effects made the browser redo layout or re-blur the page on every frame:
