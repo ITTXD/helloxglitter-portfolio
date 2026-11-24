@@ -14436,7 +14436,7 @@ function ensureHosts(){
     preorder.dataset.glassPage='preorder';
   }
 
-  [['home','page-home'],['sticker','page-sticker'],['wallpaper','page-wallpaper'],['tracking','page-tracking'],...Array.from(document.querySelectorAll('.page[data-hlg-collection]'),pg=>[pg.dataset.hlgCollection,pg.id])].forEach(([page,id])=>{
+  [['home','page-home'],['sticker','page-sticker'],['wallpaper','page-wallpaper'],['tracking','page-tracking'],...Array.from(document.querySelectorAll('.page[data-hlg-collection]'),pg=>[pg.dataset.hlgCollection,pg.id]),...Array.from(document.querySelectorAll('.page[data-hlg-category]'),pg=>[pg.dataset.hlgCategory,pg.id])].forEach(([page,id])=>{
     const pg=document.getElementById(id);if(!pg)return;
     let host=pg.querySelector(`.v8-page-glass-host[data-glass-page="${page}"]`);
     if(!host){
@@ -14496,7 +14496,7 @@ window.v8GlassRenderPage=renderPage;
 window.v8GlassEnsureHosts=ensureHosts;
 function renderAll(){
   ensureHosts();
-  ['preorder','home','sticker','wallpaper','tracking',...Array.from(document.querySelectorAll('.page[data-hlg-collection]'),pg=>pg.dataset.hlgCollection)].forEach(renderPage)
+  ['preorder','home','sticker','wallpaper','tracking',...Array.from(document.querySelectorAll('.page[data-hlg-collection]'),pg=>pg.dataset.hlgCollection),...Array.from(document.querySelectorAll('.page[data-hlg-category]'),pg=>pg.dataset.hlgCategory)].forEach(renderPage)
 }
 
 document.addEventListener('selectionchange',()=>{
@@ -14633,8 +14633,23 @@ function ensureBranch(){
   }
 }
 
+// Category pages (Calendar 2027 …) rebuild their whole page, which drops the text boxes; add them back.
+// Their builder is defined further down the page, so it is wrapped once the page has loaded.
+function wrapCategoryPages(){
+  const old=window.hlgEnsureCategoryPage;
+  if(typeof old!=='function'||old._v8Glass)return;
+  const wrapped=function(){
+    const r=old.apply(this,arguments);
+    try{if(r&&r.dataset&&r.dataset.hlgCategory)renderAll()}catch(e){}
+    return r
+  };
+  wrapped._v8Glass=true;
+  window.hlgEnsureCategoryPage=wrapped
+}
+
 function boot(){
   migratePreorder();
+  wrapCategoryPages();
   renderAll();
   ensureBranch()
 }
@@ -14776,7 +14791,7 @@ body:not(.admin-mode) .hlg-box-reorder,body:not(.admin-mode) .hlg-box-static-act
 (function(){
  'use strict';
  const KEY='hlg_box_layout_v1',BOX_KEY='hlg_page_glass_boxes_v1';
- const pages=['preorder','home','sticker','wallpaper','tracking'];const allPages=()=>[...pages,...Array.from(document.querySelectorAll('.page[data-hlg-collection]'),p=>p.dataset.hlgCollection)];
+ const pages=['preorder','home','sticker','wallpaper','tracking'];const allPages=()=>[...pages,...Array.from(document.querySelectorAll('.page[data-hlg-collection]'),p=>p.dataset.hlgCollection),...Array.from(document.querySelectorAll('.page[data-hlg-category]'),p=>p.dataset.hlgCategory)];
  const admin=()=>{try{return sessionStorage.getItem('hlg_admin_session_v2')==='1'}catch(e){return false}};
  function state(){try{const x=JSON.parse(localStorage.getItem(KEY)||'{}');return x&&typeof x==='object'?x:{}}catch(e){return {}}}
  function store(x){localStorage.setItem(KEY,JSON.stringify(x))}
@@ -17935,6 +17950,7 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
     `;
 
     pageEl.dataset.hlgImgSize = size;
+    pageEl.dataset.hlgCategory = categoryId; // text boxes (v8-page-glass) attach to this page
     pageEl.innerHTML = `
       <div class="page-backbar"><button class="page-backbtn" type="button" onclick="goBackPage()"><i class="ti ti-arrow-left"></i> ย้อนกลับ</button></div>
       <div class="hero cat-hero" style="text-align:center;padding:26px 16px 16px;background:linear-gradient(180deg,#fff5f9 0%,#ffffff 100%)">
