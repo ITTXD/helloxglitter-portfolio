@@ -808,6 +808,8 @@ function switchView(view) {
     t.classList.toggle('active', t.dataset.view === view);
   });
   document.getElementById('viewOrders').classList.toggle('hidden', view !== 'orders');
+  // A category added in the Products tab gets its order filter tab right away.
+  if (view === 'orders') updateFilterBadges();
   var vp = document.getElementById('viewProducts'); if (vp) vp.classList.toggle('hidden', view !== 'products');
   document.getElementById('viewSummary').classList.toggle('hidden', view !== 'summary');
   document.getElementById('viewPrint').classList.toggle('hidden', view !== 'print');
