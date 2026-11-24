@@ -21,7 +21,7 @@
     'hlg_badges_v1', 'hlg_section_visibility_v1', 'hlg_box_layout_v1', 'hlg_page_blocks_v3',
     'hlg_page_glass_boxes_v1', 'hlg_visual_link_menu_v1', 'hlg_v8_store_links', 'hlg_v6_inline_text',
     'hlg_public_copy_v1', 'hlg_v6_home_products', 'hlg_collections_v1', 'hlg_sales_lock_v1',
-    'hlg_banner_meta_v2'
+    'hlg_banner_meta_v2', 'hlg_music_v1'
   ];
   var SYNC = {};
   SYNC_KEYS.forEach(function (k) { SYNC[k] = true; });
