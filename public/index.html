@@ -2127,6 +2127,47 @@ async function getImage(key){
     return u;
   }catch(e){return''}
 }
+// The menu picture is kept in the menu itself (image_url), which the shop syncs to the server,
+// so every visitor sees it. imageKey pictures live only in the browser that picked them.
+async function menuPic(m){
+  if(m?.image_url)return m.image_url;
+  return isAdm()?getImage(m?.imageKey):'';
+}
+function shrinkPic(file){
+  return new Promise((resolve,reject)=>{
+    const url=URL.createObjectURL(file),img=new Image();
+    img.onload=()=>{
+      const k=Math.min(1,1600/Math.max(img.naturalWidth,img.naturalHeight)),c=document.createElement('canvas');
+      c.width=Math.max(1,Math.round(img.naturalWidth*k));c.height=Math.max(1,Math.round(img.naturalHeight*k));
+      const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(img,0,0,c.width,c.height);
+      URL.revokeObjectURL(url);resolve(c.toDataURL('image/jpeg',0.84))
+    };
+    img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('อ่านรูปไม่สำเร็จ'))};
+    img.src=url
+  })
+}
+// Pictures picked before this fix sit only in this browser: move them into the menu once an admin is here.
+let movingPics=null;
+function moveLocalMenuPictures(){
+  if(!isAdm())return Promise.resolve(false);
+  if(movingPics)return movingPics;
+  movingPics=(async()=>{
+    const a=loadMenus();let changed=false;
+    for(const m of a){
+      if(!m||m.image_url||!m.imageKey)continue;
+      try{
+        const db=await openDB();
+        const blob=await new Promise((res,rej)=>{const q=db.transaction(STORE,'readonly').objectStore(STORE).get(m.imageKey);q.onsuccess=()=>res(q.result||null);q.onerror=()=>rej(q.error)});
+        db.close();
+        if(!blob)continue;
+        m.image_url=await shrinkPic(blob);const k=m.imageKey;m.imageKey='';changed=true;await deleteImage(k)
+      }catch(e){console.warn('menu picture move failed',e)}
+    }
+    if(changed)saveMenus(a);
+    return changed
+  })().finally(()=>{movingPics=null});
+  return movingPics
+}
 async function deleteImage(key){
   if(!key)return;
   try{
@@ -2156,6 +2197,7 @@ function normalizeMenu(m){
   return {
     id:m?.id||('VL-'+Date.now()+'-'+Math.random().toString(36).slice(2,7)),
     imageKey:m?.imageKey||'',
+    image_url:m?.image_url||'',
     alt:m?.alt||'',
     parts:p,
     links:links
@@ -2202,7 +2244,7 @@ async function renderCustomer(){
   for(let mi=0;mi<a.length;mi++){
     const m=a[mi],card=document.createElement('div');card.className='v8-vlink-card';
     const media=document.createElement('div');media.className='v8-vlink-media';
-    const u=await getImage(m.imageKey);
+    const u=await menuPic(m);
     media.innerHTML=u?`<img src="${u}" alt="${esc(m.alt||'เมนู')}">`:`<div class="v8-vlink-empty">ยังไม่ได้ใส่รูปเมนู<br>เข้าโหมดแอดมินเพื่อเพิ่มรูป</div>`;
     const hs=document.createElement('div');hs.className='v8-vlink-hotspots';
     hs.style.gridTemplateColumns=`repeat(${m.parts},1fr)`;
@@ -2229,14 +2271,15 @@ async function renderAdmin(){
   root.innerHTML='';
   for(let i=0;i<a.length;i++){
     const m=a[i],ed=document.createElement('div');ed.className='v8-vl-editor';
-    const u=await getImage(m.imageKey);
+    const u=await menuPic(m);
+    const localOnly=!m.image_url&&!!m.imageKey;
     ed.innerHTML=`
       <div class="v8-vl-editor-head">
         <b>เมนูรูป ${i+1}</b>
         <button class="v8-vl-delete" type="button" onclick="v8VLDeleteMenu(${i})">ลบเมนูนี้</button>
       </div>
       <div class="v8-vl-main">
-        <div class="v8-vl-preview">${u?`<img src="${u}" alt="">`:'ยังไม่มีรูป'}</div>
+        <div class="v8-vl-preview">${u?`<img src="${u}" alt="">`:'ยังไม่มีรูป'}${localOnly?'<div class="hlg-local-pic-warn">⚠ รูปนี้ยังไม่ขึ้นระบบ ลูกค้าไม่เห็น กด “เลือกรูป” ใส่ใหม่อีกครั้ง</div>':''}</div>
         <div class="v8-vl-controls">
           <div class="v8-vl-line">
             <label class="v8-vl-file">เลือกรูป<input type="file" accept="image/*" onchange="v8VLImage(${i},this.files[0])"></label>
@@ -2299,8 +2342,10 @@ window.v8VLParts=function(i,val){
 window.v8VLImage=async function(i,file){
   if(!file||!isAdm())return;
   const a=loadMenus(),m=normalizeMenu(a[i]||{});
+  let pic;
+  try{pic=await shrinkPic(file)}catch(e){if(typeof showToast==='function')showToast('อ่านรูปไม่สำเร็จ กรุณาลองรูปอื่น');return}
   if(m.imageKey)await deleteImage(m.imageKey);
-  m.imageKey=await putImage(file);
+  m.imageKey='';m.image_url=pic;
   a[i]=m;saveMenus(a);renderAll();
   if(typeof showToast==='function')showToast('เปลี่ยนรูปแล้ว ✓');
 };
@@ -2325,10 +2370,18 @@ function syncMode(){
 }
 async function renderAll(){
   syncMode();
+  if(await moveLocalMenuPictures())return renderAll();
   await renderCustomer();
   await renderAdmin();
 }
 window.v8VLRender=renderAll;
+// Logging in happens after load: when the admin session starts, move this browser's menu pictures up.
+function watchAdminLogin(){
+  let was=isAdm();
+  new MutationObserver(()=>{const now=isAdm();if(now&&!was)renderAll();was=now})
+    .observe(document.body,{attributes:true,attributeFilter:['class']})
+}
+if(document.body)watchAdminLogin();else document.addEventListener('DOMContentLoaded',watchAdminLogin,{once:true});
 
 /* Same URL: enter admin, then return to customer without changing URL */
 function ensureAdminPill(){
@@ -4375,6 +4428,7 @@ body.admin-mode .v8-banner-inline-fields{
   font:inherit;
   font-size:9px;
 }
+.hlg-local-pic-warn{grid-column:1/-1;margin-top:6px;padding:7px 10px;border-radius:10px;background:#fff1e6;color:#a4501b;font-size:11px;font-weight:700;line-height:1.4}
 .v8-banner-inline-state{
   grid-column:1/-1;
   min-height:12px;
@@ -4507,6 +4561,8 @@ async function migrateBanners(){
 // Banner pictures are kept in the banner list itself (image_url), which the shop syncs to the server
 // (site-sync uploads big data: pictures as media), so every visitor sees them, not just this browser.
 const hasPic=x=>!!(x&&(x.image_url||x.imageKey||x.legacySrc));
+// What customers can load: imageKey pictures exist only in the admin browser that picked them.
+const sharedPic=x=>!!(x&&(x.image_url||x.legacySrc));
 function shrinkToDataUrl(file){
   return new Promise((resolve,reject)=>{
     const url=URL.createObjectURL(file),img=new Image();
@@ -4521,15 +4577,22 @@ function shrinkToDataUrl(file){
   })
 }
 // Banners that only exist in this browser (picture in IndexedDB) move into the list once, so they reach customers too.
-async function moveLocalBannerPictures(){
-  if(!admin())return;
-  const a=bLoad();let changed=false;
-  for(const x of a){
-    if(!x||x.image_url||!x.imageKey)continue;
-    const blob=await bGet(x.imageKey);if(!blob)continue;
-    try{x.image_url=await shrinkToDataUrl(blob);const k=x.imageKey;x.imageKey='';changed=true;await bDel(k)}catch(e){console.warn('banner move failed',e)}
-  }
-  if(changed)bSave(a)
+// Runs whenever an admin is on the page (load, after logging in, on page changes), not only at load.
+let bMoving=null;
+function moveLocalBannerPictures(){
+  if(!admin())return Promise.resolve(false);
+  if(bMoving)return bMoving;
+  bMoving=(async()=>{
+    const a=bLoad();let changed=false;
+    for(const x of a){
+      if(!x||x.image_url||!x.imageKey)continue;
+      const blob=await bGet(x.imageKey);if(!blob)continue;
+      try{x.image_url=await shrinkToDataUrl(blob);const k=x.imageKey;x.imageKey='';changed=true;await bDel(k)}catch(e){console.warn('banner move failed',e)}
+    }
+    if(changed)bSave(a);
+    return changed
+  })().finally(()=>{bMoving=null});
+  return bMoving
 }
 async function bUrl(x){
   if(x?.image_url)return x.image_url;
@@ -4598,7 +4661,7 @@ async function renderBannerOwner(){
   const allRows=bLoad();
   const rows=admin()
     ? allRows
-    : allRows.filter(hasPic);
+    : allRows.filter(sharedPic);
 
   if(!rows.length){
     if(admin()){
@@ -4662,6 +4725,7 @@ async function renderBannerOwner(){
       <select data-btarget>${bannerTargetOptions(cur.target||'')}</select>
       <input data-burl value="${String(cur.url||'').replace(/"/g,'&quot;')}" placeholder="https://..." style="${cur.target==='external'?'':'display:none'}">
       <div class="v8-banner-inline-state"></div>
+      ${!cur.image_url&&cur.imageKey?'<div class="hlg-local-pic-warn">⚠ รูป Banner นี้ยังไม่ขึ้นระบบ ลูกค้าไม่เห็น กดรูปแล้วเลือกรูปใส่ใหม่อีกครั้ง</div>':''}
     `;
     const file=tools.querySelector('.v8-banner-file');
     tools.querySelector('.v8-banner-image-edit').onclick=()=>file.click();
@@ -4733,7 +4797,7 @@ function restartBanner(){
   clearInterval(bTimer);
   if(admin())return;
   bTimer=setInterval(()=>{
-    const a=bLoad().filter(hasPic);
+    const a=bLoad().filter(sharedPic);
     if(a.length>1){bIdx=(bIdx+1)%a.length;renderBannerOwner()}
   },5000)
 }
@@ -4752,14 +4816,20 @@ window.v5PickBanner=function(){};
 function syncAll(){
   removeOldHomeTools();
   renderBannerOwner();
-  restartBanner()
+  restartBanner();
+  moveLocalBannerPictures().then(moved=>{if(moved)renderBannerOwner()})
 }
 
 document.addEventListener('DOMContentLoaded',async()=>{
   removeOldHomeTools();
   await migrateBanners();
   await moveLocalBannerPictures();
-  syncAll()
+  syncAll();
+  // Logging in happens after load (the login code sits later in the page, so wrapping it here misses it):
+  // when the admin session starts, move this browser's banner pictures up right away.
+  let wasAdmin=admin();
+  new MutationObserver(()=>{const now=admin();if(now&&!wasAdmin)syncAll();wasAdmin=now})
+    .observe(document.body,{attributes:true,attributeFilter:['class']})
 });
 window.addEventListener('pageshow',()=>setTimeout(syncAll,50));
 
