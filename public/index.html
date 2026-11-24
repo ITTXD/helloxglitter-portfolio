@@ -6306,9 +6306,11 @@ if(document.readyState!=='loading'){
     </div>
     <div class="admin-tabs">
       <button class="admin-tab active" data-admin-tab="store" onclick="switchAdminTab('store',this)"><i class="ti ti-building-store"></i> หน้าร้าน</button>
+      <button class="admin-tab" id="hlgSalesLockAdminTab" data-admin-tab="salesLock" onclick="switchAdminTab('salesLock',this)">🔒 ล็อกสินค้า</button>
       <a class="admin-tab" href="/admin/" target="_blank" style="text-decoration:none;background:#f3e8ff;color:#7c3aed;font-weight:700;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-external-link"></i> Full Admin Portal ↗</a>
     </div>
-    <section class="admin-panel active" id="adminPanel-store"><div class="admin-card"><div class="admin-section-title">เปิดหน้าร้านเพื่อแก้ไข</div><div class="admin-section-sub">Admin สามารถเข้าแต่ละหน้าจริงได้ ไม่จำกัดอยู่แค่ Home เพื่อแก้ไขข้อมูลหรือโปรโมชั่นบนหน้านั้นๆ ได้ทันที</div><div class="v7-store-links"><button onclick="showPage('preorder')">👜 กระเป๋าผ้า / Pre-order</button><button onclick="showPage('wallpaper')">🎨 Wallpaper</button><button onclick="showPage('sticker')">✨ Sticker</button><button onclick="showPage('home')">🏠 Home</button></div></div></section>
+    <section class="admin-panel active" id="adminPanel-store"><div class="admin-card"><div class="admin-section-title">เปิดหน้าร้านเพื่อแก้ไข</div><div class="admin-section-sub">Admin สามารถเข้าแต่ละหน้าจริงได้ ไม่จำกัดอยู่แค่ Home เพื่อแก้ไขข้อมูลหรือโปรโมชั่นบนหน้านั้นๆ ได้ทันที</div><div class="v7-store-links"><button onclick="showPage('preorder')">👜 กระเป๋าผ้า / Pre-order</button><button onclick="showPage('wallpaper')">🎨 Wallpaper</button><button onclick="showPage('sticker')">✨ Sticker</button><button onclick="showPage('home')">🏠 Home</button><button onclick="switchAdminTab('salesLock',document.getElementById('hlgSalesLockAdminTab'))" style="background:#fff0f5;color:#b83268;border:1.5px solid #f0b6ce;font-weight:800">🔒 ล็อกสินค้า / เลือกปิดรับออเดอร์</button></div><div id="hlgStoreLockShortcut"></div></div></section>
+    <section class="admin-panel" id="adminPanel-salesLock"></section>
     
     
     
@@ -18240,14 +18242,44 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
 .hlg-lock-badge{position:absolute;left:6px;top:6px;z-index:6;background:rgba(84,52,68,.88);color:#fff;font-size:10px;font-weight:800;border-radius:999px;padding:3px 8px;pointer-events:none}
 .hlg-lock-banner{max-width:900px;margin:10px auto;padding:11px 14px;box-sizing:border-box;background:#fff2f6;border:1px solid #efbfd0;border-radius:14px;color:#a33a63;font-size:13px;font-weight:700;text-align:center}
 .v8cf-item .hlg-lock-note{display:block;color:#c0392b;font-size:10px;font-weight:800;margin-top:2px}
+#adminPanel-salesLock .hsl-card{background:#fff;border:1.5px solid #f0cde0;border-radius:18px;padding:16px;margin-bottom:14px;box-shadow:0 6px 20px rgba(168,66,112,.06);color:#664558}
+#adminPanel-salesLock .hsl-card h3{margin:0 0 6px;font-size:16px;color:#a83868}
+#adminPanel-salesLock .hsl-sub{font-size:12px;color:#8c6a7c;line-height:1.6;margin:0 0 12px}
+#adminPanel-salesLock .hsl-quick-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
+#adminPanel-salesLock .hsl-quick-btn{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-radius:12px;border:1.5px solid #eed0df;background:#fff9fc;color:#7a4b63;font:inherit;font-size:12px;font-weight:800;cursor:pointer;text-align:left}
+#adminPanel-salesLock .hsl-quick-btn.is-locked{background:#fff0f3;border-color:#e58aa3;color:#b8284f}
+#adminPanel-salesLock .hsl-quick-btn small{font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;background:#f4e3ec;color:#8a5d74;white-space:nowrap}
+#adminPanel-salesLock .hsl-quick-btn.is-locked small{background:#d6335c;color:#fff}
+#adminPanel-salesLock .hsl-filter-bar{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+#adminPanel-salesLock .hsl-filter-btn{border:1px solid #e8c5d6;background:#fff;color:#86526c;border-radius:999px;padding:6px 11px;font:inherit;font-size:11px;font-weight:800;cursor:pointer}
+#adminPanel-salesLock .hsl-filter-btn.active{background:#c94a7c;color:#fff;border-color:#c94a7c}
+#adminPanel-salesLock .hsl-pick-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:7px;max-height:340px;overflow-y:auto;border:1px solid #f0d7e3;border-radius:12px;padding:8px;background:#fffbfd;margin-top:6px}
+#adminPanel-salesLock .hsl-pick-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid #f3dce7;border-radius:10px;background:#fff;font-size:12px;cursor:pointer;user-select:none}
+#adminPanel-salesLock .hsl-pick-item.is-checked{border-color:#d45a8a;background:#fff2f7}
+#adminPanel-salesLock .hsl-pick-item img{width:34px;height:34px;border-radius:7px;object-fit:cover;background:#fdf0f6;flex-shrink:0}
+#adminPanel-salesLock .hsl-pick-meta{min-width:0;flex:1;line-height:1.35}
+#adminPanel-salesLock .hsl-pick-meta b{display:block;font-size:12px;color:#5d3b4d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#adminPanel-salesLock .hsl-pick-meta small{display:block;font-size:10px;color:#987788}
+#adminPanel-salesLock .hsl-rule-card{border:1.5px solid #f1d6e3;border-radius:14px;padding:12px;margin-top:8px;background:#fffafd;display:grid;gap:8px}
+#adminPanel-salesLock .hsl-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+#adminPanel-salesLock .hsl-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;background:#ffeaf2;border:1px solid #efb9cf;color:#99335c;font-size:11px;font-weight:700}
+#adminPanel-salesLock .hsl-chip button{border:0;background:none;color:#b8284f;font:inherit;font-weight:900;cursor:pointer;padding:0 2px}
+#adminPanel-salesLock .hsl-btn{border:0;border-radius:10px;background:#c94a7c;color:#fff;padding:9px 14px;font:inherit;font-size:12px;font-weight:800;cursor:pointer}
+#adminPanel-salesLock .hsl-btn.alt{background:#fcebf2;color:#9e3964;border:1px solid #ecbfd3}
+#adminPanel-salesLock .hsl-btn.danger{background:#fff0f3;color:#c0294b;border:1px solid #f3bac7}
+#adminPanel-salesLock .hsl-field{display:block;font-size:12px;font-weight:700;color:#785065;margin-top:8px}
+#adminPanel-salesLock .hsl-field input,#adminPanel-salesLock .hsl-field select{width:100%;box-sizing:border-box;margin-top:4px;padding:9px 10px;border:1.5px solid #e9c8d8;border-radius:10px;font:inherit;font-size:13px;background:#fff}
 </style>
 <script id="hlg-sales-lock-js">
-// ล็อกการขาย (customer side): the admin pauses items in /admin/ → locked cards cannot be
+// ล็อกการขาย (customer side + in-page #page-admin editor):
+// the admin pauses items directly in #page-admin (or /admin/) → locked cards cannot be
 // picked and checkout refuses them. The server refuses too (site-settings.salesLockProblem).
 (function(){
  'use strict';
  const core=window.hlgSalesLockCore;if(!core)return;
  const CART='hlg_unified_cart_v1',SELECT='hlg_cart_selection_final_v1';
+ const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const isAdm=()=>{try{return sessionStorage.getItem('hlg_admin_session_v2')==='1'||(typeof isAdmin==='function'&&isAdmin())}catch(e){return false}};
  let fresh=null; // newest rules straight from the server, when we have asked
  const raw=()=>fresh!==null?fresh:localStorage.getItem(core.KEY);
  function sized(x){
@@ -18257,7 +18289,7 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
  }
  const lockOf=x=>core.lockFor(sized(x),raw());
  function problem(items){const hit=core.problem((items||[]).map(sized),raw());return hit?hit.text:''}
- function refresh(){return fetch('/api/site-settings',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{if(d&&d.values){fresh=d.values[core.KEY]||'';decorate()}}).catch(()=>{})}
+ function refresh(){return fetch('/api/site-settings',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{if(d&&d.values){fresh=d.values[core.KEY]||'';decorate();paintShortcut()}}).catch(()=>{})}
  function toast(t){if(typeof window.showToast==='function')showToast(t);else alert(t)}
  function mark(card,rule){
    if(!card)return;card.classList.toggle('hlg-locked',!!rule);
@@ -18278,6 +18310,27 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
    if(typeof getList==='function'){const ps=getList();document.querySelectorAll('#gallery .gcard').forEach((card,i)=>{const p=ps[i];mark(card,p?lockOf({type:'bag',name:p.name,variant:p.size||'',sizeKey:p.sizeKey}):null)})}
    const st=(typeof STICKER_PATTERNS!=='undefined'?STICKER_PATTERNS:[]);document.querySelectorAll('#stickerGallery .gcard').forEach((card,i)=>{const p=st[i];mark(card,p?lockOf({type:'sticker',name:p.name,variant:''}):null)});
    const wp=lockOf({type:'wallpaper',name:'Wallpaper Special Set',variant:'Digital Download'});document.querySelectorAll('#page-wallpaper .wp-card').forEach(card=>mark(card,wp));
+   // Custom category cards & collection cards
+   try{
+     const cprods=typeof window.getCustomProducts==='function'?window.getCustomProducts():[];
+     document.querySelectorAll('.hlg-custom-cat-grid').forEach(grid=>{
+       const catId=String(grid.id||'').replace(/^catGrid-/,'');
+       const list=cprods.filter(p=>(p.category_id===catId)||(p.type===catId));
+       grid.querySelectorAll('.gcard').forEach((card,i)=>{
+         const p=list[i];
+         mark(card,p?lockOf({type:'custom',name:p.name,variant:p.size||''}):null);
+       });
+     });
+     const colls=typeof window.hlgCollectionProducts==='function'?window.hlgCollectionProducts():[];
+     document.querySelectorAll('.page[data-hlg-collection]').forEach(page=>{
+       const cid=page.dataset.hlgCollection;
+       const list=colls.filter(p=>p.categoryId===cid);
+       page.querySelectorAll('.hlgc-gallery .gcard').forEach((card,i)=>{
+         const p=list[i];
+         mark(card,p?lockOf({type:'custom',name:p.name,variant:p.variant||''}):null);
+       });
+     });
+   }catch(e){}
    banner(document.getElementById('gallery'),'hlgLockBannerBag',whole('bag'));
    banner(document.getElementById('stickerGallery'),'hlgLockBannerSticker',whole('sticker'));
    banner(document.querySelector('#page-wallpaper .wp-card')?.parentNode,'hlgLockBannerWallpaper',whole('wallpaper'));
@@ -18295,7 +18348,9 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
    // A gallery that was just rebuilt has not been marked yet.
    if(e.target.closest?.('.gcard:not(.hlg-locked)'))decorate();
    const card=e.target.closest?.('.gcard.hlg-locked');
-   if(card){e.preventDefault();e.stopImmediatePropagation();toast('🔒 '+(card.dataset.hlgLockMsg||core.DEFAULT_MESSAGE));return}
+   if(card&&!e.target.closest?.('[onclick*="hlgOpenAddProductModal"],[onclick*="hlgDeleteProduct"]')){
+     e.preventDefault();e.stopImmediatePropagation();toast('🔒 '+(card.dataset.hlgLockMsg||core.DEFAULT_MESSAGE));return
+   }
    // Final "ตกลง": ask the server for the newest rules first, a tab left open may be out of date.
    const submit=e.target.closest?.('#hrxSubmit,#wpSubmitBtn');
    if(!submit||checked)return;
@@ -18310,18 +18365,375 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
  },true);
  const oldConfirm=window.v8CFconfirm;
  if(typeof oldConfirm==='function')window.v8CFconfirm=function(){const p=problem(chosen());if(p){fail('🔒 '+p+' กรุณานำออกจากตะกร้าก่อนยืนยันค่ะ');return}return oldConfirm.apply(this,arguments)};
- ['buildGallery','stickerBuildGallery','renderUnifiedCart','showPage'].forEach(name=>{const old=window[name];if(typeof old!=='function')return;window[name]=function(){const r=old.apply(this,arguments);decorate();setTimeout(decorate,40);return r}});
+
+ /* ================= IN-PAGE ADMIN (#page-admin) SALES LOCK UI ================= */
+ const LOCK_TARGETS=[
+   ['selected','🎯 เลือกสินค้าเอง (ติ๊กเลือกรายชิ้น)'],
+   ['all','🏠 ทั้งร้าน (ทุกสินค้า)'],
+   ['type:bag','👜 กระเป๋าทุกลาย'],
+   ['size:normal','👜 กระเป๋า Normal (15 × 16 inch)'],
+   ['size:large','👜 กระเป๋า Large (15.5 × 4 × 16 inch)'],
+   ['size:easy','👜 กระเป๋า Easy Bag (10.5 × 5 × 14 inch)'],
+   ['size:maxi','👜 กระเป๋า Maxi (13.5 × 6 × 17 inch)'],
+   ['type:sticker','✨ สติกเกอร์ทั้งหมด'],
+   ['type:wallpaper','🎨 Wallpaper'],
+   ['type:custom','🎀 สินค้าหมวดที่สร้างเองทั้งหมด']
+ ];
+ const QUICK_TARGETS=[
+   ['all','🏠 ทั้งร้าน'],
+   ['type:bag','👜 กระเป๋าทั้งหมด'],
+   ['size:normal','👜 Normal'],
+   ['size:large','👜 Large'],
+   ['size:easy','👜 Easy Bag'],
+   ['size:maxi','👜 Maxi'],
+   ['type:sticker','✨ สติกเกอร์ทั้งหมด'],
+   ['type:wallpaper','🎨 Wallpaper'],
+   ['type:custom','🎀 หมวดสร้างเอง']
+ ];
+ const FILTER_TABS=[
+   ['all','ทั้งหมด'],
+   ['size:normal','👜 Normal'],
+   ['size:large','👜 Large'],
+   ['size:easy','👜 Easy Bag'],
+   ['size:maxi','👜 Maxi'],
+   ['type:sticker','✨ Sticker'],
+   ['type:wallpaper','🎨 Wallpaper'],
+   ['type:custom','🎀 หมวดอื่นๆ']
+ ];
+ let lockEditing=null,lockFilter='all',pickedSet=new Set();
+
+ function lockCatalog(){
+   const out=[],seen=new Set();
+   const add=x=>{
+     const k=core.sku(x);
+     if(seen.has(k))return;
+     seen.add(k);out.push(x);
+   };
+   try{
+     const bags=typeof getList==='function'?getList():(typeof ALL_PATTERNS!=='undefined'?ALL_PATTERNS:[]);
+     bags.forEach(x=>add({type:'bag',name:x.name,variant:x.size||'',sizeKey:x.sizeKey||core.SIZE_KEYS[String(x.size||'').trim()]||'',price:Number(x.priceOrig||x.price)||0,image:x.img||x.image_url||''}));
+   }catch(e){}
+   try{
+     if(typeof STICKER_PATTERNS!=='undefined'){
+       STICKER_PATTERNS.forEach(x=>add({type:'sticker',name:x.name,variant:'',price:Number(x.price)||69,image:x.img||''}));
+     }
+   }catch(e){}
+   add({type:'wallpaper',name:'Wallpaper Special Set',variant:'Digital Download',price:99,image:''});
+   try{
+     (typeof window.getCustomProducts==='function'?window.getCustomProducts():[]).forEach(x=>{
+       const cat=String(x.category_id||x.type||'other');
+       if(cat==='bag')add({type:'bag',name:x.name,variant:x.size||'',sizeKey:x.sizeKey||'',price:Number(x.price)||0,image:x.image_url||x.imageUrl||''});
+       else if(cat==='sticker')add({type:'sticker',name:x.name,variant:'',price:Number(x.price)||0,image:x.image_url||x.imageUrl||''});
+       else add({type:'custom',name:x.name,variant:x.size||'',price:Number(x.price)||0,image:x.image_url||x.imageUrl||''});
+     });
+   }catch(e){}
+   try{
+     (typeof window.hlgCollectionProducts==='function'?window.hlgCollectionProducts():[]).forEach(x=>{
+       add({type:'custom',name:x.name,variant:x.variant||'',price:Number(x.price)||0,image:x.image||''});
+     });
+   }catch(e){}
+   return out;
+ }
+
+ function lockLoad(){return core.parse(localStorage.getItem(core.KEY)).rules}
+ function lockSave(rules){
+   try{
+     const str=JSON.stringify({rules});
+     fresh=null;
+     localStorage.setItem(core.KEY,str);
+     if(typeof window.hlgSiteSyncFlush==='function')window.hlgSiteSyncFlush();
+     decorate();
+     paintShortcut();
+     return true;
+   }catch(e){toast('บันทึกไม่สำเร็จ');return false}
+ }
+ function lockTargetName(r){
+   if(r.target==='selected')return 'สินค้าที่เลือก '+(r.skus||[]).length+' ชิ้น';
+   const t=LOCK_TARGETS.find(x=>x[0]===r.target);
+   return t?t[1]:r.target;
+ }
+ function lockState(r){
+   if(r.enabled===false)return ['⚪ ปิดอยู่','#8a7a82'];
+   if(core.active(r))return ['🔒 กำลังล็อก','#c0392b'];
+   const start=r.start?Date.parse(r.start+'+07:00'):NaN;
+   return Number.isFinite(start)&&Date.now()<start?['⏳ รอเวลาเริ่ม','#b7791f']:['⌛ หมดเวลาแล้ว','#8a7a82'];
+ }
+ function skuLabel(k){
+   try{const a=JSON.parse(k);if(Array.isArray(a))return a[1]+(a[2]?' ('+a[2]+')':'')}catch(e){}
+   return k;
+ }
+ function ensureLockAdminTab(){
+   const tabs=$('#page-admin .admin-tabs'),anchor=$('#adminPanel-store');
+   if(!tabs||!anchor)return;
+   if(!$('#hlgSalesLockAdminTab')){
+     const b=document.createElement('button');
+     b.id='hlgSalesLockAdminTab';b.type='button';b.className='admin-tab';b.dataset.adminTab='salesLock';
+     b.textContent='🔒 ล็อกสินค้า';
+     b.onclick=()=>window.switchAdminTab('salesLock',b);
+     tabs.insertBefore(b,tabs.children[1]||null);
+   }
+   if(!$('#adminPanel-salesLock')){
+     const sec=document.createElement('section');
+     sec.id='adminPanel-salesLock';sec.className='admin-panel';
+     anchor.insertAdjacentElement('afterend',sec);
+   }
+ }
+ function paintShortcut(){
+   const box=$('#hlgStoreLockShortcut');
+   if(!box)return;
+   const activeRules=lockLoad().filter(r=>core.active(r));
+   const lockedCount=lockCatalog().filter(x=>!!lockOf(x)).length;
+   box.innerHTML='<div style="margin-top:12px;padding:12px 14px;border-radius:14px;background:'+(activeRules.length?'#fff0f4':'#fff8fb')+';border:1.5px solid '+(activeRules.length?'#efaec5':'#f2d5e3')+';display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">'
+     +'<div><b style="color:#a83868;font-size:13px">🔒 สถานะล็อกสินค้า: '+(activeRules.length?'กำลังล็อก '+lockedCount+' รายการ ('+activeRules.length+' กฎ)':'เปิดขายตามปกติทุกชิ้น ♡')+'</b>'
+     +'<div style="font-size:11px;color:#8a6879">เลือกติ๊กล็อกเฉพาะบางลาย บางขนาด หรือทั้งหมวดได้จากหน้านี้ทันที ไม่ต้องเข้า Full Admin Portal</div></div>'
+     +'<button type="button" onclick="switchAdminTab(\'salesLock\',document.getElementById(\'hlgSalesLockAdminTab\'))" style="border:0;border-radius:10px;background:#c94a7c;color:#fff;padding:8px 14px;font:inherit;font-size:12px;font-weight:800;cursor:pointer">ตั้งค่าล็อกสินค้า →</button>'
+     +'</div>';
+ }
+ function matchesFilter(item,f){
+   if(!f||f==='all')return true;
+   if(f.indexOf('size:')===0)return item.type==='bag'&&(item.sizeKey||core.SIZE_KEYS[String(item.variant||'').trim()]||'')===f.slice(5);
+   if(f.indexOf('type:')===0)return item.type===f.slice(5);
+   return true;
+ }
+ function visibleCatalog(){
+   const q=(($('#hlgLockSearch')||{}).value||'').toLowerCase().trim();
+   return lockCatalog().filter(x=>matchesFilter(x,lockFilter)&&(x.name+' '+(x.variant||'')).toLowerCase().indexOf(q)>=0);
+ }
+ function renderPickList(){
+   const host=$('#hlgLockPickList'),countEl=$('#hlgLockPickedCount');
+   if(countEl)countEl.textContent='เลือกไว้ '+pickedSet.size+' ชิ้น';
+   if(!host)return;
+   const items=visibleCatalog();
+   if(!items.length){host.innerHTML='<div style="padding:16px;text-align:center;color:#987788;font-size:12px;grid-column:1/-1">ไม่พบสินค้าที่ค้นหาค่ะ</div>';return}
+   host.innerHTML=items.map(x=>{
+     const k=core.sku(x),on=pickedSet.has(k),lockedNow=!!lockOf(x);
+     const sub=x.variant||(x.type==='sticker'?'Sticker':x.type==='wallpaper'?'Wallpaper':'สินค้า');
+     return '<label class="hsl-pick-item'+(on?' is-checked':'')+'">'
+       +'<input type="checkbox" class="hlg-lock-sku" value="'+esc(k)+'"'+(on?' checked':'')+'>'
+       +(x.image?'<img src="'+esc(x.image)+'" alt="" loading="lazy">':'')
+       +'<span class="hsl-pick-meta"><b>'+esc(x.name)+'</b><small>'+esc(sub)+(lockedNow?' · <span style="color:#c0392b;font-weight:800">🔒 ล็อกอยู่</span>':'')+'</small></span>'
+       +'</label>';
+   }).join('');
+   host.querySelectorAll('.hlg-lock-sku').forEach(cb=>{
+     cb.onchange=()=>{
+       if(cb.checked)pickedSet.add(cb.value);else pickedSet.delete(cb.value);
+       cb.closest('.hsl-pick-item')?.classList.toggle('is-checked',cb.checked);
+       if(countEl)countEl.textContent='เลือกไว้ '+pickedSet.size+' ชิ้น';
+     };
+   });
+ }
+ function renderSalesLockAdmin(){
+   ensureLockAdminTab();
+   paintShortcut();
+   const root=$('#adminPanel-salesLock');
+   if(!root)return;
+   const rules=lockLoad();
+   const edit=lockEditing?rules.find(r=>r.id===lockEditing):null;
+   const f=edit||{target:'selected',message:'',start:'',end:'',skus:[]};
+   if(edit)pickedSet=new Set(edit.skus||[]);
+   const anyActive=rules.some(r=>core.active(r));
+
+   root.innerHTML='<div class="hsl-card">'
+     +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'
+     +'<div><h3>🔒 ล็อกด่วนตามหมวด / ขนาด (กดเพื่อล็อกหรือปลดล็อกทันที)</h3>'
+     +'<p class="hsl-sub" style="margin:0">สินค้าที่ถูกล็อกยังแสดงในหน้าร้าน แต่จะขึ้นป้าย “🔒 ปิดรับชั่วคราว” และลูกค้ากดเลือกหรือสั่งซื้อไม่ได้จนกว่าจะปลดล็อกค่ะ</p></div>'
+     +(anyActive?'<button type="button" class="hsl-btn danger" id="hlgUnlockAllBtn">🔓 ปลดล็อกทั้งหมดทันที</button>':'')
+     +'</div>'
+     +'<div class="hsl-quick-grid" style="margin-top:10px">'
+     +QUICK_TARGETS.map(([t,label])=>{
+       const activeRule=rules.find(r=>r.target===t&&core.active(r));
+       return '<button type="button" class="hsl-quick-btn'+(activeRule?' is-locked':'')+'" data-quick-target="'+esc(t)+'">'
+         +'<span>'+esc(label)+'</span>'
+         +'<small>'+(activeRule?'🔒 ล็อกอยู่ (กดปลด)':'กดเพื่อล็อก')+'</small>'
+         +'</button>';
+     }).join('')
+     +'</div></div>'
+
+     +'<div class="hsl-card" id="hlgLockFormCard">'
+     +'<h3>'+(edit?'✏️ แก้ไขกฎล็อกสินค้า':'🎯 เลือกสินค้าที่จะล็อก (ติ๊กเลือกได้ตามใจชอบ)')+'</h3>'
+     +'<p class="hsl-sub">ติ๊กเลือกสินค้าที่ต้องการล็อกได้ทีละชิ้น หรือหลายชิ้นพร้อมกัน แล้วกดปุ่มบันทึกด้านล่างได้เลยค่ะ</p>'
+     +'<label class="hsl-field">รูปแบบการล็อก'
+     +'<select id="hlgLockTarget">'+LOCK_TARGETS.map(([val,txt])=>'<option value="'+esc(val)+'"'+(val===f.target?' selected':'')+'>'+esc(txt)+'</option>').join('')+'</select>'
+     +'</label>'
+     +'<div id="hlgLockPick" style="margin-top:10px;'+(f.target==='selected'?'':'display:none')+'">'
+     +'<div class="hsl-filter-bar" id="hlgLockFilterBar">'
+     +FILTER_TABS.map(([id,txt])=>'<button type="button" class="hsl-filter-btn'+(lockFilter===id?' active':'')+'" data-lock-filter="'+esc(id)+'">'+esc(txt)+'</button>').join('')
+     +'</div>'
+     +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+     +'<input id="hlgLockSearch" type="search" placeholder="🔍 ค้นหาชื่อสินค้า / ลายกระเป๋า / สติกเกอร์..." style="flex:1;min-width:200px;padding:8px 11px;border:1.5px solid #e9c8d8;border-radius:10px;font:inherit;font-size:12px;background:#fff">'
+     +'<button type="button" class="hsl-btn alt" id="hlgLockSelectVisible">☑️ เลือกทั้งหมดในหมวดนี้</button>'
+     +'<button type="button" class="hsl-btn alt" id="hlgLockClearVisible">⬜ ล้างที่เลือกในหมวดนี้</button>'
+     +'<span id="hlgLockPickedCount" style="font-size:12px;font-weight:800;color:#b83268">เลือกไว้ '+pickedSet.size+' ชิ้น</span>'
+     +'</div>'
+     +'<div class="hsl-pick-grid" id="hlgLockPickList"></div>'
+     +'</div>'
+     +'<label class="hsl-field">ข้อความแจ้งลูกค้าเมื่อกดสินค้าที่ล็อก (เว้นว่าง = “'+esc(core.DEFAULT_MESSAGE)+'”)'
+     +'<input id="hlgLockMsg" type="text" maxlength="120" value="'+esc(f.message||'')+'" placeholder="'+esc(core.DEFAULT_MESSAGE)+'">'
+     +'</label>'
+     +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px">'
+     +'<label class="hsl-field">เวลาเริ่มล็อก (ไม่ใส่ = ล็อกทันที)<input id="hlgLockStart" type="datetime-local" value="'+esc(f.start||'')+'"></label>'
+     +'<label class="hsl-field">เวลาปลดล็อกอัตโนมัติ (ไม่ใส่ = จนกว่าจะกดปลดเอง)<input id="hlgLockEnd" type="datetime-local" value="'+esc(f.end||'')+'"></label>'
+     +'</div>'
+     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">'
+     +'<button type="button" class="hsl-btn" id="hlgLockSave">'+(edit?'💾 บันทึกการแก้ไข':'🔒 บันทึกล็อกตามที่เลือก')+'</button>'
+     +(edit?'<button type="button" class="hsl-btn alt" id="hlgLockCancel">ยกเลิกการแก้ไข</button>':'')
+     +'</div>'
+     +'</div>'
+
+     +'<div class="hsl-card">'
+     +'<h3>📋 รายการกฎล็อกทั้งหมด ('+rules.length+')</h3>'
+     +(rules.length?rules.map(r=>{
+       const st=lockState(r);
+       const chips=r.target==='selected'&&Array.isArray(r.skus)&&r.skus.length
+         ?'<div class="hsl-chips">'+r.skus.map(k=>'<span class="hsl-chip">'+esc(skuLabel(k))+' <button type="button" title="ปลดล็อกเฉพาะชิ้นนี้" data-unlock-sku="'+esc(k)+'" data-rule-id="'+esc(r.id)+'">✕</button></span>').join('')+'</div>'
+         :'';
+       return '<div class="hsl-rule-card" data-lock-id="'+esc(r.id)+'">'
+         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">'
+         +'<div><b style="font-size:14px;color:#61394c">'+esc(lockTargetName(r))+'</b>'
+         +'<div style="font-size:12px;color:#8e6b7c;margin-top:2px">ข้อความ: “'+esc(core.message(r))+'” · เวลา: '+(r.start?esc(r.start.replace('T',' ')):'เริ่มทันที')+' ถึง '+(r.end?esc(r.end.replace('T',' ')):'จนกว่าจะปลด')+'</div>'
+         +chips+'</div>'
+         +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+         +'<span style="color:'+st[1]+';font-weight:900;font-size:12px;margin-right:4px">'+st[0]+'</span>'
+         +'<button type="button" class="hsl-btn '+(r.enabled===false?'':'alt')+'" data-lock-act="toggle">'+(r.enabled===false?'🔒 เปิดล็อก':'🔓 ปลดล็อก')+'</button>'
+         +'<button type="button" class="hsl-btn alt" data-lock-act="edit">✏️ แก้ไข</button>'
+         +'<button type="button" class="hsl-btn danger" data-lock-act="delete">🗑️ ลบ</button>'
+         +'</div></div></div>';
+     }).join(''):'<div style="padding:18px;text-align:center;color:#937283;font-size:13px">ยังไม่มีการล็อกสินค้า ตอนนี้ลูกค้าสามารถสั่งซื้อได้ทุกชิ้นตามปกติค่ะ ♡</div>')
+     +'</div>';
+
+   renderPickList();
+
+   const unlockAll=$('#hlgUnlockAllBtn');
+   if(unlockAll)unlockAll.onclick=()=>{
+     const next=lockLoad().map(r=>({...r,enabled:false,updated:Date.now()}));
+     if(lockSave(next)){renderSalesLockAdmin();toast('ปลดล็อกสินค้าทั้งหมดแล้ว ลูกค้าสั่งซื้อได้ตามปกติค่ะ ✓')}
+   };
+
+   root.querySelectorAll('[data-quick-target]').forEach(btn=>{
+     btn.onclick=()=>{
+       const t=btn.dataset.quickTarget;
+       const next=lockLoad();
+       const activeIdx=next.findIndex(r=>r.target===t&&core.active(r));
+       if(activeIdx>=0){
+         next[activeIdx].enabled=false;
+         next[activeIdx].updated=Date.now();
+         if(lockSave(next)){renderSalesLockAdmin();toast('ปลดล็อกเรียบร้อยแล้วค่ะ ✓')}
+       }else{
+         const existingIdx=next.findIndex(r=>r.target===t&&!r.start&&!r.end);
+         if(existingIdx>=0){
+           next[existingIdx].enabled=true;
+           next[existingIdx].updated=Date.now();
+         }else{
+           next.unshift({id:'l'+Date.now(),target:t,skus:[],message:'',enabled:true,start:'',end:'',updated:Date.now()});
+         }
+         if(lockSave(next)){renderSalesLockAdmin();toast('ล็อกเรียบร้อยแล้ว ลูกค้าจะสั่งหมวดนี้ไม่ได้จนกว่าจะปลดค่ะ ✓')}
+       }
+     };
+   });
+
+   $('#hlgLockTarget').onchange=function(){
+     $('#hlgLockPick').style.display=this.value==='selected'?'':'none';
+   };
+   root.querySelectorAll('[data-lock-filter]').forEach(btn=>{
+     btn.onclick=()=>{
+       lockFilter=btn.dataset.lockFilter;
+       root.querySelectorAll('[data-lock-filter]').forEach(b=>b.classList.toggle('active',b===btn));
+       renderPickList();
+     };
+   });
+   $('#hlgLockSearch').oninput=()=>renderPickList();
+   $('#hlgLockSelectVisible').onclick=()=>{
+     visibleCatalog().forEach(x=>pickedSet.add(core.sku(x)));
+     renderPickList();
+   };
+   $('#hlgLockClearVisible').onclick=()=>{
+     visibleCatalog().forEach(x=>pickedSet.delete(core.sku(x)));
+     renderPickList();
+   };
+   const cancel=$('#hlgLockCancel');
+   if(cancel)cancel.onclick=()=>{lockEditing=null;pickedSet.clear();renderSalesLockAdmin()};
+
+   $('#hlgLockSave').onclick=()=>{
+     const target=$('#hlgLockTarget').value;
+     const skus=target==='selected'?Array.from(pickedSet):[];
+     const start=$('#hlgLockStart').value,end=$('#hlgLockEnd').value;
+     if(target==='selected'&&!skus.length){toast('กรุณาติ๊กเลือกสินค้าที่จะล็อกอย่างน้อย 1 ชิ้นค่ะ');return}
+     if(start&&end&&end<=start){toast('เวลาปลดล็อกต้องอยู่หลังเวลาเริ่มล็อกค่ะ');return}
+     const next=lockLoad();
+     const row={id:lockEditing||'l'+Date.now(),target,skus,message:$('#hlgLockMsg').value.trim(),enabled:true,start,end,updated:Date.now()};
+     const i=next.findIndex(r=>r.id===row.id);
+     if(i>=0){row.enabled=next[i].enabled!==false;next[i]=row}
+     else next.unshift(row);
+     if(lockSave(next)){
+       lockEditing=null;pickedSet.clear();
+       renderSalesLockAdmin();
+       toast('บันทึกการล็อกสินค้าเรียบร้อยแล้ว ✓');
+     }
+   };
+
+   root.querySelectorAll('[data-unlock-sku]').forEach(btn=>{
+     btn.onclick=()=>{
+       const ruleId=btn.dataset.ruleId,sku=btn.dataset.unlockSku;
+       const next=lockLoad(),i=next.findIndex(r=>r.id===ruleId);
+       if(i<0)return;
+       next[i].skus=(next[i].skus||[]).filter(k=>k!==sku);
+       next[i].updated=Date.now();
+       if(!next[i].skus.length)next.splice(i,1);
+       if(lockSave(next)){renderSalesLockAdmin();toast('ปลดล็อก '+skuLabel(sku)+' แล้วค่ะ ✓')}
+     };
+   });
+
+   root.querySelectorAll('[data-lock-act]').forEach(b=>{
+     b.onclick=()=>{
+       const id=b.closest('[data-lock-id]').dataset.lockId,next=lockLoad(),i=next.findIndex(r=>r.id===id);
+       if(i<0)return;
+       const act=b.dataset.lockAct;
+       if(act==='edit'){
+         lockEditing=id;
+         pickedSet=new Set(next[i].skus||[]);
+         renderSalesLockAdmin();
+         $('#hlgLockFormCard')?.scrollIntoView({block:'start',behavior:'smooth'});
+         return;
+       }
+       if(act==='delete'){
+         if(!confirm('ลบกฎล็อกนี้ใช่ไหมคะ?'))return;
+         next.splice(i,1);
+       }
+       if(act==='toggle'){
+         next[i].enabled=next[i].enabled===false;
+         next[i].updated=Date.now();
+       }
+       if(lockSave(next)){
+         if(lockEditing===id){lockEditing=null;pickedSet.clear()}
+         renderSalesLockAdmin();
+         toast(act==='delete'?'ลบกฎล็อกแล้ว':next[i].enabled===false?'ปลดล็อกแล้ว ลูกค้าสั่งซื้อได้ตามปกติ ✓':'เปิดล็อกสินค้าแล้ว ✓');
+       }
+     };
+   });
+ }
+
+ const prevSwitchTab=window.switchAdminTab;
+ window.switchAdminTab=function(tab,btn){
+   ensureLockAdminTab();
+   const r=prevSwitchTab?.apply(this,arguments);
+   if(tab==='salesLock')renderSalesLockAdmin();
+   if(tab==='store')paintShortcut();
+   return r;
+ };
+
+ ['buildGallery','stickerBuildGallery','renderUnifiedCart','showPage'].forEach(name=>{const old=window[name];if(typeof old!=='function')return;window[name]=function(){const r=old.apply(this,arguments);decorate();if(name==='showPage'&&arguments[0]==='admin'){ensureLockAdminTab();paintShortcut();if($('#adminPanel-salesLock')?.classList.contains('active'))renderSalesLockAdmin()}setTimeout(decorate,40);return r}});
  // The server said no after the bill was already written here: take the bill back.
  function rejected(order,text){
    try{const rows=typeof getOrders==='function'?getOrders():[],left=rows.filter(o=>o.id!==order.id);if(left.length!==rows.length&&typeof saveOrders==='function')saveOrders(left)}catch(e){}
    refresh();alert('🔒 '+(text||core.DEFAULT_MESSAGE)+'\nออเดอร์นี้ยังไม่ถูกบันทึก กรุณาอย่าโอนเงินนะคะ');
    if(typeof showPage==='function')showPage('home')
  }
- window.hlgSalesLock={lockOf,problem,refresh,rejected,decorate};
- window.addEventListener('storage',e=>{if(e.key===core.KEY){fresh=null;decorate()}});
+ window.hlgSalesLock={lockOf,problem,refresh,rejected,decorate,renderAdmin:renderSalesLockAdmin};
+ window.addEventListener('storage',e=>{if(e.key===core.KEY){fresh=null;decorate();paintShortcut();if($('#adminPanel-salesLock')?.classList.contains('active'))renderSalesLockAdmin()}});
  // Timed locks start and end on their own while the page stays open.
  setInterval(decorate,60000);
- document.addEventListener('DOMContentLoaded',decorate);if(document.readyState!=='loading')decorate();
+ function boot(){ensureLockAdminTab();decorate();paintShortcut()}
+ document.addEventListener('DOMContentLoaded',boot);if(document.readyState!=='loading')boot();
 })();
 </script>
 
