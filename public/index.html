@@ -751,6 +751,15 @@ html { scroll-behavior: smooth; }
 .music-title { font-size: 13px; font-weight: 800; color: #c04070; display: flex; align-items: center; gap: 6px; }
 .music-close { background: none; border: none; font-size: 18px; color: #c0909e; cursor: pointer; }
 .music-controls { display: flex; align-items: center; gap: 8px; padding: 12px 14px; }
+.mc-admin { padding: 10px 14px 12px; border-top: 1px dashed #f0d0e0; background: #fffafc; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 11px; color: #8a5a70; }
+/* Above the admin text-edit button while open, so the song buttons stay tappable. */
+.music-player:not(.hidden) { z-index: 1200200 !important; }
+.mc-admin-now { width: 100%; }
+.mc-admin-now b { color: #b83268; }
+.mc-admin-btn, .mc-admin-reset { border: 1.5px solid #f0b6ce; background: #fff0f5; color: #b83268; border-radius: 999px; padding: 6px 12px; font: inherit; font-weight: 800; cursor: pointer; }
+.mc-admin-reset { background: #fff; color: #8a5a70; border-color: #ead6df; }
+.mc-admin-state { width: 100%; color: #a4501b; font-weight: 700; }
+.mc-admin-state:empty { display: none; }
 .mc-btn { width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid #f0d0e0; background: white; color: #d45a8a; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 
 /* ==========================================================================
@@ -6423,7 +6432,7 @@ if(document.readyState!=='loading'){
       <button class="admin-tab" id="hlgSalesLockAdminTab" data-admin-tab="salesLock" onclick="switchAdminTab('salesLock',this)">🔒 ล็อกสินค้า</button>
       <a class="admin-tab" href="/admin/" target="_blank" style="text-decoration:none;background:#f3e8ff;color:#7c3aed;font-weight:700;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-external-link"></i> Full Admin Portal ↗</a>
     </div>
-    <section class="admin-panel active" id="adminPanel-store"><div class="admin-card"><div class="admin-section-title">เปิดหน้าร้านเพื่อแก้ไข</div><div class="admin-section-sub">Admin สามารถเข้าแต่ละหน้าจริงได้ ไม่จำกัดอยู่แค่ Home เพื่อแก้ไขข้อมูลหรือโปรโมชั่นบนหน้านั้นๆ ได้ทันที</div><div class="v7-store-links"><button onclick="showPage('preorder')">👜 กระเป๋าผ้า / Pre-order</button><button onclick="showPage('wallpaper')">🎨 Wallpaper</button><button onclick="showPage('sticker')">✨ Sticker</button><button onclick="showPage('home')">🏠 Home</button><button onclick="switchAdminTab('salesLock',document.getElementById('hlgSalesLockAdminTab'))" style="background:#fff0f5;color:#b83268;border:1.5px solid #f0b6ce;font-weight:800">🔒 ล็อกสินค้า / เลือกปิดรับออเดอร์</button></div><div id="hlgStoreLockShortcut"></div></div></section>
+    <section class="admin-panel active" id="adminPanel-store"><div class="admin-card"><div class="admin-section-title">เปิดหน้าร้านเพื่อแก้ไข</div><div class="admin-section-sub">Admin สามารถเข้าแต่ละหน้าจริงได้ ไม่จำกัดอยู่แค่ Home เพื่อแก้ไขข้อมูลหรือโปรโมชั่นบนหน้านั้นๆ ได้ทันที</div><div class="v7-store-links"><button onclick="showPage('preorder')">👜 กระเป๋าผ้า / Pre-order</button><button onclick="showPage('wallpaper')">🎨 Wallpaper</button><button onclick="showPage('sticker')">✨ Sticker</button><button onclick="showPage('home')">🏠 Home</button><button onclick="switchAdminTab('salesLock',document.getElementById('hlgSalesLockAdminTab'))" style="background:#fff0f5;color:#b83268;border:1.5px solid #f0b6ce;font-weight:800">🔒 ล็อกสินค้า / เลือกปิดรับออเดอร์</button><button onclick="hlgOpenMusicAdmin()" style="background:#fff0f5;color:#b83268;border:1.5px solid #f0b6ce;font-weight:800">🎵 เปลี่ยนเพลงในร้าน</button></div><div id="hlgStoreLockShortcut"></div></div></section>
     <section class="admin-panel" id="adminPanel-salesLock"></section>
     
     
@@ -6693,7 +6702,7 @@ if(document.readyState!=='loading'){
 </div>
 <div id="musicPlayer" class="music-player hidden">
   <div class="music-header">
-    <span class="music-title"><i class="ti ti-disc"></i> เพลงเพราะๆ</span>
+    <span class="music-title"><i class="ti ti-disc"></i> <span id="mcSongTitle">เพลงเพราะๆ</span></span>
     <button class="music-close" onclick="toggleMusic()"><i class="ti ti-x"></i></button>
   </div>
   <div class="music-controls">
@@ -6701,6 +6710,7 @@ if(document.readyState!=='loading'){
     <button class="mc-btn" onclick="musicPause()"><i class="ti ti-player-pause"></i></button>
     <input type="range" class="mc-volume" id="mcVolume" min="0" max="1" step="0.05" value="0.5" oninput="musicVolume(this.value)"/>
   </div>
+  <div id="mcAdmin" class="mc-admin" hidden></div>
 </div>
 
 
@@ -8279,16 +8289,28 @@ async function wpCheckDownload() {
 }
 
 /* 11. MUSIC CONTROLS */
+// The admin can change the shop's song (hlg_music_v1 = {url, title}); it is a synced site setting,
+// and the file itself is uploaded as media, so every visitor hears the same song.
+var HLG_MUSIC_KEY = 'hlg_music_v1';
+var HLG_DEFAULT_SONG = CDN_BASE + '/music/dereks-tune.mp3';
+function hlgMusicSetting() {
+  try { var v = JSON.parse(localStorage.getItem(HLG_MUSIC_KEY) || 'null'); return v && typeof v.url === 'string' && v.url ? v : null; } catch (e) { return null; }
+}
+function hlgMusicSrc() { var v = hlgMusicSetting(); return v ? v.url : HLG_DEFAULT_SONG; }
 var bgMusic = null;
 function getAudio() {
   if (!bgMusic) {
-    bgMusic = new Audio(CDN_BASE + '/music/dereks-tune.mp3');
+    bgMusic = new Audio(hlgMusicSrc());
     // Fetch the song only once it actually plays, not while the page is loading.
     bgMusic.preload = 'none';
     bgMusic.loop = true;
     bgMusic.volume = 0.5;
     bgMusic.onerror = function() {
-      if (!this.dataset.triedLocal) {
+      // The admin's song could not load: fall back to the shop's own song.
+      if (!this.dataset.triedDefault && this.src.indexOf('/music/dereks-tune.mp3') < 0) {
+        this.dataset.triedDefault = '1';
+        this.src = HLG_DEFAULT_SONG;
+      } else if (!this.dataset.triedLocal) {
         this.dataset.triedLocal = '1';
         this.src = './music/dereks-tune.mp3';
       }
@@ -8296,8 +8318,62 @@ function getAudio() {
   }
   return bgMusic;
 }
+function hlgApplySong() {
+  var t = document.getElementById('mcSongTitle'), v = hlgMusicSetting();
+  if (t) t.textContent = v && v.title ? v.title : 'เพลงเพราะๆ';
+  if (!bgMusic) return;
+  var want = hlgMusicSrc();
+  if (bgMusic.src === new URL(want, location.href).href) return;
+  var playing = !bgMusic.paused;
+  delete bgMusic.dataset.triedDefault; delete bgMusic.dataset.triedLocal;
+  bgMusic.src = want;
+  if (playing) bgMusic.play().catch(function(){});
+}
+function hlgRenderMusicAdmin() {
+  var box = document.getElementById('mcAdmin');
+  if (!box) return;
+  var admin = typeof isAdmin === 'function' && isAdmin();
+  box.hidden = !admin;
+  if (!admin) { box.innerHTML = ''; return; }
+  var v = hlgMusicSetting();
+  box.innerHTML = '<div class="mc-admin-now">เพลงที่ร้านเปิดตอนนี้: <b></b></div>' +
+    '<label class="mc-admin-btn">🎵 เปลี่ยนเพลง<input type="file" accept="audio/*,.mp3,.m4a" hidden></label>' +
+    (v ? '<button type="button" class="mc-admin-reset">ใช้เพลงเดิมของร้าน</button>' : '') +
+    '<div class="mc-admin-state"></div>';
+  box.querySelector('b').textContent = v ? (v.title || 'เพลงที่อัปโหลด') : 'เพลงเดิมของร้าน';
+  var state = box.querySelector('.mc-admin-state');
+  box.querySelector('input').onchange = async function () {
+    var f = this.files && this.files[0]; this.value = '';
+    if (!f) return;
+    if (!/^audio\//.test(f.type) && !/\.(mp3|m4a)$/i.test(f.name)) { state.textContent = 'กรุณาเลือกไฟล์เพลง (.mp3 / .m4a)'; return; }
+    if (f.size > 30 * 1024 * 1024) { state.textContent = 'ไฟล์ใหญ่เกินไป (ไม่เกิน 30 MB)'; return; }
+    if (typeof window.hlgUploadMedia !== 'function') { state.textContent = 'ระบบอัปโหลดยังไม่พร้อม ลองรีเฟรชหน้า'; return; }
+    state.textContent = 'กำลังอัปโหลดเพลง… อย่าเพิ่งปิดหน้านี้';
+    try {
+      var file = f.type ? f : new File([f], f.name, { type: /\.m4a$/i.test(f.name) ? 'audio/mp4' : 'audio/mpeg' });
+      var url = await window.hlgUploadMedia(file);
+      localStorage.setItem(HLG_MUSIC_KEY, JSON.stringify({ url: url, title: f.name.replace(/\.[^.]+$/, '').slice(0, 60), updated: Date.now() }));
+      hlgApplySong(); hlgRenderMusicAdmin();
+      if (typeof showToast === 'function') showToast('เปลี่ยนเพลงแล้ว ลูกค้าทุกคนจะได้ยินเพลงนี้ ♪');
+    } catch (err) { state.textContent = 'อัปโหลดไม่สำเร็จ: ' + err.message; }
+  };
+  var reset = box.querySelector('.mc-admin-reset');
+  if (reset) reset.onclick = function () {
+    if (!confirm('กลับไปใช้เพลงเดิมของร้านใช่ไหมคะ?')) return;
+    localStorage.removeItem(HLG_MUSIC_KEY);
+    hlgApplySong(); hlgRenderMusicAdmin();
+    if (typeof showToast === 'function') showToast('กลับมาใช้เพลงเดิมแล้ว');
+  };
+}
+window.hlgOpenMusicAdmin = function () {
+  document.getElementById('musicPlayer').classList.remove('hidden');
+  hlgRenderMusicAdmin();
+};
+window.addEventListener('hlg:site-settings', function (e) { if ((e.detail && e.detail.keys || []).indexOf(HLG_MUSIC_KEY) >= 0) { hlgApplySong(); hlgRenderMusicAdmin(); } });
+document.addEventListener('DOMContentLoaded', hlgApplySong);
 function toggleMusic() {
   document.getElementById('musicPlayer').classList.toggle('hidden');
+  hlgRenderMusicAdmin();
 }
 function musicPlay() {
   var a = getAudio();
@@ -18624,15 +18700,31 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
    return locks.every(Boolean)?locks[0]:null
  }
  window.hlgPageLock=pageLock;
+ // Any other way into a locked page (a link, a script, a button added later) stays on the current page.
+ function guardShowPage(){
+   const inner=window.showPage;
+   if(typeof inner!=='function'||inner.__hlgLockGuard)return;
+   const guarded=function(page){
+     const rule=isAdm()?null:pageLock(String(page||''));
+     if(rule){toast('🔒 '+core.message(rule));return}
+     return inner.apply(this,arguments)
+   };
+   guarded.__hlgLockGuard=true;
+   window.showPage=guarded
+ }
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',guardShowPage,{once:true});else guardShowPage();
+ window.addEventListener('load',guardShowPage);
  // Page an entry (home card, category pill, quick button) opens.
  function entryTarget(el){
    if(el.dataset.hlgTarget)return el.dataset.hlgTarget;
-   const m=/showPage\('([^']+)'\)/.exec(el.getAttribute('onclick')||'');
+   const m=/(?:showPage|selectPage)\('([^']+)'\)/.exec(el.getAttribute('onclick')||'');
    return m?m[1]:''
  }
  function decorateEntries(){
    const adm=isAdm();
-   document.querySelectorAll('#page-home .v5-products > [data-hlg-target], #page-home [onclick*="showPage("], #hlgHomeCategoryPills button').forEach(el=>{
+   // Every button that opens a page: home cards, category pills, the welcome pop-up, menus, back links.
+   document.querySelectorAll('#page-home .v5-products > [data-hlg-target], [onclick*="showPage("], [onclick*="selectPage("], #hlgHomeCategoryPills button').forEach(el=>{
+     if(el.closest('#page-admin'))return;
      const rule=adm?null:pageLock(entryTarget(el));
      el.classList.toggle('hlg-locked-entry',!!rule);
      let b=el.querySelector(':scope > .hlg-lock-badge');

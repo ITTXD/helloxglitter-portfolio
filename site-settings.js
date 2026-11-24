@@ -47,6 +47,7 @@ const SYNC_KEYS = [
   'hlg_collections_v1',
   'hlg_sales_lock_v1',
   'hlg_banner_meta_v2',
+  'hlg_music_v1',
 ];
 const ALLOWED = new Set(SYNC_KEYS);
 const MAX_VALUE_CHARS = 200 * 1024;
