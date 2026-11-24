@@ -17921,12 +17921,12 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
       var img = p.image_url || p.imageUrl || '';
       return `
         <div class="gcard" data-hlg-badge="${esc(window.hlgBadgeKey ? window.hlgBadgeKey({type:'custom',name:p.name,id:p.id}) : '')}" style="background:#fff;border:1px solid #f2d5e1;border-radius:18px;overflow:hidden;box-shadow:0 4px 16px rgba(184,75,123,0.08);display:flex;flex-direction:column">
-          <div style="aspect-ratio:1/1;position:relative;background:#fff5f9;display:flex;align-items:center;justify-content:center;overflow:hidden">
+          <div class="hlg-cat-open" role="button" tabindex="0" aria-label="ดูรายละเอียด ${esc(p.name)}" onclick="hlgShowProductDetail('${esc(p.id)}')" style="aspect-ratio:1/1;position:relative;background:#fff5f9;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer">
             ${img ? `<img src="${esc(img)}" alt="${esc(p.name)}" style="width:100%;height:100%;object-fit:cover">` : `<div style="font-size:36px">🎀</div>`}
           </div>
           <div style="padding:12px;display:flex;flex-direction:column;flex:1">
-            <div style="font-weight:700;font-size:14px;color:#4a2b38;margin-bottom:4px">${esc(p.name)}</div>
-            ${p.description ? `<div class="hlg-cat-desc-clamp">${esc(p.description)}</div><button type="button" class="hlg-cat-more" onclick="hlgShowProductDetail('${esc(p.id)}','${esc(categoryId)}')">ดูรายละเอียด ▾</button>` : ''}
+            <div class="hlg-cat-open" onclick="hlgShowProductDetail('${esc(p.id)}')" style="font-weight:700;font-size:14px;color:#4a2b38;margin-bottom:4px;cursor:pointer">${esc(p.name)}</div>
+            ${p.description ? `<div class="hlg-cat-desc-clamp hlg-cat-open" onclick="hlgShowProductDetail('${esc(p.id)}')" style="cursor:pointer">${esc(p.description)}</div><button type="button" class="hlg-cat-more" onclick="hlgShowProductDetail('${esc(p.id)}')">ดูรายละเอียด ›</button>` : ''}
             ${p.size ? `<div style="font-size:11px;color:#a8537a;margin-bottom:6px">ขนาด: ${esc(p.size)}</div>` : ''}
             <div style="margin-top:auto;display:flex;align-items:center;justify-content:space-between;padding-top:8px;border-top:1px solid #fbf0f4">
               <span style="font-weight:800;font-size:15px;color:#b84070">${Number(p.price).toLocaleString()} ฿</span>
@@ -17965,13 +17965,9 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
         <div class="hlg-custom-cat-grid" id="catGrid-${esc(categoryId)}">
           ${productsHtml}
         </div>
-        <div class="hlg-cat-detail-host" id="catDetail-${esc(categoryId)}"></div>
       </div>
     `;
 
-    // One product with details: open its detail box right away.
-    var withDesc = prods.filter(function(p) { return p.description; });
-    if (prods.length === 1 && withDesc.length === 1) window.hlgShowProductDetail(prods[0].id, categoryId, true);
 
     return pageEl;
   };
@@ -18008,17 +18004,30 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
   };
 
   // Full-width box under the product grid with the whole description, line breaks kept.
-  window.hlgShowProductDetail = function(productId, categoryId, quiet) {
-    var host = document.getElementById('catDetail-' + categoryId);
+  // Product details open in a sheet over the page (tap the picture, name or ดูรายละเอียด).
+  window.hlgCloseProductDetail = function() {
+    var m = document.getElementById('hlgProductDetailModal');
+    if (m) m.remove();
+    document.documentElement.classList.remove('hlg-detail-open');
+  };
+  window.hlgShowProductDetail = function(productId) {
     var p = getCustomProducts().find(function(x) { return String(x.id) === String(productId); });
-    if (!host || !p) return;
+    if (!p) return;
+    window.hlgCloseProductDetail();
+    var host = document.createElement('div');
+    host.id = 'hlgProductDetailModal';
+    host.className = 'hlg-detail-modal';
+    host.setAttribute('role', 'dialog');
+    host.setAttribute('aria-modal', 'true');
+    host.setAttribute('aria-label', 'รายละเอียด ' + (p.name || 'สินค้า'));
+    host.onclick = function(e) { if (e.target === host) window.hlgCloseProductDetail(); };
     var pics = productImageList(p), img = pics[0] || '';
     var gallery = pics.length > 1 ? `
         <div class="hlg-cat-gallery" onscroll="hlgGalleryDots(this)">${pics.map(function(u, i) { return `<img src="${esc(u)}" alt="${esc(p.name)} รูปที่ ${i + 1}" loading="lazy" onclick="openImgLightbox && openImgLightbox(this.src)">`; }).join('')}</div>
         <div class="hlg-cat-gallery-nav"><button type="button" onclick="hlgGalleryStep(this,-1)" aria-label="รูปก่อนหน้า">‹</button><span class="hlg-cat-gallery-dots">${pics.map(function(_, i) { return `<i class="${i ? '' : 'on'}"></i>`; }).join('')}</span><button type="button" onclick="hlgGalleryStep(this,1)" aria-label="รูปถัดไป">›</button></div>` : '';
     host.innerHTML = `
       <div class="hlg-cat-detail">
-        <button type="button" class="hlg-cat-detail-close" onclick="this.closest('.hlg-cat-detail').remove()" aria-label="ปิดรายละเอียด">×</button>
+        <button type="button" class="hlg-cat-detail-close" onclick="hlgCloseProductDetail()" aria-label="ปิดรายละเอียด">×</button>
         <div class="hlg-cat-detail-head">
           ${img ? `<img src="${esc(img)}" alt="${esc(p.name)}">` : ''}
           <div>
@@ -18029,10 +18038,14 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
           </div>
         </div>
         ${gallery}
-        <div class="hlg-cat-detail-body">${esc(p.description || '')}</div>
+        <div class="hlg-cat-detail-body">${esc(p.description || '') || '<span style="color:#a08a95">ยังไม่มีรายละเอียดเพิ่มเติมค่ะ</span>'}</div>
       </div>`;
-    if (!quiet) host.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.body.appendChild(host);
+    document.documentElement.classList.add('hlg-detail-open');
+    var close = host.querySelector('.hlg-cat-detail-close');
+    if (close) close.focus();
   };
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && document.getElementById('hlgProductDetailModal')) window.hlgCloseProductDetail(); });
 
   window.hlgRenderCategoryPills = function() {
     var cats = getCategories().filter(function(c) { return c && c.show_on_home !== false; });
@@ -18358,6 +18371,12 @@ dialog.hlgc-product-dialog::backdrop{background:rgba(43,22,39,.60);backdrop-filt
 .hlg-size-pick button.on{background:#bc4b7b;color:#fff}
 .hlg-cat-desc-clamp{font-size:12px;color:#8a6d7b;line-height:1.45;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line}
 .hlg-cat-more{align-self:flex-start;border:0;background:none;color:#b84070;font:inherit;font-size:12px;font-weight:800;padding:0;margin-bottom:6px;cursor:pointer}
+.hlg-detail-modal{position:fixed;inset:0;z-index:130000;background:rgba(45,28,37,.55);display:flex;align-items:flex-end;justify-content:center;padding:0}
+@media(min-width:700px){.hlg-detail-modal{align-items:center;padding:24px}}
+.hlg-detail-modal .hlg-cat-detail{margin:0;width:min(640px,100%);max-height:92vh;overflow-y:auto;border-radius:22px 22px 0 0;border:0;background:#fff;box-shadow:0 -10px 40px rgba(60,20,40,.25);-webkit-overflow-scrolling:touch;padding-bottom:calc(18px + env(safe-area-inset-bottom))}
+@media(min-width:700px){.hlg-detail-modal .hlg-cat-detail{border-radius:22px}}
+.hlg-detail-modal .hlg-cat-detail-close{position:sticky;top:0;float:right;width:34px;height:34px;border-radius:50%;background:#fceaf1;font-size:20px;z-index:2}
+html.hlg-detail-open,html.hlg-detail-open body{overflow:hidden}
 .hlg-cat-detail{position:relative;margin-top:16px;background:#fff8fb;border:1.5px dashed #f0a8c2;border-radius:18px;padding:16px 18px;box-shadow:0 4px 14px rgba(184,75,123,.08);color:#5c3a4a}
 .hlg-cat-detail-close{position:absolute;right:10px;top:8px;border:0;background:none;color:#b84070;font-size:22px;line-height:1;cursor:pointer}
 .hlg-cat-detail-head{display:flex;gap:14px;align-items:flex-start;margin-bottom:12px;padding-right:22px}
@@ -18583,7 +18602,7 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
    const entry=e.target.closest?.('.hlg-locked-entry');
    if(entry){e.preventDefault();e.stopImmediatePropagation();toast('🔒 '+(entry.dataset.hlgLockMsg||core.DEFAULT_MESSAGE));return}
    const card=e.target.closest?.('.gcard.hlg-locked');
-   if(card&&!e.target.closest?.('[onclick*="hlgOpenAddProductModal"],[onclick*="hlgDeleteProduct"],.hlg-cat-more')){
+   if(card&&!e.target.closest?.('[onclick*="hlgOpenAddProductModal"],[onclick*="hlgDeleteProduct"],.hlg-cat-more,.hlg-cat-open')){
      e.preventDefault();e.stopImmediatePropagation();toast('🔒 '+(card.dataset.hlgLockMsg||core.DEFAULT_MESSAGE));return
    }
    // Final "ตกลง": ask the server for the newest rules first, a tab left open may be out of date.
