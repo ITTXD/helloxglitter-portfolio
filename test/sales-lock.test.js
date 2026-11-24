@@ -55,6 +55,12 @@ const storeWith = rules => ({ get: async (c, id) => (c === 'settings' && id === 
     assert.strictEqual(lock.lockFor(large, c), null);
   });
 
+  await test('a picked shop-category item is locked in the cart too (cart adds the category as variant)', () => {
+    const c = cfg([{ target: 'selected', skus: [lock.sku({ type: 'custom', name: '(pre) Calendar 2027', variant: '' })] }]);
+    assert.ok(lock.lockFor({ type: 'custom', categoryId: 'cat1', name: '(pre) Calendar 2027', variant: 'Calendar 2027' }, c));
+    assert.strictEqual(lock.lockFor({ type: 'custom', name: 'Other', variant: 'Calendar 2027' }, c), null);
+  });
+
   await test('whole-shop lock uses the default message when none is set', () => {
     assert.strictEqual(lock.problem([sticker], cfg([{ target: 'all' }])).text, lock.DEFAULT_MESSAGE);
   });
@@ -85,6 +91,13 @@ const storeWith = rules => ({ get: async (c, id) => (c === 'settings' && id === 
         assert.ok(src.includes("siteSettings.salesLockProblem(storyStore, '" + kind + "', body)"), file + ' ' + kind);
       }
     }
+  });
+
+  await test('storefront in-page #page-admin includes the sales lock tab and product picker UI', () => {
+    const html = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
+    assert.ok(html.includes('id="hlgSalesLockAdminTab"'), 'sales lock tab button present in #page-admin');
+    assert.ok(html.includes('id="adminPanel-salesLock"'), 'sales lock panel present in #page-admin');
+    assert.ok(html.includes('renderSalesLockAdmin'), 'sales lock in-page renderer present');
   });
 
   console.log('\n  RESULT: ' + passed + ' passed, ' + failed + ' failed');

@@ -60,6 +60,16 @@
     if (/\.ttf$/.test(name)) return 'font/ttf';
     return 'application/octet-stream';
   }
+  function adminHeaders() {
+    // The login cookie, or the session token for pages where the cookie is not sent.
+    var h = { 'Content-Type': 'application/json' };
+    try {
+      var t = sessionStorage.getItem('hlg_admin_token');
+      if (t) h['Authorization'] = 'Bearer ' + t;
+    } catch (e) {}
+    return h;
+  }
+
   // Uploads a file and returns its absolute URL (https on the live site).
   async function uploadMedia(blob) {
     var mime = guessMime(blob);
@@ -70,7 +80,7 @@
     for (var i = 0; i < count; i++) {
       var r = await fetch('/api/story-media', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: adminHeaders(),
         credentials: 'include',
         body: JSON.stringify({ media_id: id, index: i, count: count, mime: mime, data: b64(bytes.subarray(i * CHUNK, (i + 1) * CHUNK)) })
       });
@@ -125,7 +135,7 @@
       }
       var r = await fetch('/api/site-settings', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: adminHeaders(),
         credentials: 'include',
         body: JSON.stringify({ values: values })
       });
@@ -142,6 +152,7 @@
       timer = setTimeout(flush, 15000);
     }
   }
+  window.hlgSiteSyncFlush = flush;
   Storage.prototype.setItem = function (key, value) {
     origSet.call(this, key, value);
     if (this === ls && SYNC[key] && !applying && adminContext()) queue(key);

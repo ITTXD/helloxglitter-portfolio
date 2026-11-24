@@ -59,7 +59,12 @@
   function matches(rule, item) {
     var type = String(item.type || 'bag');
     if (rule.target === 'all') return true;
-    if (rule.target === 'selected') return Array.isArray(rule.skus) && rule.skus.indexOf(sku(item)) >= 0;
+    if (rule.target === 'selected') {
+      if (!Array.isArray(rule.skus)) return false;
+      // Items of a shop-made category carry the category name as variant in the cart but not
+      // on their cards, so the picker stores them without one: match on type + name.
+      return rule.skus.indexOf(sku(item)) >= 0 || (type === 'custom' && rule.skus.indexOf(sku({ type: type, name: item.name, variant: '' })) >= 0);
+    }
     if (rule.target === 'type:' + type) return true;
     if (rule.target.indexOf('size:') === 0) return type === 'bag' && rule.target === 'size:' + sizeKeyOf(item);
     return false;
