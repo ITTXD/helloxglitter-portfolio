@@ -2302,8 +2302,8 @@ function renderProductsView() {
             <input id="hlgPrice" type="number" min="0" max="999999" step="1" required placeholder="เช่น 69" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
           </label>
           <label style="display:block;font-size:13px;color:#765461;font-weight:600">
-            คำอธิบายสั้น ๆ
-            <input id="hlgProdDesc" maxlength="150" placeholder="เช่น ไซส์กะทัดรัด จุของได้เยอะ" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+            รายละเอียดสินค้า <small style="font-weight:400;color:#9a7f8c">(ขึ้นบรรทัดใหม่ได้ ลูกค้าเห็นในกล่องรายละเอียด)</small>
+            <textarea id="hlgProdDesc" rows="8" maxlength="4000" placeholder="เช่น ขนาด วัสดุ ของแถม วันเปิด–ปิดพรี วันจัดส่ง" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff;resize:vertical;line-height:1.6"></textarea>
           </label>
           <label style="display:block;font-size:13px;color:#765461;font-weight:600">
             อัปโหลดรูปสินค้า
