@@ -3719,6 +3719,9 @@ if(document.readyState!=='loading'){build();update()}
   opacity:1;
   transform:none;
 }
+.v8-inline-move{position:absolute;top:7px;left:7px;z-index:8;display:flex;gap:4px}
+.v8-inline-move button{width:29px;height:29px;border:0;border-radius:50%;background:rgba(255,255,255,.95);color:#b84070;font-size:12px;box-shadow:0 2px 8px rgba(150,60,100,.18);cursor:pointer}
+.v8-inline-move button:disabled{opacity:.35;cursor:default}
 .v8-inline-delete{
   position:absolute;
   top:7px;
@@ -4045,7 +4048,13 @@ async function renderInline(){
     root.classList.add('v8-inline-preview-grid');
     root.innerHTML='';
 
-    for(let i=0;i<a.length;i++){
+    // Customers see open cards first: cards whose page is locked move to the end (saved order unchanged).
+    const order=a.map((_,k)=>k);
+    if(!isAdmin()&&typeof window.hlgPageLock==='function'){
+      const locked=k=>{const t=a[k].target==='bag'?'preorder':a[k].target;try{return window.hlgPageLock(t)?1:0}catch(e){return 0}};
+      order.sort((p,q)=>locked(p)-locked(q)||p-q);
+    }
+    for(const i of order){
       const x=a[i];if(x.hidden&&!isAdmin())continue;
       const fallbackPvImg = (x.target === 'wallpaper' || /wallpaper/i.test(x.name)) ? '/images/wallphone.jpg' : ((x.target === 'preorder' || /กระเป๋า/i.test(x.name)) ? '/images/normal-01.jpg' : null);
       const u = images[i] || fallbackPvImg;
@@ -4055,6 +4064,7 @@ async function renderInline(){
 
       if(isAdmin()){
         card.innerHTML=`
+          <div class="v8-inline-move" role="group" aria-label="ย้ายลำดับการ์ด"><button type="button" data-move="-1" title="ย้ายไปก่อนหน้า" aria-label="ย้ายไปก่อนหน้า" ${i===0?'disabled':''}>◀</button><button type="button" data-move="1" title="ย้ายไปถัดไป" aria-label="ย้ายไปถัดไป" ${i===a.length-1?'disabled':''}>▶</button></div>
           <button class="v8-inline-delete" type="button" title="${x.hidden?'แสดงพรีวิวอีกครั้ง':'ซ่อนพรีวิวจากลูกค้า'}" aria-label="${x.hidden?'แสดงพรีวิวอีกครั้ง':'ซ่อนพรีวิวจากลูกค้า'}">${x.hidden?'↺':'×'}</button>
           <div class="v8-inline-preview-image" data-image>
             ${u?`<img src="${u}" alt="${esc(x.name)}"><button class="v8-inline-remove-img" type="button">ลบรูป</button>`:`<div class="v8-inline-preview-empty"><strong>＋</strong><span>แตะเพื่อเพิ่มรูป</span></div>`}
@@ -4103,6 +4113,14 @@ async function renderInline(){
           };
           reader.readAsDataURL(f);
         };
+        card.querySelectorAll('.v8-inline-move [data-move]').forEach(b=>b.onclick=async e=>{
+          e.stopPropagation();
+          const rows=load().map(normalize),j=i+Number(b.dataset.move);
+          if(j<0||j>=rows.length)return;
+          const t=rows[i];rows[i]=rows[j];rows[j]=t;
+          save(rows);await renderInline();
+          if(window.showToast)showToast('ย้ายลำดับแล้ว ✓')
+        });
         card.querySelector('.v8-inline-delete').onclick=async e=>{
           e.stopPropagation();
           const rows=load().map(normalize),cur=rows[i];if(!cur)return;
