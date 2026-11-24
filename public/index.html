@@ -17859,13 +17859,18 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
     });
 
     var isAdm = isAdminUser();
-    var coverHtml = cat.cover_url ? `<div style="max-width:320px;margin:0 auto 12px;border-radius:18px;overflow:hidden;box-shadow:0 4px 16px rgba(184,75,123,0.12)"><img src="${esc(cat.cover_url)}" alt="${esc(cat.name)}" style="width:100%;height:auto;display:block"></div>` : '';
+    var size = ['s', 'm', 'l'].indexOf(cat.image_size) >= 0 ? cat.image_size : 'm';
+    var coverHtml = cat.cover_url ? `<div class="hlg-cat-cover" style="margin:0 auto 12px;border-radius:18px;overflow:hidden;box-shadow:0 4px 16px rgba(184,75,123,0.12)"><img src="${esc(cat.cover_url)}" alt="${esc(cat.name)}" style="width:100%;height:auto;display:block"></div>` : '';
 
     var adminBarHtml = isAdm ? `
       <div class="hlg-cat-admin-bar" style="background:#fff0f6;border:1.5px dashed #f0a8c2;border-radius:18px;padding:14px 18px;margin:0 auto 18px;max-width:960px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;box-shadow:0 4px 14px rgba(184,75,123,0.08)">
         <div>
           <b style="color:#b83a6f;font-size:14px;display:block">👑 โหมดแอดมิน: จัดการสินค้าหมวด "${esc(cat.name)}"</b>
           <span style="font-size:12px;color:#875c6e">เพิ่มสินค้า อัปโหลดรูปภาพ ตั้งราคาเองได้ทันที ลูกค้าจะเห็นและสั่งซื้อได้เลยค่ะ</span>
+        </div>
+        <div class="hlg-size-pick" role="group" aria-label="ขนาดรูปในหน้านี้">
+          <span>ขนาดรูป</span>
+          ${[['s','เล็ก'],['m','กลาง'],['l','ใหญ่']].map(function(x) { return `<button type="button" class="${size === x[0] ? 'on' : ''}" onclick="hlgSetCategoryImageSize('${esc(categoryId)}','${x[0]}',this)">${x[1]}</button>`; }).join('')}
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button type="button" class="hlg-btn-add-product" onclick="hlgOpenAddProductModal('${esc(categoryId)}')" style="border:none;border-radius:12px;background:#bc4b7b;color:#fff;font-weight:700;padding:9px 16px;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 3px 10px rgba(188,75,123,0.25)">
@@ -17910,6 +17915,7 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
       </div>
     `;
 
+    pageEl.dataset.hlgImgSize = size;
     pageEl.innerHTML = `
       <div class="page-backbar"><button class="page-backbtn" type="button" onclick="goBackPage()"><i class="ti ti-arrow-left"></i> ย้อนกลับ</button></div>
       <div class="hero cat-hero" style="text-align:center;padding:26px 16px 16px;background:linear-gradient(180deg,#fff5f9 0%,#ffffff 100%)">
@@ -17921,7 +17927,7 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
       <div class="sec" style="max-width:960px;margin:0 auto;padding:0 14px 40px">
         ${adminBarHtml}
         <div class="sec-title" style="margin-bottom:14px"><i class="ti ti-heart"></i> รายการสินค้า (${prods.length} รายการ)</div>
-        <div class="hlg-custom-cat-grid" id="catGrid-${esc(categoryId)}" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(160px, 1fr));gap:14px">
+        <div class="hlg-custom-cat-grid" id="catGrid-${esc(categoryId)}">
           ${productsHtml}
         </div>
         <div class="hlg-cat-detail-host" id="catDetail-${esc(categoryId)}"></div>
@@ -17933,6 +17939,28 @@ window.addEventListener('pageshow',e=>{if(e.persisted)hydrate().catch(console.er
     if (prods.length === 1 && withDesc.length === 1) window.hlgShowProductDetail(prods[0].id, categoryId, true);
 
     return pageEl;
+  };
+
+  // Admin: picture size of a category page (เล็ก / กลาง / ใหญ่), saved on the category.
+  window.hlgSetCategoryImageSize = async function(categoryId, size, btn) {
+    var page = document.getElementById('page-' + categoryId);
+    var before = page ? page.dataset.hlgImgSize : '';
+    if (page) page.dataset.hlgImgSize = size;
+    if (btn) btn.parentNode.querySelectorAll('button').forEach(function(b) { b.classList.toggle('on', b === btn); });
+    try {
+      var res = await hlgAdminFetch('/api/categories/' + encodeURIComponent(categoryId), {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image_size: size })
+      });
+      var d = await res.json().catch(function() { return {}; });
+      if (!res.ok || d.success === false) throw new Error(d.error || 'บันทึกไม่สำเร็จ');
+      var cats = getCategories(), c = cats.find(function(x) { return x.id === categoryId; });
+      if (c) { c.image_size = size; localStorage.setItem(CAT_KEY, JSON.stringify(cats)); }
+      if (typeof showToast === 'function') showToast('ตั้งขนาดรูปแล้ว ✓');
+    } catch (err) {
+      if (page) page.dataset.hlgImgSize = before;
+      window.hlgEnsureCategoryPage(categoryId);
+      alert(err.message || 'บันทึกขนาดรูปไม่สำเร็จ');
+    }
   };
 
   window.hlgGalleryStep = function(btn, dir) {
@@ -18274,6 +18302,25 @@ dialog.hlgc-product-dialog::backdrop{background:rgba(43,22,39,.60);backdrop-filt
 #hlgReceiptImageViewer{position:fixed;inset:0;z-index:1000003;display:flex;justify-content:center;align-items:center;box-sizing:border-box;padding:calc(10px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom));background:rgba(42,23,39,.78);backdrop-filter:blur(6px)}#hlgReceiptImageViewer .hrp-viewer{width:min(100%,600px);max-height:100%;overflow:auto;border-radius:18px;background:#fff8fb;padding:14px;box-sizing:border-box;text-align:center;-webkit-overflow-scrolling:touch}#hlgReceiptImageViewer img{display:block;width:100%;height:auto;max-width:100%;border-radius:12px;box-shadow:0 4px 22px #8f49643a;touch-action:auto}#hlgReceiptImageViewer h3{color:#b44678;margin:2px 0 5px}#hlgReceiptImageViewer p{font-size:12px;color:#856675;line-height:1.5}#hlgReceiptImageViewer .hrp-buttons{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:10px 0}#hlgReceiptImageViewer .hrp-buttons a,#hlgReceiptImageViewer .hrp-buttons button{border:0;border-radius:10px;background:#be4a7a;color:#fff;padding:10px 14px;font:inherit;font-size:13px;text-decoration:none;cursor:pointer}#hlgReceiptImageViewer .hrp-buttons .hrp-close{background:#f3dce7;color:#8d4367}
 </style>
 <style id="hlg-cat-detail-css">
+/* Picture size per category page: s / m / l */
+.page[data-hlg-img-size]{--hlg-cover:320px;--hlg-card:150px;--hlg-gallery:440px;--hlg-thumb:120px}
+.page[data-hlg-img-size="s"]{--hlg-cover:200px;--hlg-card:100px;--hlg-gallery:300px;--hlg-thumb:84px}
+.page[data-hlg-img-size="l"]{--hlg-cover:520px;--hlg-card:250px;--hlg-gallery:640px;--hlg-thumb:160px}
+.hlg-cat-cover{max-width:min(var(--hlg-cover,320px),100%)}
+.hlg-custom-cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(var(--hlg-card,150px),100%),1fr));gap:14px}
+.page[data-hlg-img-size="s"] .hlg-custom-cat-grid{gap:10px}
+.page[data-hlg-img-size="s"] .hlg-custom-cat-grid .gcard > div:nth-child(2){padding:8px!important}
+.page[data-hlg-img-size="s"] .hlg-custom-cat-grid .gcard > div:nth-child(2) > div:first-child{font-size:12px!important}
+.page[data-hlg-img-size="s"] .hlg-custom-cat-grid .hlg-cat-desc-clamp{-webkit-line-clamp:2;font-size:11px}
+.page[data-hlg-img-size="s"] .hlg-custom-cat-grid div:has(> .hlg-cat-add-btn){flex-direction:column;align-items:stretch!important;gap:6px}
+.page[data-hlg-img-size="s"] .hlg-custom-cat-grid div:has(> .hlg-cat-add-btn) > span{font-size:13px!important;white-space:nowrap}
+.page[data-hlg-img-size="s"] .hlg-custom-cat-grid .hlg-cat-add-btn{padding:6px 4px!important;font-size:11px!important;white-space:nowrap}
+.hlg-cat-gallery img{max-height:var(--hlg-gallery,440px)!important}
+.hlg-cat-detail-head img{width:var(--hlg-thumb,120px)!important;height:var(--hlg-thumb,120px)!important}
+.hlg-size-pick{display:inline-flex;align-items:center;gap:4px;background:#fff;border:1px solid #efc3d4;border-radius:12px;padding:4px}
+.hlg-size-pick span{font-size:11px;font-weight:800;color:#a8406f;padding:0 6px}
+.hlg-size-pick button{border:0;border-radius:9px;background:none;color:#8a4465;font:inherit;font-size:12px;font-weight:700;padding:6px 10px;cursor:pointer}
+.hlg-size-pick button.on{background:#bc4b7b;color:#fff}
 .hlg-cat-desc-clamp{font-size:12px;color:#8a6d7b;line-height:1.45;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line}
 .hlg-cat-more{align-self:flex-start;border:0;background:none;color:#b84070;font:inherit;font-size:12px;font-weight:800;padding:0;margin-bottom:6px;cursor:pointer}
 .hlg-cat-detail{position:relative;margin-top:16px;background:#fff8fb;border:1.5px dashed #f0a8c2;border-radius:18px;padding:16px 18px;box-shadow:0 4px 14px rgba(184,75,123,.08);color:#5c3a4a}
