@@ -745,6 +745,7 @@ module.exports = async (req, res) => {
         description: String(body.description || '').trim(),
         cover_url: String(body.cover_url || '').trim(),
         show_on_home: body.show_on_home !== false,
+        image_size: ['s', 'm', 'l'].indexOf(body.image_size) >= 0 ? body.image_size : 'm',
         created_at: new Date().toISOString()
       };
 
@@ -803,6 +804,8 @@ module.exports = async (req, res) => {
       }
 
       if (body.name) cat.name = String(body.name).trim();
+      // Picture size on the category page: s / m / l (admin picks one of three).
+      if (body.image_size !== undefined) cat.image_size = ['s', 'm', 'l'].indexOf(body.image_size) >= 0 ? body.image_size : 'm';
       if (body.description !== undefined) cat.description = String(body.description).trim();
       if (body.cover_url !== undefined) cat.cover_url = String(body.cover_url).trim();
       if (body.show_on_home !== undefined) cat.show_on_home = body.show_on_home !== false;

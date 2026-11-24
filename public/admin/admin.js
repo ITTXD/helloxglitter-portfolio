@@ -1987,12 +1987,20 @@ function renderCategoryManager() {
             <input id="hlgCatDesc" maxlength="150" placeholder="เช่น สินค้าน่ารัก งานอะคริลิคเคลือบกลิตเตอร์" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
           </label>
           <label style="display:block;font-size:13px;color:#765461;font-weight:600">
+            ขนาดรูปในหน้าหมวด
+            <select id="hlgCatImageSize" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+              <option value="s">เล็ก (การ์ดเล็ก เห็นหลายชิ้นต่อแถว)</option>
+              <option value="m" selected>กลาง</option>
+              <option value="l">ใหญ่ (รูปเด่น เห็นรายละเอียดชัด)</option>
+            </select>
+          </label>
+          <label style="display:block;font-size:13px;color:#765461;font-weight:600">
             อัปโหลดรูปหน้าปกหมวด
             <input id="hlgCatCoverFile" type="file" accept="image/*" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
           </label>
           <label style="display:block;font-size:13px;color:#765461;font-weight:600">
             หรือใส่ลิงก์รูป HTTPS
-            <input id="hlgCatCoverUrl" type="url" placeholder="https://..." style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+            <input id="hlgCatCoverUrl" type="text" inputmode="url" placeholder="https://... หรือ /api/story-media/..." style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
           </label>
         </div>
         <div style="margin:12px 0 6px">
@@ -2143,6 +2151,7 @@ function editCategoryRow(id) {
   document.getElementById("hlgCatDesc").value = c.description || "";
   document.getElementById("hlgCatCoverUrl").value = c.cover_url || "";
   document.getElementById("hlgCatShowHome").checked = c.show_on_home !== false;
+  document.getElementById("hlgCatImageSize").value = c.image_size || "m";
   document.getElementById("hlgCatSaveBtn").textContent = "อัปเดตหมวดหมู่";
   document.getElementById("hlgCatForm").scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -2154,6 +2163,7 @@ function resetCategoryForm() {
   document.getElementById("hlgCatCoverFile").value = "";
   document.getElementById("hlgCatCoverUrl").value = "";
   document.getElementById("hlgCatShowHome").checked = true;
+  document.getElementById("hlgCatImageSize").value = "m";
   document.getElementById("hlgCatSaveBtn").textContent = "บันทึกหมวดหมู่";
 }
 
@@ -2189,7 +2199,7 @@ async function saveCategory(e) {
       method,
       headers: { 'Content-Type': 'application/json', 'x-admin-pin': '333999' },
       credentials: 'include',
-      body: JSON.stringify({ name, description, cover_url, show_on_home: showOnHome })
+      body: JSON.stringify({ name, description, cover_url, show_on_home: showOnHome, image_size: document.getElementById("hlgCatImageSize").value })
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
@@ -2312,7 +2322,7 @@ function renderProductsView() {
           </label>
           <label style="display:block;font-size:13px;color:#765461;font-weight:600">
             หรือใส่ลิงก์รูป HTTPS
-            <input id="hlgImageUrl" type="url" placeholder="https://..." style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+            <input id="hlgImageUrl" type="text" inputmode="url" placeholder="https://... หรือ /api/story-media/..." style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
           </label>
           <label id="hlgDownloadWrap" style="display:none;font-size:13px;color:#765461;font-weight:600">
             ลิงก์ดาวน์โหลด (สำหรับ Wallpaper / Digital File) 🔗
@@ -2620,7 +2630,7 @@ function renderPreviewManager() {
           </label>
           <label style="display:block;font-size:13px;color:#765461;font-weight:600">
             หรือใส่ลิงก์รูป HTTPS
-            <input id="hlgPvImageUrl" type="url" placeholder="https://..." style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
+            <input id="hlgPvImageUrl" type="text" inputmode="url" placeholder="https://... หรือ /api/story-media/..." style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #e8c7d5;border-radius:10px;font:inherit;background:#fff">
           </label>
         </div>
         <div style="margin-top:14px;display:flex;gap:8px">
