@@ -759,7 +759,7 @@ async function handleApi(req, res) {
       preview_cards: Array.isArray(body.preview_cards) ? body.preview_cards : (Array.isArray(existing.preview_cards) ? existing.preview_cards : []),
       updated_at: new Date().toISOString(),
     };
-    await fsSetDoc('settings', 'storefront', settings);
+    await fsSetDoc('settings', 'storefront', await storyService.offloadDataImages(storyStore, settings));
     sendJson(res, 200, { success: true, settings });
     return true;
   }
@@ -826,7 +826,7 @@ async function handleApi(req, res) {
     sf.categories = categories;
     sf.preview_cards = previewCards;
     sf.updated_at = new Date().toISOString();
-    await fsSetDoc('settings', 'storefront', sf);
+    await fsSetDoc('settings', 'storefront', await storyService.offloadDataImages(storyStore, sf));
 
     sendJson(res, 200, { success: true, category: newCat });
     return true;
@@ -885,7 +885,7 @@ async function handleApi(req, res) {
     sf.categories = categories;
     sf.preview_cards = previewCards;
     sf.updated_at = new Date().toISOString();
-    await fsSetDoc('settings', 'storefront', sf);
+    await fsSetDoc('settings', 'storefront', await storyService.offloadDataImages(storyStore, sf));
 
     sendJson(res, 200, { success: true, category: cat });
     return true;
@@ -909,7 +909,7 @@ async function handleApi(req, res) {
     sf.custom_products = customProducts;
     sf.preview_cards = previewCards;
     sf.updated_at = new Date().toISOString();
-    await fsSetDoc('settings', 'storefront', sf);
+    await fsSetDoc('settings', 'storefront', await storyService.offloadDataImages(storyStore, sf));
 
     sendJson(res, 200, { success: true });
     return true;
@@ -957,7 +957,7 @@ async function handleApi(req, res) {
 
     sf.custom_products = customProducts;
     sf.updated_at = new Date().toISOString();
-    await fsSetDoc('settings', 'storefront', sf);
+    await fsSetDoc('settings', 'storefront', await storyService.offloadDataImages(storyStore, sf));
 
     sendJson(res, 200, { success: true, product: newProd });
     return true;
@@ -990,7 +990,7 @@ async function handleApi(req, res) {
 
     sf.custom_products = customProducts;
     sf.updated_at = new Date().toISOString();
-    await fsSetDoc('settings', 'storefront', sf);
+    await fsSetDoc('settings', 'storefront', await storyService.offloadDataImages(storyStore, sf));
 
     sendJson(res, 200, { success: true, product: prod });
     return true;
@@ -1006,7 +1006,7 @@ async function handleApi(req, res) {
 
     sf.custom_products = customProducts;
     sf.updated_at = new Date().toISOString();
-    await fsSetDoc('settings', 'storefront', sf);
+    await fsSetDoc('settings', 'storefront', await storyService.offloadDataImages(storyStore, sf));
 
     sendJson(res, 200, { success: true });
     return true;
@@ -1035,7 +1035,7 @@ async function handleApi(req, res) {
     const sf = (await fsGetDoc('settings', 'storefront')) || {};
     sf.preview_cards = cards;
     sf.updated_at = new Date().toISOString();
-    await fsSetDoc('settings', 'storefront', sf);
+    await fsSetDoc('settings', 'storefront', await storyService.offloadDataImages(storyStore, sf));
 
     sendJson(res, 200, { success: true, preview_cards: cards });
     return true;
@@ -2564,7 +2564,9 @@ const requestHandler = async (req, res) => {
     serveStatic(req, res);
   } catch (err) {
     console.error('Server error:', err);
-    sendJson(res, 500, { error: 'Internal server error' });
+    // Say so when a save failed because the settings document is too big, instead of a bare 500.
+    const tooBig = /maximum allowed size|exceeds the maximum/i.test(String(err && err.message));
+    sendJson(res, 500, { error: tooBig ? 'ข้อมูลร้านใหญ่เกินที่ระบบเก็บได้ กรุณาลดรูปหรือข้อมูลที่ไม่ใช้แล้วค่ะ' : 'Internal server error' });
   }
 };
 
