@@ -177,4 +177,45 @@ async function handleStoryApi(req, res, pathname, method, ctx) {
   return false;
 }
 
-module.exports = { handleStoryApi, cleanStories, parseRange, CHUNK_BYTES, MAX_CHUNKS, MAX_RESPONSE_BYTES };
+/**
+ * Moves pictures that were pasted into a settings document as data: URLs into the
+ * media store, and puts '/api/story-media/<id>' in their place (in place, on `value`).
+ * The storefront settings document holds every category, product and preview card,
+ * and inline pictures had pushed it to Firestore's 1 MiB limit, so saves failed.
+ * The id comes from the picture's hash: the same picture is stored once, and saving
+ * the same document again writes nothing new.
+ */
+const DATA_IMAGE_RE = /^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/;
+const INLINE_IMAGE_MIN_CHARS = 2048; // tiny icons can stay inline
+async function storeDataImage(store, dataUrl) {
+  const m = DATA_IMAGE_RE.exec(dataUrl);
+  if (!m) return dataUrl;
+  const mime = m[1];
+  const buf = Buffer.from(m[2], 'base64');
+  const id = 'img' + require('crypto').createHash('sha1').update(buf).digest('hex').slice(0, 30);
+  const count = Math.max(1, Math.ceil(buf.length / CHUNK_BYTES));
+  if (count > MAX_CHUNKS) return dataUrl;
+  if (!(await store.get(MEDIA_COLLECTION, metaKey(id)))) {
+    for (let i = 0; i < count; i++) {
+      await store.set(MEDIA_COLLECTION, chunkId(id, i), { data: buf.subarray(i * CHUNK_BYTES, (i + 1) * CHUNK_BYTES).toString('base64') });
+    }
+    await store.set(MEDIA_COLLECTION, metaKey(id), { mime, chunks: count, size: buf.length, created_at: new Date().toISOString() });
+  }
+  return '/api/story-media/' + id;
+}
+async function offloadDataImages(store, value) {
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) value[i] = await offloadDataImages(store, value[i]);
+    return value;
+  }
+  if (value && typeof value === 'object') {
+    for (const k of Object.keys(value)) value[k] = await offloadDataImages(store, value[k]);
+    return value;
+  }
+  if (typeof value === 'string' && value.length >= INLINE_IMAGE_MIN_CHARS && value.startsWith('data:image/')) {
+    return storeDataImage(store, value);
+  }
+  return value;
+}
+
+module.exports = { handleStoryApi, cleanStories, parseRange, offloadDataImages, CHUNK_BYTES, MAX_CHUNKS, MAX_RESPONSE_BYTES };

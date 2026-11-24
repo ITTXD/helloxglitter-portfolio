@@ -21,14 +21,50 @@ function switchChannelFilter(channel) {
 
 // Bag / wallpaper / sticker kept apart so each is packed or sent on its own.
 // An order from the unified cart can hold several kinds and then shows under each.
+// Filter key of one order line: bag / wallpaper / sticker, or 'cat:<id>' for a category the shop created.
+function itemKind(x) {
+  if (x.type === 'wallpaper' || x.type === 'sticker') return x.type;
+  if (x.type === 'custom') return 'cat:' + String(x.categoryId || x.category_id || x.variant || 'other');
+  return 'bag';
+}
 function orderKinds(o) {
   var kinds = {};
   if (Array.isArray(o.items) && o.items.length) {
-    o.items.forEach(function(x) { if (x) kinds[x.type === 'wallpaper' || x.type === 'sticker' ? x.type : 'bag'] = true; });
+    o.items.forEach(function(x) { if (x) kinds[itemKind(x)] = true; });
   } else {
     kinds[o.type === 'wallpaper' || o.type === 'sticker' ? o.type : 'bag'] = true;
   }
   return kinds;
+}
+
+// One filter tab per shop-created category: from the category list, plus any still found in orders.
+function renderCategoryTypeTabs() {
+  var bar = document.getElementById('filterTypeTabs');
+  if (!bar) return;
+  var names = {};
+  (typeof adminCategories !== 'undefined' ? adminCategories : []).forEach(function(c) {
+    if (c && c.id && ['bag', 'sticker', 'wallpaper'].indexOf(c.id) < 0) names['cat:' + c.id] = c.name || c.id;
+  });
+  allOrders.forEach(function(o) {
+    (Array.isArray(o.items) ? o.items : []).forEach(function(x) {
+      if (x && x.type === 'custom') { var k = itemKind(x); if (!names[k]) names[k] = x.variant || k.slice(4); }
+    });
+  });
+  bar.querySelectorAll('.tytab[data-type^="cat:"]').forEach(function(b) { if (!names[b.dataset.type]) b.remove(); });
+  Object.keys(names).forEach(function(k) {
+    var b = Array.prototype.find.call(bar.querySelectorAll('.tytab'), function(x) { return x.dataset.type === k; });
+    if (!b) {
+      b = document.createElement('button');
+      b.className = 'chtab tytab';
+      b.dataset.type = k;
+      b.onclick = function() { switchTypeFilter(k); };
+      bar.appendChild(b);
+    }
+    b.textContent = '🗂 ' + names[k] + ' ';
+    var n = document.createElement('span'); n.className = 'ftab-count'; n.textContent = '0'; b.appendChild(n);
+    b.classList.toggle('active', currentTypeFilter === k);
+  });
+  if (currentTypeFilter.indexOf('cat:') === 0 && !names[currentTypeFilter]) currentTypeFilter = 'all';
 }
 
 function switchTypeFilter(type) {
@@ -80,6 +116,8 @@ function showDashboard() {
   document.getElementById('dashboardPage').classList.remove('hidden');
   loadStats();
   loadOrders();
+  // Category names for the order filter tabs (the list is otherwise only loaded in the Products tab).
+  fetchCategories().then(updateFilterBadges).catch(function() {});
 }
 
 function doLogin(e) {
@@ -193,12 +231,13 @@ function refreshData() {
 // ==================== FILTER ====================
 function updateFilterBadges() {
   var inRange = allOrders.filter(function(o) { return inDateRange(o, 'orders'); });
+  renderCategoryTypeTabs();
   var typeCounts = { all: 0, bag: 0, wallpaper: 0, sticker: 0 };
   inRange.forEach(function(o) {
     if (isAwaitingPayment(o)) return;
     typeCounts.all++;
     var k = orderKinds(o);
-    Object.keys(k).forEach(function(t) { typeCounts[t]++; });
+    Object.keys(k).forEach(function(t) { typeCounts[t] = (typeCounts[t] || 0) + 1; });
   });
   document.querySelectorAll('.tytab').forEach(function(tab) {
     var badge = tab.querySelector('.ftab-count');
@@ -2718,7 +2757,8 @@ async function savePreviewCard(e) {
     const data = await res.json();
     if (!res.ok || !data.success) throw Error(data.error || 'บันทึกการ์ดไม่สำเร็จ');
 
-    adminPreviewCards = updatedCards;
+    // The server swaps uploaded pictures for media links; keep its copy.
+    adminPreviewCards = Array.isArray(data.preview_cards) ? data.preview_cards : updatedCards;
     localStorage.setItem(PREVIEW_KEY, JSON.stringify(adminPreviewCards));
     resetPreviewForm();
     renderPreviewManager();
@@ -2748,7 +2788,7 @@ async function movePreviewCard(idx, delta) {
     });
     const data = await res.json();
     if (!res.ok || !data.success) throw Error(data.error || 'ย้ายลำดับไม่สำเร็จ');
-    adminPreviewCards = updated;
+    adminPreviewCards = Array.isArray(data.preview_cards) ? data.preview_cards : updated;
     localStorage.setItem(PREVIEW_KEY, JSON.stringify(adminPreviewCards));
     renderPreviewManager();
   } catch (err) {
@@ -2771,7 +2811,7 @@ async function deletePreviewCard(idx) {
     const data = await res.json();
     if (!res.ok || !data.success) throw Error(data.error || 'ลบไม่สำเร็จ');
 
-    adminPreviewCards = updated;
+    adminPreviewCards = Array.isArray(data.preview_cards) ? data.preview_cards : updated;
     localStorage.setItem(PREVIEW_KEY, JSON.stringify(adminPreviewCards));
     renderPreviewManager();
     showToast("success", "ลบการ์ดพรีวิวแล้ว ✓");

@@ -692,7 +692,7 @@ module.exports = async (req, res) => {
         preview_cards: Array.isArray(body.preview_cards) ? body.preview_cards : (Array.isArray(existing.preview_cards) ? existing.preview_cards : []),
         updated_at: new Date().toISOString(),
       };
-      await setDoc(doc(db, 'settings', 'storefront'), settings);
+      await setDoc(doc(db, 'settings', 'storefront'), await storyService.offloadDataImages(storyStore, settings));
       sendJson(res, 200, { success: true, settings });
       return;
     }
@@ -765,7 +765,7 @@ module.exports = async (req, res) => {
       sf.categories = categories;
       sf.preview_cards = previewCards;
       sf.updated_at = new Date().toISOString();
-      await setDoc(doc(db, 'settings', 'storefront'), sf);
+      await setDoc(doc(db, 'settings', 'storefront'), await storyService.offloadDataImages(storyStore, sf));
 
       sendJson(res, 200, { success: true, category: newCat });
       return;
@@ -823,7 +823,7 @@ module.exports = async (req, res) => {
       sf.categories = categories;
       sf.preview_cards = previewCards;
       sf.updated_at = new Date().toISOString();
-      await setDoc(doc(db, 'settings', 'storefront'), sf);
+      await setDoc(doc(db, 'settings', 'storefront'), await storyService.offloadDataImages(storyStore, sf));
 
       sendJson(res, 200, { success: true, category: cat });
       return;
@@ -848,7 +848,7 @@ module.exports = async (req, res) => {
       sf.custom_products = customProducts;
       sf.preview_cards = previewCards;
       sf.updated_at = new Date().toISOString();
-      await setDoc(doc(db, 'settings', 'storefront'), sf);
+      await setDoc(doc(db, 'settings', 'storefront'), await storyService.offloadDataImages(storyStore, sf));
 
       sendJson(res, 200, { success: true });
       return;
@@ -902,7 +902,7 @@ module.exports = async (req, res) => {
 
       sf.custom_products = customProducts;
       sf.updated_at = new Date().toISOString();
-      await setDoc(doc(db, 'settings', 'storefront'), sf);
+      await setDoc(doc(db, 'settings', 'storefront'), await storyService.offloadDataImages(storyStore, sf));
 
       sendJson(res, 200, { success: true, product: newProd });
       return;
@@ -936,7 +936,7 @@ module.exports = async (req, res) => {
 
       sf.custom_products = customProducts;
       sf.updated_at = new Date().toISOString();
-      await setDoc(doc(db, 'settings', 'storefront'), sf);
+      await setDoc(doc(db, 'settings', 'storefront'), await storyService.offloadDataImages(storyStore, sf));
 
       sendJson(res, 200, { success: true, product: prod });
       return;
@@ -953,7 +953,7 @@ module.exports = async (req, res) => {
 
       sf.custom_products = customProducts;
       sf.updated_at = new Date().toISOString();
-      await setDoc(doc(db, 'settings', 'storefront'), sf);
+      await setDoc(doc(db, 'settings', 'storefront'), await storyService.offloadDataImages(storyStore, sf));
 
       sendJson(res, 200, { success: true });
       return;
@@ -988,7 +988,7 @@ module.exports = async (req, res) => {
       const sf = d.exists() ? d.data() : {};
       sf.preview_cards = cards;
       sf.updated_at = new Date().toISOString();
-      await setDoc(doc(db, 'settings', 'storefront'), sf);
+      await setDoc(doc(db, 'settings', 'storefront'), await storyService.offloadDataImages(storyStore, sf));
 
       sendJson(res, 200, { success: true, preview_cards: cards });
       return;
@@ -2408,6 +2408,8 @@ module.exports = async (req, res) => {
     send404(res);
   } catch (err) {
     console.error('API error:', err);
-    sendJson(res, 500, { error: 'Internal server error' });
+    // Say so when a save failed because the settings document is too big, instead of a bare 500.
+    const tooBig = /maximum allowed size|exceeds the maximum/i.test(String(err && err.message));
+    sendJson(res, 500, { error: tooBig ? 'ข้อมูลร้านใหญ่เกินที่ระบบเก็บได้ กรุณาลดรูปหรือข้อมูลที่ไม่ใช้แล้วค่ะ' : 'Internal server error' });
   }
 };
