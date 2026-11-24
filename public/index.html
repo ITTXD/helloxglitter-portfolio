@@ -4146,6 +4146,7 @@ async function renderInline(){
             <b>${esc(x.name)}</b>
             <span>${esc(x.sub)}</span>
           </div>`;
+        card.dataset.hlgTarget=x.target==='bag'?'preorder':(x.target||'');
         card.onclick=()=>{
           openCard(i);
         };
@@ -18382,6 +18383,18 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
 .gcard.hlg-locked img{filter:grayscale(.75);opacity:.55}
 .hlg-lock-badge{position:absolute;left:6px;top:6px;z-index:6;background:rgba(84,52,68,.88);color:#fff;font-size:10px;font-weight:800;border-radius:999px;padding:3px 8px;pointer-events:none}
 .hlg-lock-banner{max-width:900px;margin:10px auto;padding:11px 14px;box-sizing:border-box;background:#fff2f6;border:1px solid #efbfd0;border-radius:14px;color:#a33a63;font-size:13px;font-weight:700;text-align:center}
+.hlg-locked-entry{position:relative;cursor:not-allowed!important}
+.hlg-locked-entry > :not(.hlg-lock-badge){filter:grayscale(1);opacity:.5}
+.hlg-locked-entry > .hlg-lock-badge{z-index:7}
+/* Buttons and pills: a small inline lock instead of the card corner badge, so the label stays readable */
+.hlg-locked-entry:not([data-hlg-target]) > .hlg-lock-badge{position:static;display:inline-block;margin-left:5px;padding:2px 6px;font-size:9px;vertical-align:middle;white-space:nowrap}
+.hlg-locked-entry:not([data-hlg-target]) > :not(.hlg-lock-badge){opacity:.6}
+.page.hlg-page-locked > :not(.hlg-page-lock-note):not(.page-backbar){filter:grayscale(1);opacity:.4;pointer-events:none;user-select:none}
+.hlg-page-lock-note{max-width:520px;margin:16px auto;padding:22px 18px;box-sizing:border-box;text-align:center;background:#f4f1f3;border:1.5px solid #d9cfd5;border-radius:18px;color:#5e4f57}
+.hlg-page-lock-note .hlg-page-lock-icon{font-size:34px;margin-bottom:4px}
+.hlg-page-lock-note b{display:block;font-size:17px;color:#4b3d44}
+.hlg-page-lock-note p{margin:6px 0 12px;font-size:13px;line-height:1.6}
+.hlg-page-lock-note button{border:0;border-radius:12px;background:#7a6871;color:#fff;font:inherit;font-weight:700;padding:9px 16px;cursor:pointer}
 .v8cf-item .hlg-lock-note{display:block;color:#c0392b;font-size:10px;font-weight:800;margin-top:2px}
 #adminPanel-salesLock .hsl-card{background:#fff;border:1.5px solid #f0cde0;border-radius:18px;padding:16px;margin-bottom:14px;box-shadow:0 6px 20px rgba(168,66,112,.06);color:#664558}
 #adminPanel-salesLock .hsl-card h3{margin:0 0 6px;font-size:16px;color:#a83868}
@@ -18447,7 +18460,52 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
    el.textContent='🔒 '+core.message(rule)
  }
  const whole=type=>core.parse(raw()).rules.find(r=>core.active(r)&&(r.target==='all'||r.target==='type:'+type))||null;
+ // Rule that closes a whole page: the shop, its type, every bag size, or every product of a made category.
+ function pageLock(page){
+   const rules=core.parse(raw()).rules.filter(r=>core.active(r));
+   const any=t=>rules.find(r=>r.target===t);
+   if(!page||['home','cart','tracking','admin','thankyou','wpcheck','external','product'].includes(page))return null;
+   const all=any('all');if(all)return all;
+   if(page==='preorder'||page==='bag'){const t=any('type:bag');if(t)return t;const sz=['normal','large','easy','maxi'].map(k=>any('size:'+k));return sz.every(Boolean)?sz[0]:null}
+   if(page==='sticker'||page==='wallpaper')return any('type:'+page);
+   const prods=(typeof window.getCustomProducts==='function'?window.getCustomProducts():[]).filter(p=>p.category_id===page||p.type===page);
+   if(!prods.length&&!(window.getCategories?.()||[]).some?.(c=>c.id===page))return null;
+   const t=any('type:custom');if(t)return t;
+   if(!prods.length)return null;
+   const locks=prods.map(p=>core.lockFor({type:'custom',name:p.name,variant:''},raw()));
+   return locks.every(Boolean)?locks[0]:null
+ }
+ window.hlgPageLock=pageLock;
+ // Page an entry (home card, category pill, quick button) opens.
+ function entryTarget(el){
+   if(el.dataset.hlgTarget)return el.dataset.hlgTarget;
+   const m=/showPage\('([^']+)'\)/.exec(el.getAttribute('onclick')||'');
+   return m?m[1]:''
+ }
+ function decorateEntries(){
+   const adm=isAdm();
+   document.querySelectorAll('#page-home .v5-products > [data-hlg-target], #page-home [onclick*="showPage("], #hlgHomeCategoryPills button').forEach(el=>{
+     const rule=adm?null:pageLock(entryTarget(el));
+     el.classList.toggle('hlg-locked-entry',!!rule);
+     let b=el.querySelector(':scope > .hlg-lock-badge');
+     if(!rule){b?.remove();delete el.dataset.hlgLockMsg;return}
+     if(!b){b=document.createElement('span');b.className='hlg-lock-badge';b.textContent='🔒 ปิดรับชั่วคราว';el.append(b)}
+     el.dataset.hlgLockMsg=core.message(rule)
+   });
+   // A locked page reached some other way (menu, link): greyed out with a note on top.
+   document.querySelectorAll('.page').forEach(pg=>{
+     const id=pg.id.replace(/^page-/,''),rule=adm?null:pageLock(id);
+     pg.classList.toggle('hlg-page-locked',!!rule);
+     let n=pg.querySelector(':scope > .hlg-page-lock-note');
+     if(!rule){n?.remove();return}
+     if(!n){n=document.createElement('div');n.className='hlg-page-lock-note';pg.prepend(n)}
+     n.innerHTML='<div class="hlg-page-lock-icon">🔒</div><b>หน้านี้ปิดรับชั่วคราว</b><p></p><button type="button">กลับหน้าแรก</button>';
+     n.querySelector('p').textContent=core.message(rule);
+     n.querySelector('button').onclick=()=>{if(typeof showPage==='function')showPage('home')}
+   })
+ }
  function decorate(){
+   try{decorateEntries()}catch(e){}
    if(typeof getList==='function'){const ps=getList();document.querySelectorAll('#gallery .gcard').forEach((card,i)=>{const p=ps[i];mark(card,p?lockOf({type:'bag',name:p.name,variant:p.size||'',sizeKey:p.sizeKey}):null)})}
    const st=(typeof STICKER_PATTERNS!=='undefined'?STICKER_PATTERNS:[]);document.querySelectorAll('#stickerGallery .gcard').forEach((card,i)=>{const p=st[i];mark(card,p?lockOf({type:'sticker',name:p.name,variant:''}):null)});
    const wp=lockOf({type:'wallpaper',name:'Wallpaper Special Set',variant:'Digital Download'});document.querySelectorAll('#page-wallpaper .wp-card').forEach(card=>mark(card,wp));
@@ -18488,6 +18546,8 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
  document.addEventListener('click',e=>{
    // A gallery that was just rebuilt has not been marked yet.
    if(e.target.closest?.('.gcard:not(.hlg-locked)'))decorate();
+   const entry=e.target.closest?.('.hlg-locked-entry');
+   if(entry){e.preventDefault();e.stopImmediatePropagation();toast('🔒 '+(entry.dataset.hlgLockMsg||core.DEFAULT_MESSAGE));return}
    const card=e.target.closest?.('.gcard.hlg-locked');
    if(card&&!e.target.closest?.('[onclick*="hlgOpenAddProductModal"],[onclick*="hlgDeleteProduct"],.hlg-cat-more')){
      e.preventDefault();e.stopImmediatePropagation();toast('🔒 '+(card.dataset.hlgLockMsg||core.DEFAULT_MESSAGE));return
@@ -18862,7 +18922,7 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
    return r;
  };
 
- ['buildGallery','stickerBuildGallery','renderUnifiedCart','showPage'].forEach(name=>{const old=window[name];if(typeof old!=='function')return;window[name]=function(){const r=old.apply(this,arguments);decorate();if(name==='showPage'&&arguments[0]==='admin'){ensureLockAdminTab();paintShortcut();if($('#adminPanel-salesLock')?.classList.contains('active'))renderSalesLockAdmin()}setTimeout(decorate,40);return r}});
+ ['buildGallery','stickerBuildGallery','renderUnifiedCart','showPage','renderRecommended','v8InlinePreviewRender','hlgRenderCategoryPills','hlgEnsureCategoryPage'].forEach(name=>{const old=window[name];if(typeof old!=='function')return;window[name]=function(){const r=old.apply(this,arguments);decorate();if(name==='showPage'&&arguments[0]==='admin'){ensureLockAdminTab();paintShortcut();if($('#adminPanel-salesLock')?.classList.contains('active'))renderSalesLockAdmin()}setTimeout(decorate,40);return r}});
  // The server said no after the bill was already written here: take the bill back.
  function rejected(order,text){
    try{const rows=typeof getOrders==='function'?getOrders():[],left=rows.filter(o=>o.id!==order.id);if(left.length!==rows.length&&typeof saveOrders==='function')saveOrders(left)}catch(e){}
